@@ -1,0 +1,9 @@
+{
+    "C_Cpp.default.compileCommands": "builddir/compile_commands.json",
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "*.rs": "rust",
+        "*.zonefile": "zone",
+        "cstdlib": "cpp"
+    }
+}
