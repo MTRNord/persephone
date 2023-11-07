@@ -27,7 +27,7 @@ void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
 
   // Get exception or rethrow
   try {
-    std::rethrow_exception(ep);
+    std::rethrow_exception(std::move(ep));
   } catch (std::exception &e) {
     error = e.what();
   } catch (...) { // See the following NOTE

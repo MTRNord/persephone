@@ -3,7 +3,7 @@
 
 #include "webserver/webserver.hpp"
 
-int main(void) {
+int main() {
   Webserver webserver;
 
   webserver.start();
