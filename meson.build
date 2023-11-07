@@ -9,7 +9,8 @@ json = dependency('nlohmann_json')
 
 src = [
     'src/main.cpp',
-    'src/utils/utils.cpp'
+    'src/utils/utils.cpp',
+    'src/webserver/webserver.cpp'
 ]
 
 executable('persephone', src, include_directories : includes, dependencies : [cpp_httplib_dep, json], install: true)
