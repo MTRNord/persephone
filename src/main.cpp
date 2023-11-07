@@ -28,9 +28,8 @@ int main(void) {
 
   svr.Get("/_matrix/federation/v1/version",
           [](const Request & /*req*/, Response &res) {
-            matrix_json::version::server server = {.name = "persephone",
-                                                   .version = "0.1.0"};
-            matrix_json::version::json version = {.server = server};
+            server_server_json::version version = {
+                .server = {.name = "persephone", .version = "0.1.0"}};
 
             json j = version;
             res.set_content(j.dump(), "application/json");

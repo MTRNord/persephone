@@ -44,7 +44,7 @@ std::string log(const Request &req, const Response &res) {
 }
 
 void return_error(Response &res, std::string errorcode, std::string error) {
-  matrix_json::generic_json_error json_error{errorcode, error};
+  generic_json::generic_json_error json_error{errorcode, error};
   json j = json_error;
   res.set_content(j.dump(), "application/json");
   res.status = 500;
