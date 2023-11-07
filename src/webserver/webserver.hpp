@@ -4,13 +4,13 @@
 using namespace httplib;
 
 class Webserver {
+private:
   // #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
   //   SSLServer svr(SERVER_CERT_FILE, SERVER_PRIVATE_KEY_FILE);
   // #else
   Server svr;
   // #endif
 
-private:
   static void handle_exceptions(const Request & /*req*/, Response &res,
                                 std::exception_ptr ep);
   static void get_root(const Request & /*req*/, Response &res);
