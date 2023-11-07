@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include "json.hpp"
 #include <format>
 
 std::string dump_headers(const Headers &headers) {
@@ -40,4 +41,11 @@ std::string log(const Request &req, const Response &res) {
 
   s += "\n";
   return s;
+}
+
+void return_error(Response &res, std::string errorcode, std::string error) {
+  matrix_json::generic_json_error json_error{errorcode, error};
+  json j = json_error;
+  res.set_content(j.dump(), "application/json");
+  res.status = 500;
 }
