@@ -1,14 +1,16 @@
-project('persephone', 'cpp', version : '0.1.0', default_options : ['cpp_std=c++20', 'warning_level=3', 'werror=true'])
-add_project_arguments('-DJSON_DIAGNOSTICS=1', '-DJSON_USE_IMPLICIT_CONVERSIONS=0', '-Wshadow', '-Wconversion', '-Wpedantic', language : ['c', 'cpp'])
+project('persephone', 'cpp', version : '0.1.0', default_options : ['cpp_std=c++20', 'warning_level=3', 'werror=true', 'optimization=2'])
+add_project_arguments('-DJSON_DIAGNOSTICS=1', '-DJSON_USE_IMPLICIT_CONVERSIONS=0', '-Wshadow', '-Wconversion', '-Wpedantic', '-D_FORTIFY_SOURCE=2', language : ['c', 'cpp'])
 
 includes = include_directories('src')
 
+####### Webserver/Matrix ############
 httplib = subproject('cpp-httplib', default_options: ['cpp-httplib_openssl=enabled', 'cpp-httplib_compile=true'])
 cpp_httplib_dep = httplib.get_variable('cpp_httplib_dep')
 thread_dep = dependency('threads')
 
 json = dependency('nlohmann_json')
 
+####### Database ############
 cmake = import('cmake')
 opt_var = cmake.subproject_options()
 
@@ -22,6 +24,8 @@ soci = cmake.subproject('SOCI', options: opt_var)
 soci_core = soci.dependency('soci_core')
 soci_postgresql = soci.dependency('soci_postgresql')
 
+####### Tests ############
+snitch_dep = dependency('snitch')
 
 src = files([
     'src/main.cpp',
@@ -30,3 +34,4 @@ src = files([
 ])
 
 executable('persephone', src, include_directories : includes, dependencies : [cpp_httplib_dep, json, thread_dep, soci_core, soci_postgresql], install: true)
+test('utils', executable('utils_test','tests/utils_test.cpp', dependencies: snitch_dep))
