@@ -1,5 +1,6 @@
 #pragma once
 
+#include "database/database.hpp"
 #include "httplib.h"
 using namespace httplib;
 
