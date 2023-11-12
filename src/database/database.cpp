@@ -70,8 +70,9 @@ void Database::listen(std::string channel,
       throw std::runtime_error(std::format("poll() failed: {}\n", errno));
     }
 
-    // FIXME: Check which channel was notified here
-    callback();
+    if (notify->relname == channel) {
+      callback();
+    }
     PQfreemem(notify);
     PQconsumeInput(conn);
   }
