@@ -2,6 +2,7 @@
 
 #include "soci/postgresql/soci-postgresql.h"
 #include "soci/soci.h"
+#include <functional>
 
 using namespace soci;
 
@@ -16,7 +17,8 @@ private:
   connection_pool pool;
 
 public:
-  Database(std::string db_url, const size_t pool_size) : pool(pool_size) {
+  Database(std::string const &db_url, const size_t pool_size)
+      : pool(pool_size) {
     register_factory_postgresql();
     for (size_t i = 0; i != pool_size; ++i) {
       session &sql = this->pool.at(i);
@@ -29,4 +31,5 @@ public:
 
 private:
   void migration_v1();
+  void listen(std::string channel, std::function<void()> const &callback);
 };
