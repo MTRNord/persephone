@@ -70,6 +70,7 @@ src = files(
     'src/database/database.cpp',
     'src/main.cpp',
     'src/utils/utils.cpp',
+    'src/utils/config.cpp',
     'src/webserver/webserver.cpp',
 )
 

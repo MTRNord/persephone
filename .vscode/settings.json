@@ -82,6 +82,7 @@
         "forward_list": "cpp",
         "ranges": "cpp",
         "shared_mutex": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "*.sql": "cpp"
     }
 }
