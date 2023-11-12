@@ -23,8 +23,8 @@ RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE room_cleared text;
 BEGIN
     room_cleared := REPLACE(REPLACE(REPLACE(NEW.room_id, '.', '_'), ':', '_'), '!', '');
-    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS room_%s AS SELECT * FROM events WHERE room_id = ''%s'';', room_cleared, NEW.room_id);
-    EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS room_%s_idx ON room_%s (event_id);', room_cleared, room_cleared);
+    EXECUTE 'CREATE MATERIALIZED VIEW IF NOT EXISTS ' || quote_ident('room_' || room_cleared) || ' AS SELECT * FROM events WHERE room_id = ' || quote_literal(NEW.room_id);
+    EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS ' || quote_ident('room_' || room_cleared || '_idx') || ' ON ' || quote_ident('room_' || room_cleared) || ' (event_id);';
     RETURN NULL;
 END;
 $$; 
@@ -39,7 +39,7 @@ LANGUAGE plpgsql AS $$
 DECLARE room_cleared text;
 BEGIN
     room_cleared := REPLACE(REPLACE(REPLACE(room_id, '.', '_'), ':', '_'), '!', '');
-    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY room_%s;', room_cleared);
+    EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ' || quote_ident('room_' || room_cleared);
 END;
 $$;
 
@@ -51,8 +51,8 @@ BEGIN
     CASE 
         WHEN NEW.state_key IS NOT NULL THEN
             state_key_cleared := REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '');
-            EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS user_%s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', state_key_cleared, NEW.state_key);
-            EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS user_%s_idx ON user_%s (event_id);', state_key_cleared, state_key_cleared);
+            EXECUTE 'CREATE MATERIALIZED VIEW IF NOT EXISTS ' || quote_ident('user_' || state_key_cleared) || ' AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ' || quote_literal(NEW.state_key);
+            EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS ' || quote_ident('user_' || state_key_cleared || '_idx') || ' ON ' || quote_ident('user_' || state_key_cleared) || ' (event_id);';
         ELSE
             -- Do nothing
     END CASE;
@@ -68,7 +68,7 @@ LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
     state_key_cleared := REPLACE(REPLACE(REPLACE(state_key, '.', '_'), ':', '_'), '@', '');
-    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY user_%s;', state_key_cleared);
+    EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ' ||  quote_ident('user_' || state_key_cleared);
 END;
 $$;
 

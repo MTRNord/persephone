@@ -22,7 +22,6 @@ void Database::migration_v1() {
 void Database::listen(std::string channel,
                       std::function<void()> const &callback) {
   session sql(this->pool);
-  // TODO: Invoke listen
 
   sql << std::format("Listen {}", channel);
 
