@@ -24,6 +24,7 @@ DECLARE room_cleared text;
 BEGIN
     room_cleared := REPLACE(REPLACE(REPLACE(NEW.room_id, '.', '_'), ':', '_'), '!', '');
     EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS room_%s AS SELECT * FROM events WHERE room_id = ''%s'';', room_cleared, NEW.room_id);
+    EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS room_%s_idx ON room_%s (event_id);', room_cleared, room_cleared);
     RETURN NULL;
 END;
 $$; 
@@ -32,13 +33,13 @@ $$;
 CREATE TRIGGER tg_room_view_create AFTER INSERT ON events FOR EACH ROW EXECUTE FUNCTION new_room_view();
 
 /* Create update fn which needs to be called manually as we can batch this in the app logic */
-CREATE OR REPLACE FUNCTION room_view_update()
-RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION room_view_update(room_id text)
+RETURNS void
+LANGUAGE plpgsql AS $$
 DECLARE room_cleared text;
 BEGIN
-    room_cleared := REPLACE(REPLACE(REPLACE(OLD.room_id, '.', '_'), ':', '_'), '!', '');
+    room_cleared := REPLACE(REPLACE(REPLACE(room_id, '.', '_'), ':', '_'), '!', '');
     EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY room_%s;', room_cleared);
-    RETURN NULL;
 END;
 $$;
 
@@ -47,21 +48,27 @@ CREATE OR REPLACE FUNCTION new_user_view()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
-    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
-    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS user_%s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', state_key_cleared, NEW.state_key);
+    CASE 
+        WHEN NEW.state_key IS NOT NULL THEN
+            state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
+            EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS user_%s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', state_key_cleared, NEW.state_key);
+            EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS user_%s_idx ON user_%s (event_id);', state_key_cleared, state_key_cleared);
+        ELSE
+            -- Do nothing
+    END CASE;
     RETURN NULL;
 END;
 $$;
 
 CREATE TRIGGER tg_user_view_create AFTER INSERT ON events FOR EACH ROW EXECUTE FUNCTION new_user_view();
 
-CREATE OR REPLACE FUNCTION user_view_update()
-RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION user_view_update(state_key text)
+RETURNS void
+LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
-    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
+    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(state_key, '.', '_'), ':', '_'), '@', '', 'g');
     EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY user_%s;', state_key_cleared);
-    RETURN NULL;
 END;
 $$;
 
