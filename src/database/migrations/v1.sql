@@ -22,8 +22,8 @@ CREATE OR REPLACE FUNCTION new_room_view()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE room_cleared text;
 BEGIN
-    room_cleared := REGEXP_REPLACE(NEW.room_id, '!', '', 'g');
-    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS SELECT * FROM events WHERE room_id = ''%s'';', REGEXP_REPLACE(room_cleared, ':|.', '_', 'g'), NEW.room_id);
+    room_cleared := REPLACE(REPLACE(REPLACE(NEW.room_id, '.', '_'), ':', '_'), '!', '');
+    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS room_%s AS SELECT * FROM events WHERE room_id = ''%s'';', room_cleared, NEW.room_id);
     RETURN NULL;
 END;
 $$; 
@@ -36,8 +36,8 @@ CREATE OR REPLACE FUNCTION room_view_update()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE room_cleared text;
 BEGIN
-    room_cleared := REGEXP_REPLACE(OLD.room_id, '!', '', 'g');
-    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY %s;', REGEXP_REPLACE(room_cleared, ':|.', '_', 'g'));
+    room_cleared := REPLACE(REPLACE(REPLACE(OLD.room_id, '.', '_'), ':', '_'), '!', '');
+    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY room_%s;', room_cleared);
     RETURN NULL;
 END;
 $$;
@@ -47,8 +47,8 @@ CREATE OR REPLACE FUNCTION new_user_view()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
-    state_key_cleared := REGEXP_REPLACE(NEW.state_key, '@', '', 'g');
-    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS %s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', REGEXP_REPLACE(state_key_cleared, ':|.', '_', 'g'), NEW.state_key);
+    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
+    EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS user_%s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', state_key_cleared, NEW.state_key);
     RETURN NULL;
 END;
 $$;
@@ -59,8 +59,8 @@ CREATE OR REPLACE FUNCTION user_view_update()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
-    state_key_cleared := REGEXP_REPLACE(OLD.state_key, '@', '', 'g');
-    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY %s;', REGEXP_REPLACE(state_key_cleared, ':|.', '_', 'g'));
+    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
+    EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY user_%s;', state_key_cleared);
     RETURN NULL;
 END;
 $$;
