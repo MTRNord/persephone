@@ -2,6 +2,7 @@
 
 #include "libpq-fe.h"
 #include <format>
+#include <poll.h>
 
 void Database::migrate() { this->migration_v1(); }
 
@@ -32,22 +33,23 @@ void Database::listen(std::string channel,
 
   /*
    * Sleep until something happens on the connection.  We use
-   * select(2) to wait for input, but you could also use poll() or
-   * similar facilities.
+   * poll(2) to wait for input.
    */
   int sock;
-  fd_set input_mask;
+  pollfd poll_struct;
+  // This is a C struct.
+  memset(&poll_struct, 0, sizeof(poll_struct));
 
   sock = PQsocket(conn);
 
   if (sock < 0)
     throw std::runtime_error("Unable to open PQSocket"); /* shouldn't happen */
 
-  FD_ZERO(&input_mask);
-  FD_SET(sock, &input_mask);
+  poll_struct.fd = sock;
+  poll_struct.events = POLLIN | POLLHUP | POLLERR | POLLNVAL;
 
-  if (select(sock + 1, &input_mask, nullptr, nullptr, nullptr) < 0) {
-    throw std::runtime_error(std::format("select() failed: {}\n", errno));
+  if (poll(&poll_struct, 1, 5000) < 0) {
+    throw std::runtime_error(std::format("poll() failed: {}\n", errno));
   }
 
   PGnotify *notify;
@@ -59,11 +61,13 @@ void Database::listen(std::string channel,
       throw std::runtime_error(
           "Unable to open PQSocket"); /* shouldn't happen */
 
-    FD_ZERO(&input_mask);
-    FD_SET(sock, &input_mask);
+    // Reset the poll_struct
+    memset(&poll_struct, 0, sizeof(poll_struct));
+    poll_struct.fd = sock;
+    poll_struct.events = POLLIN | POLLHUP | POLLERR | POLLNVAL;
 
-    if (select(sock + 1, &input_mask, nullptr, nullptr, nullptr) < 0) {
-      throw std::runtime_error(std::format("select() failed: {}\n", errno));
+    if (poll(&poll_struct, 1, 5000) < 0) {
+      throw std::runtime_error(std::format("poll() failed: {}\n", errno));
     }
 
     // FIXME: Check which channel was notified here
