@@ -50,7 +50,7 @@ DECLARE state_key_cleared text;
 BEGIN
     CASE 
         WHEN NEW.state_key IS NOT NULL THEN
-            state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '', 'g');
+            state_key_cleared := REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', '');
             EXECUTE format('CREATE MATERIALIZED VIEW IF NOT EXISTS user_%s AS SELECT * FROM events WHERE type = ''m.room.member'' AND state_key = ''%s'';', state_key_cleared, NEW.state_key);
             EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS user_%s_idx ON user_%s (event_id);', state_key_cleared, state_key_cleared);
         ELSE
@@ -67,7 +67,7 @@ RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
-    state_key_cleared := REGEXP_REPLACE(REPLACE(REPLACE(state_key, '.', '_'), ':', '_'), '@', '', 'g');
+    state_key_cleared := REPLACE(REPLACE(REPLACE(state_key, '.', '_'), ':', '_'), '@', '');
     EXECUTE format('REFRESH MATERIALIZED VIEW CONCURRENTLY user_%s;', state_key_cleared);
 END;
 $$;
