@@ -35,32 +35,15 @@ void Database::listen(std::string channel,
    * poll(2) to wait for input.
    */
   int sock;
-  pollfd poll_struct;
-  // This is a C struct.
-  memset(&poll_struct, 0, sizeof(poll_struct));
 
   sock = PQsocket(conn);
 
   if (sock < 0)
     throw std::runtime_error("Unable to open PQSocket"); /* shouldn't happen */
 
-  poll_struct.fd = sock;
-  poll_struct.events = POLLIN | POLLHUP | POLLERR | POLLNVAL;
-
-  if (poll(&poll_struct, 1, 5000) < 0) {
-    throw std::runtime_error(std::format("poll() failed: {}\n", errno));
-  }
-
-  PGnotify *notify;
-  PQconsumeInput(conn);
-  while ((notify = PQnotifies(conn)) != nullptr) {
-    sock = PQsocket(conn);
-
-    if (sock < 0)
-      throw std::runtime_error(
-          "Unable to open PQSocket"); /* shouldn't happen */
-
-    // Reset the poll_struct
+  while (true) {
+    pollfd poll_struct;
+    // This is a C struct.
     memset(&poll_struct, 0, sizeof(poll_struct));
     poll_struct.fd = sock;
     poll_struct.events = POLLIN | POLLHUP | POLLERR | POLLNVAL;
@@ -69,10 +52,17 @@ void Database::listen(std::string channel,
       throw std::runtime_error(std::format("poll() failed: {}\n", errno));
     }
 
-    if (notify->relname == channel) {
-      callback();
+    if (poll_struct.revents & POLLIN) {
+      PGnotify *notify;
+      PQconsumeInput(conn);
+
+      while ((notify = PQnotifies(conn)) != nullptr) {
+        if (notify->relname == channel) {
+          callback();
+        }
+        PQfreemem(notify);
+        PQconsumeInput(conn);
+      }
     }
-    PQfreemem(notify);
-    PQconsumeInput(conn);
   }
 }
