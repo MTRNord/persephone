@@ -2,6 +2,7 @@
 #include "nlohmann/json.hpp"
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
+#include <format>
 
 using json = nlohmann::json;
 
@@ -9,6 +10,10 @@ Webserver::Webserver(Config config) {
   if (!this->svr.is_valid()) {
     throw std::runtime_error("server has an error...");
   }
+
+  std::cout << std::format("Starting server as {}",
+                           config.matrix_config.server_name)
+            << std::endl;
 
   this->svr.set_logger([](const Request &req, const Response &res) {
     std::cout << log(req, res) << std::endl;

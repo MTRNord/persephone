@@ -6,7 +6,7 @@ project(
         'cpp_std=c++20',
         'warning_level=3',
         'werror=true',
-        'optimization=2',
+        'b_lto=true',
     ],
 )
 add_project_arguments(
@@ -69,8 +69,8 @@ snitch_dep = dependency('snitch')
 src = files(
     'src/database/database.cpp',
     'src/main.cpp',
-    'src/utils/utils.cpp',
     'src/utils/config.cpp',
+    'src/utils/utils.cpp',
     'src/webserver/webserver.cpp',
 )
 
