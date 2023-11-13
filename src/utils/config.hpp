@@ -1,3 +1,23 @@
 #pragma once
+#include "yaml-cpp/yaml.h"
+#include <string>
 
-class Config {};
+struct DBConfig {
+  std::string url;
+  size_t pool_size;
+};
+
+struct MatrixConfig {
+  std::string server_name;
+};
+
+struct Config {
+  DBConfig db_config;
+  MatrixConfig matrix_config;
+
+  Config();
+
+private:
+  void load_db(YAML::Node config);
+  void load_matrix(YAML::Node config);
+};

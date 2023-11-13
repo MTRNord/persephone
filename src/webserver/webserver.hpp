@@ -1,7 +1,8 @@
 #pragma once
 
-#include "database/database.hpp"
 #include "httplib.h"
+#include "utils/config.hpp"
+
 using namespace httplib;
 
 class Webserver {
@@ -18,6 +19,6 @@ private:
   static void get_server_version(const Request & /*req*/, Response &res);
 
 public:
-  Webserver();
+  Webserver(Config config);
   void start();
 };

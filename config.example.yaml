@@ -1,0 +1,5 @@
+database:
+  url: "postgres://user@domain"
+  pool_size: 15
+matrix:
+  server_name: example.com

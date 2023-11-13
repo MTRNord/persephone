@@ -57,7 +57,7 @@ opt_var = cmake.subproject_options()
 
 # Globally override the C++ standard to c++20
 opt_var.add_cmake_defines(
-    {'CMAKE_CXX_STANDARD': '20', 'YAML_BUILD_SHARED_LIBS': false},
+    {'CMAKE_CXX_STANDARD': '20', 'YAML_BUILD_SHARED_LIBS': true},
 )
 
 soci = cmake.subproject('yaml-cpp', options: opt_var)

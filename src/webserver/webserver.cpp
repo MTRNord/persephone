@@ -1,11 +1,11 @@
 #include "webserver.hpp"
-#include "json.hpp"
 #include "nlohmann/json.hpp"
 #include "utils/utils.hpp"
+#include "webserver/json.hpp"
 
 using json = nlohmann::json;
 
-Webserver::Webserver() {
+Webserver::Webserver(Config config) {
   if (!this->svr.is_valid()) {
     throw std::runtime_error("server has an error...");
   }

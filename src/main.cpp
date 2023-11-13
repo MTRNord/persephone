@@ -1,7 +1,9 @@
+#include "utils/config.hpp"
 #include "webserver/webserver.hpp"
 
 int main() {
-  Webserver webserver;
+  Config config;
+  Webserver webserver(config);
 
   webserver.start();
 
