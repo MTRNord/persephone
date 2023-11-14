@@ -3,3 +3,8 @@ directory = soci-4.0.3
 source_url = https://github.com/SOCI/soci/archive/refs/tags/v4.0.3.tar.gz
 source_filename = soci-4.0.3.tar.gz
 source_hash = 4b1ff9c8545c5d802fbe06ee6cd2886630e5c03bf740e269bb625b45cf934928
+method = cmake
+
+[provide]
+soci_core = soci_core_dep
+soci_postgresql = soci_postgresql_dep

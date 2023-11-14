@@ -2,6 +2,7 @@
 
 #include "httplib.h"
 #include "utils/config.hpp"
+#include "database/database.hpp"
 
 using namespace httplib;
 
@@ -19,6 +20,6 @@ private:
   static void get_server_version(const Request & /*req*/, Response &res);
 
 public:
-  Webserver(Config config);
+  Webserver(Config config, Database const &database);
   void start();
 };

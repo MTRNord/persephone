@@ -6,7 +6,7 @@
 
 using json = nlohmann::json;
 
-Webserver::Webserver(Config config) {
+Webserver::Webserver(Config config, Database const &database) {
   if (!this->svr.is_valid()) {
     throw std::runtime_error("server has an error...");
   }

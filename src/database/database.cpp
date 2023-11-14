@@ -8,7 +8,7 @@ void Database::migrate() { this->migration_v1(); }
 
 void Database::migration_v1() {
   // TODO: Check if we already did this migration
-  session sql(this->pool);
+  session sql(*this->pool.get());
   transaction tr(sql);
 
   auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
@@ -21,7 +21,7 @@ void Database::migration_v1() {
 
 void Database::listen(std::string channel,
                       std::function<void()> const &callback) {
-  session sql(this->pool);
+  session sql(*this->pool.get());
 
   sql << std::format("Listen {}", channel);
 

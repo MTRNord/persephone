@@ -5,11 +5,13 @@ project(
     default_options: [
         'cpp_std=c++20',
         'warning_level=3',
-        'werror=true',
+# Yaml-cpp breaks this with clang
+#        'werror=true',
         'b_lto=true',
     ],
 )
 add_project_arguments(
+    '-DCPPHTTPLIB_USE_POLL=true',
     '-DJSON_DIAGNOSTICS=1',
     '-DJSON_USE_IMPLICIT_CONVERSIONS=0',
     '-Wshadow',
@@ -24,7 +26,7 @@ includes = include_directories('src')
 ####### Webserver/Matrix ############
 httplib = subproject(
     'cpp-httplib',
-    default_options: ['cpp-httplib_openssl=enabled', 'cpp-httplib_compile=true'],
+    default_options: ['cpp-httplib_openssl=enabled'],
 )
 cpp_httplib_dep = httplib.get_variable('cpp_httplib_dep')
 thread_dep = dependency('threads')
@@ -32,28 +34,11 @@ thread_dep = dependency('threads')
 json = dependency('nlohmann_json')
 
 ####### Database ############
-cmake = import('cmake')
-opt_var = cmake.subproject_options()
-
-# Globally override the C++ standard to c++20
-opt_var.add_cmake_defines(
-    {
-        'WITH_BOOST': false,
-        'SOCI_ORACLE': false,
-        'SOCI_ODBC': false,
-        'SOCI_FIREBIRD': false,
-        'SOCI_STATIC': false,
-        'CMAKE_CXX_STANDARD': '20',
-    },
-)
-
-soci = cmake.subproject('SOCI', options: opt_var)
-soci_core = soci.dependency('soci_core')
-soci_postgresql = soci.dependency('soci_postgresql')
+soci_core = dependency('soci_core')
+soci_postgresql = dependency('soci_postgresql')
 
 ###### Config #######
-cmake = import('cmake')
-opt_var = cmake.subproject_options()
+yaml_cpp_dep = dependency('yaml_cpp')
 
 # Globally override the C++ standard to c++20
 opt_var.add_cmake_defines(
@@ -85,6 +70,7 @@ executable(
         soci_core,
         soci_postgresql,
         yaml_cpp,
+        yaml_cpp_dep,
     ],
     install: true,
 )

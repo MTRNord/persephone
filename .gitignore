@@ -3,3 +3,5 @@ builddir
 subprojects/*
 !subprojects/*.wrap
 !subprojects/packagefiles
+
+.idea
