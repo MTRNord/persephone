@@ -13,10 +13,10 @@ Webserver::Webserver(Config config, Database const &database) {
 
   std::cout << std::format("Starting server as {}",
                            config.matrix_config.server_name)
-            << std::endl;
+            << '\n';
 
   this->svr.set_logger([](const Request &req, const Response &res) {
-    std::cout << log(req, res) << std::endl;
+    std::cout << log(req, res) << '\n';
   });
 
   this->svr.set_exception_handler(this->handle_exceptions);
@@ -55,6 +55,6 @@ void Webserver::get_server_version(const Request & /*req*/, Response &res) {
 }
 
 void Webserver::start() {
-  std::cout << "Listening on 8080" << std::endl;
+  std::cout << "Listening on 8080\n";
   this->svr.listen("localhost", 8080);
 }

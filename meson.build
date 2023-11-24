@@ -40,13 +40,8 @@ soci_postgresql = dependency('soci_postgresql')
 ###### Config #######
 yaml_cpp_dep = dependency('yaml_cpp')
 
-# Globally override the C++ standard to c++20
-opt_var.add_cmake_defines(
-    {'CMAKE_CXX_STANDARD': '20', 'YAML_BUILD_SHARED_LIBS': true},
-)
-
-soci = cmake.subproject('yaml-cpp', options: opt_var)
-yaml_cpp = soci.dependency('yaml_cpp')
+###### libsodium #######
+libsodium_dep = dependency('libsodium')
 
 ####### Tests ############
 snitch_dep = dependency('snitch')
@@ -69,8 +64,8 @@ executable(
         thread_dep,
         soci_core,
         soci_postgresql,
-        yaml_cpp,
         yaml_cpp_dep,
+        libsodium_dep
     ],
     install: true,
 )
