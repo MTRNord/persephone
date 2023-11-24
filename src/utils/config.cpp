@@ -36,7 +36,7 @@ void Config::load_matrix(YAML::Node config) {
 
   if (!config["matrix"]["server_name"]) {
     throw std::runtime_error(
-        "Missing 'matrix.url' server_name. Unable to start. Make sure you set "
+        "Missing 'matrix.server_name'. Unable to start. Make sure you set "
         "the server_name of the homeserver. This usually is a domain WITHOUT "
         "the matrix subdomain. It is used in the user id.");
   }

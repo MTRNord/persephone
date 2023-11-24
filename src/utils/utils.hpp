@@ -18,6 +18,8 @@ generate_server_key();
 json sign_json(std::string const &server_name, std::string const &key_id,
                std::array<unsigned char, crypto_sign_SECRETKEYBYTES> secret_key,
                json &json_data);
+std::array<unsigned char, crypto_sign_SECRETKEYBYTES>
+unbase64_key(std::string input);
 } // namespace json_utils
 
 std::string random_string(const unsigned long len);

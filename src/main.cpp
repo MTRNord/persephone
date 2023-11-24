@@ -45,19 +45,28 @@ void ensure_server_keys(Config const &config) {
 }
 
 int main() {
-  Config config;
-
   try {
-    ensure_server_keys(config);
+    Config config;
+
+    try {
+      ensure_server_keys(config);
+    } catch (std::runtime_error error) {
+      std::cout << "Failed to ensure_server_keys: " << error.what() << '\n';
+      return 1;
+    }
+
+    Database database(config.db_config.url, config.db_config.pool_size);
+    Webserver webserver(config, database);
+
+    webserver.start();
+  } catch (YAML::BadFile error) {
+    std::cout << "Missing or invalid config.yaml file. Make sure to create it "
+                 "prior to running persephone \n";
+    return 1;
   } catch (std::runtime_error error) {
-    std::cout << "Failed to ensure_server_keys: " << error.what() << '\n';
-    std::abort();
+    std::cout << error.what() << "\n";
+    return 1;
   }
-
-  Database database(config.db_config.url, config.db_config.pool_size);
-  Webserver webserver(config, database);
-
-  webserver.start();
 
   return 0;
 }
