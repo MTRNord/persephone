@@ -51,19 +51,18 @@ void return_error(Response &res, std::string errorcode, std::string error) {
 }
 
 namespace json_utils {
-std::array<unsigned char, crypto_sign_SECRETKEYBYTES>
-unbase64_key(std::string input) {
+std::vector<unsigned char> unbase64_key(std::string input) {
   size_t b64_str_len = input.size();
 
   size_t bin_len = 4 * (b64_str_len / 3);
-  std::array<unsigned char, crypto_sign_SECRETKEYBYTES> bin_str;
+  std::vector<unsigned char> bin_str(bin_len);
 
   int status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
-                                 input.size(), nullptr, &bin_len, nullptr,
-                                 sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+                                 b64_str_len, nullptr, &bin_len, nullptr,
+                                 sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
-  if (status != 0) {
-    throw "Base64 String decode failed to decode";
+  if (status < 0) {
+    throw std::runtime_error("Base64 String decode failed to decode");
   }
 
   return bin_str;
@@ -72,12 +71,12 @@ unbase64_key(std::string input) {
 std::string base64_key(std::vector<unsigned char> input) {
   unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
-      private_key_len, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+      private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
-  char *encoded_str_char = sodium_bin2base64(
+  auto encoded_str_char = sodium_bin2base64(
       base64_str.data(), base64_max_len, input.data(), private_key_len,
-      sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+      sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
     throw std::runtime_error("Base64 Error: Failed to encode string");
   }
@@ -86,12 +85,10 @@ std::string base64_key(std::vector<unsigned char> input) {
 }
 
 json sign_json(std::string const &server_name, std::string const &key_id,
-               std::array<unsigned char, crypto_sign_SECRETKEYBYTES> secret_key,
-               json &json_data) {
+               std::vector<unsigned char> secret_key, json &json_data) {
   // Get existing (or not yet existing) signatures and unsigned fields
   auto signatures = json_data.value("signatures", json(json::value_t::object));
-  auto unsigned_value =
-      json_data.value("unsigned", json(json::value_t::object));
+  auto unsigned_value = json_data.value("unsigned", json{});
 
   json_data.erase("signatures");
   json_data.erase("unsigned");
@@ -112,19 +109,10 @@ json sign_json(std::string const &server_name, std::string const &key_id,
   }
 
   // Encode signature as UNPADDED base64
-  const size_t base64_max_len = sodium_base64_encoded_len(
-      signed_message_len, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
-
-  std::string base64_str(base64_max_len - 1, 0);
-  char *encoded_str_char = sodium_bin2base64(
-      base64_str.data(), base64_max_len, signed_message.data(),
-      signed_message_len, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
-  if (encoded_str_char == nullptr) {
-    throw std::runtime_error("Base64 Error: Failed to encode string");
-  }
+  auto base64_str = json_utils::base64_key(signed_message);
   // Add signature to json
-  json_data["signatures"][server_name][std::format("ed25519:{}", key_id)] =
-      base64_str;
+  signatures[server_name][std::format("ed25519:{}", key_id)] = base64_str;
+  json_data["signatures"] = signatures;
 
   // Add unsigned back
   if (!unsigned_value.is_null()) {

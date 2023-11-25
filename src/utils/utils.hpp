@@ -16,10 +16,8 @@ std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
            std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key();
 json sign_json(std::string const &server_name, std::string const &key_id,
-               std::array<unsigned char, crypto_sign_SECRETKEYBYTES> secret_key,
-               json &json_data);
-std::array<unsigned char, crypto_sign_SECRETKEYBYTES>
-unbase64_key(std::string input);
+               std::vector<unsigned char> secret_key, json &json_data);
+std::vector<unsigned char> unbase64_key(std::string input);
 std::string base64_key(std::vector<unsigned char> input);
 } // namespace json_utils
 

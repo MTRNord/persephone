@@ -14,7 +14,7 @@ void write_server_key(Config const &config,
                       std::vector<unsigned char> private_key) {
   const std::string algo = "ed25519";
 
-  auto base64_str = json_utils::base64_key(private_key);
+  auto base64_str = json_utils::base64_key(std::move(private_key));
 
   std::string version = std::format("a_{}", random_string(4));
   std::ofstream keyfile(config.matrix_config.server_key_location);
@@ -37,7 +37,7 @@ void ensure_server_keys(Config const &config) {
 int main() {
   // Libsodium init
   if (sodium_init() < 0) {
-    std::cout << 'Failed to init libsodium\n';
+    std::cout << "Failed to init libsodium\n";
     return 1;
   }
 

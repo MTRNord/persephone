@@ -41,6 +41,8 @@ void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
     std::rethrow_exception(std::move(ep));
   } catch (std::exception &e) {
     error = e.what();
+  } catch (char const *e) {
+    error = std::string(e);
   } catch (...) { // See the following NOTE
     error = "Unknown Exception";
   }
