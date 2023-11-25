@@ -24,11 +24,7 @@ add_project_arguments(
 includes = include_directories('src')
 
 ####### Webserver/Matrix ############
-httplib = subproject(
-    'cpp-httplib',
-    default_options: ['cpp-httplib_openssl=enabled'],
-)
-cpp_httplib_dep = httplib.get_variable('cpp_httplib_dep')
+cpp_httplib_dep = dependency('cpp-httplib')
 thread_dep = dependency('threads')
 
 json = dependency('nlohmann_json')
