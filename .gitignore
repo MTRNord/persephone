@@ -5,3 +5,5 @@ subprojects/*
 !subprojects/packagefiles
 
 .idea
+
+config.yaml

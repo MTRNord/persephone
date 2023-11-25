@@ -20,6 +20,7 @@ json sign_json(std::string const &server_name, std::string const &key_id,
                json &json_data);
 std::array<unsigned char, crypto_sign_SECRETKEYBYTES>
 unbase64_key(std::string input);
+std::string base64_key(std::vector<unsigned char> input);
 } // namespace json_utils
 
 std::string random_string(const unsigned long len);

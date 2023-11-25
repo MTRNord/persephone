@@ -26,7 +26,10 @@ Webserver::Webserver(Config config, Database const &database) {
   this->svr.Get("/", this->get_root);
 
   this->svr.Get("/_matrix/federation/v1/version", this->get_server_version);
-  this->svr.Get("/_matrix/key/v1/server", this->get_server_version);
+  this->svr.Get("/_matrix/key/v2/server",
+                [this](const httplib::Request &req, httplib::Response &res) {
+                  this->get_server_key(req, res);
+                });
 }
 
 void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
@@ -62,7 +65,7 @@ void Webserver::get_server_key(const Request & /*req*/, Response &res) {
   long now = std::chrono::duration_cast<std::chrono::milliseconds>(
                  std::chrono::system_clock::now().time_since_epoch())
                  .count();
-  long tomorrow = now + (24 * 60 * 60 * 1000); // 24h
+  long tomorrow = now + static_cast<long>(24 * 60 * 60 * 1000); // 24h
 
   std::ifstream t(this->config.matrix_config.server_key_location);
   std::string server_key((std::istreambuf_iterator<char>(t)),
@@ -72,17 +75,21 @@ void Webserver::get_server_key(const Request & /*req*/, Response &res) {
       std::istream_iterator<std::string>(buffer),
       std::istream_iterator<std::string>()};
 
+  auto private_key = json_utils::unbase64_key(splitted_data[2]);
+  std::vector<unsigned char> public_key(crypto_sign_PUBLICKEYBYTES);
+  crypto_sign_ed25519_sk_to_pk(public_key.data(), private_key.data());
+  auto public_key_base64 = json_utils::base64_key(public_key);
+
   server_server_json::keys keys = {
       .server_name = server_name,
       .valid_until_ts = tomorrow,
       .old_verify_keys = {},
       .verify_keys = {{std::format("{}:{}", splitted_data[0], splitted_data[1]),
-                       {.key = splitted_data[2]}}},
+                       {.key = public_key_base64}}},
   };
   json j = keys;
   json signed_j =
-      json_utils::sign_json(server_name, splitted_data[1],
-                            json_utils::unbase64_key(splitted_data[2]), j);
+      json_utils::sign_json(server_name, splitted_data[1], private_key, j);
   res.set_content(signed_j.dump(), "application/json");
 }
 
