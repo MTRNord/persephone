@@ -1,6 +1,7 @@
 #pragma once
 #include "httplib.h"
 #include "nlohmann/json.hpp"
+#include "utils/config.hpp"
 #include <sodium.h>
 
 using json = nlohmann::json;
@@ -22,3 +23,6 @@ std::string base64_key(std::vector<unsigned char> input);
 } // namespace json_utils
 
 std::string random_string(const unsigned long len);
+void write_server_key(Config const &config,
+                      std::vector<unsigned char> private_key);
+void ensure_server_keys(Config const &config);

@@ -145,3 +145,27 @@ std::string random_string(const unsigned long len) {
 
   return tmp_s;
 }
+
+void write_server_key(Config const &config,
+                      std::vector<unsigned char> private_key) {
+  const std::string algo = "ed25519";
+
+  auto base64_str = json_utils::base64_key(std::move(private_key));
+
+  std::string version = std::format("a_{}", random_string(4));
+  std::ofstream keyfile(config.matrix_config.server_key_location);
+  if (keyfile.is_open()) {
+    keyfile << std::format("{} {} {}", algo, version, base64_str);
+    keyfile.close();
+  }
+}
+
+void ensure_server_keys(Config const &config) {
+  if (!std::filesystem::exists(config.matrix_config.server_key_location)) {
+    auto server_key = json_utils::generate_server_key();
+    auto private_key = std::get<1>(server_key);
+    std::vector<unsigned char> private_key_vector(std::begin(private_key),
+                                                  std::end(private_key));
+    write_server_key(config, private_key_vector);
+  }
+}

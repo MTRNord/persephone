@@ -44,7 +44,6 @@ snitch_dep = dependency('snitch')
 
 src = files(
     'src/database/database.cpp',
-    'src/main.cpp',
     'src/utils/config.cpp',
     'src/utils/utils.cpp',
     'src/webserver/webserver.cpp',
@@ -52,7 +51,7 @@ src = files(
 
 executable(
     'persephone',
-    src,
+    src + 'src/main.cpp',
     include_directories: includes,
     dependencies: [
         cpp_httplib_dep,
@@ -67,5 +66,15 @@ executable(
 )
 test(
     'utils',
-    executable('utils_test', 'tests/utils_test.cpp', dependencies: snitch_dep),
+    executable('utils_test', src + 'tests/utils_test.cpp',include_directories: includes, 
+    dependencies: [
+        cpp_httplib_dep,
+        json,
+        thread_dep,
+        soci_core,
+        soci_postgresql,
+        yaml_cpp_dep,
+        libsodium_dep,
+        snitch_dep
+    ],),
 )
