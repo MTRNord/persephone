@@ -13,6 +13,17 @@ void Database::migrate() { this->migration_v1(); }
 void Database::migration_v1() {
   // TODO: Check if we already did this migration
   session sql(*this->pool.get());
+
+  int version = 1;
+  int exists = 0;
+  sql << "select exists(select 1 from migrations where version = :version) as "
+         "exists",
+      into(exists), use(version, "version");
+
+  if (exists == 1) {
+    return;
+  }
+
   transaction tr(sql);
 
   auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
