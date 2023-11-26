@@ -9,13 +9,15 @@ struct Config;
 using json = nlohmann::json;
 
 namespace json_utils {
-std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
-           std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
+[[nodiscard]] std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
+                         std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key();
-json sign_json(std::string const &server_name, std::string const &key_id,
-               std::vector<unsigned char> secret_key, json &json_data);
-std::vector<unsigned char> unbase64_key(std::string input);
-std::string base64_key(std::vector<unsigned char> input);
+[[nodiscard]] json sign_json(std::string const &server_name,
+                             std::string const &key_id,
+                             std::vector<unsigned char> secret_key,
+                             json &json_data);
+[[nodiscard]] std::vector<unsigned char> unbase64_key(std::string input);
+[[nodiscard]] std::string base64_key(std::vector<unsigned char> input);
 
 void write_server_key(Config const &config,
                       std::vector<unsigned char> private_key);

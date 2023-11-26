@@ -9,4 +9,4 @@ std::string log(const Request &req, const Response &res);
 
 void return_error(Response &res, std::string errorcode, std::string error);
 
-std::string random_string(const unsigned long len);
+[[nodiscard]] std::string random_string(const unsigned long len);

@@ -26,6 +26,7 @@ int main() {
     }
 
     Database database(config.db_config.url, config.db_config.pool_size);
+    database.migrate();
     Webserver webserver(config, database);
 
     webserver.start();
