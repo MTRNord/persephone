@@ -1,6 +1,6 @@
 // Placeholder for now
-#include "./utils/utils.hpp"
 #include "nlohmann/json.hpp"
+#include "utils/json_utils.hpp"
 #include <snitch/snitch.hpp>
 #include <vector>
 

@@ -1,8 +1,12 @@
 #include "database.hpp"
-
 #include "libpq-fe.h"
+#include "soci/postgresql/soci-postgresql.h"
+#include "soci/transaction.h"
+#include <errno.h>
 #include <format>
 #include <poll.h>
+#include <stdexcept>
+#include <string.h>
 
 void Database::migrate() { this->migration_v1(); }
 

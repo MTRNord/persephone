@@ -1,6 +1,11 @@
 #include "utils/config.hpp"
+#include "yaml-cpp/node/impl.h"
+#include "yaml-cpp/node/node.h"
+#include "yaml-cpp/node/parse.h"
 #include <filesystem>
 #include <iostream>
+#include <stddef.h>
+#include <stdexcept>
 
 Config::Config() {
   YAML::Node config = YAML::LoadFile("config.yaml");

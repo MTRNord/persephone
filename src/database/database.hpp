@@ -3,10 +3,13 @@
 /// @file
 /// @brief A wrapper for the database operations to ensure they are uniform.
 
-#include "soci/postgresql/soci-postgresql.h"
-#include "soci/soci.h"
+#include "soci/connection-pool.h"
+#include "soci/session.h"
+#include "soci/soci-platform.h"
+#include <cstddef>
 #include <functional>
 #include <memory>
+#include <string>
 
 using namespace soci;
 

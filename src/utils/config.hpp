@@ -5,6 +5,7 @@
 /// This allows to have a nice structure as a struct instead of using brackets.
 
 #include "yaml-cpp/yaml.h"
+#include <cstddef>
 #include <filesystem>
 #include <string>
 

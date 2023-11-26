@@ -1,14 +1,11 @@
 #include "utils/config.hpp"
-#include "utils/utils.hpp"
+#include "utils/json_utils.hpp"
 #include "webserver/webserver.hpp"
+#include "yaml-cpp/exceptions.h"
 #include <database/database.hpp>
-#include <filesystem>
-#include <format>
-#include <fstream>
 #include <iostream>
-#include <iterator>
-#include <sodium.h>
-#include <vector>
+#include <sodium/core.h>
+#include <stdexcept>
 
 int main() {
   // Libsodium init
@@ -22,7 +19,7 @@ int main() {
     Config config;
 
     try {
-      ensure_server_keys(config);
+      json_utils::ensure_server_keys(config);
     } catch (std::runtime_error &error) {
       std::cout << "Failed to ensure_server_keys: " << error.what() << '\n';
       return 1;
