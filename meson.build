@@ -5,8 +5,8 @@ project(
     default_options: [
         'cpp_std=c++20',
         'warning_level=3',
-# Yaml-cpp breaks this with clang
-#        'werror=true',
+        # Yaml-cpp breaks this with clang
+        # 'werror=true',
         'b_lto=true',
     ],
 )
@@ -60,21 +60,26 @@ executable(
         soci_core,
         soci_postgresql,
         yaml_cpp_dep,
-        libsodium_dep
+        libsodium_dep,
     ],
     install: true,
 )
+
 test(
     'utils',
-    executable('utils_test', src + 'tests/utils_test.cpp',include_directories: includes, 
-    dependencies: [
-        cpp_httplib_dep,
-        json,
-        thread_dep,
-        soci_core,
-        soci_postgresql,
-        yaml_cpp_dep,
-        libsodium_dep,
-        snitch_dep
-    ],),
+    executable(
+        'utils_test',
+        src + 'tests/utils_test.cpp',
+        include_directories: includes,
+        dependencies: [
+            cpp_httplib_dep,
+            json,
+            thread_dep,
+            soci_core,
+            soci_postgresql,
+            yaml_cpp_dep,
+            libsodium_dep,
+            snitch_dep,
+        ],
+    ),
 )
