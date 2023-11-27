@@ -6,6 +6,28 @@
 
 #include "nlohmann/json.hpp"
 #include <map>
+#include <optional>
+
+namespace nlohmann {
+
+template <class T> void to_json(nlohmann::json &j, const std::optional<T> &v) {
+  if (v.has_value()) {
+    j = *v;
+  } else {
+    j = nullptr;
+  }
+}
+
+template <class T>
+void from_json(const nlohmann::json &j, std::optional<T> &v) {
+  if (j.is_null()) {
+    v = std::nullopt;
+  } else {
+    v = j.get<T>();
+  }
+}
+
+} // namespace nlohmann
 
 using json = nlohmann::json;
 
@@ -90,3 +112,21 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
                                    old_verify_keys, verify_keys, signatures)
 
 } // namespace server_server_json
+
+/**
+ * @brief Json types for the C-S API
+ */
+namespace client_server_json {
+struct registration_body {
+  std::optional<std::map<std::string, json>> auth;
+  std::optional<std::string> device_id;
+  bool inhibit_login;
+  std::optional<std::string> initial_device_display_name;
+  std::string password;
+  bool refresh_token;
+  std::optional<std::string> username;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_body, auth, device_id,
+                                   inhibit_login, initial_device_display_name,
+                                   password, refresh_token, username)
+} // namespace client_server_json

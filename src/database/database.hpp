@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 
 using namespace soci;
@@ -37,7 +38,17 @@ public:
 
   void migrate();
 
+  struct UserCreationData {
+    std::string matrix_id;
+    std::optional<std::string> device_id;
+    std::string device_name;
+    std::string password;
+  };
+  [[nodiscard]] std::string create_user(UserCreationData const &data) const;
+  [[nodiscard]] bool user_exists(std::string matrix_id) const;
+
 private:
   void migration_v1();
+  void migration_v2();
   void listen(std::string channel, std::function<void()> const &callback);
 };

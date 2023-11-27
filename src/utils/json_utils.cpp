@@ -2,6 +2,7 @@
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -10,7 +11,6 @@
 #include <nlohmann/detail/value_t.hpp>
 #include <nlohmann/json.hpp>
 #include <sodium/utils.h>
-#include <stddef.h>
 #include <stdexcept>
 #include <utility>
 

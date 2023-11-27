@@ -3,6 +3,7 @@
 #include "nlohmann/json.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
+#include "webserver/client_server_api/auth.hpp"
 #include "webserver/json.hpp"
 #include <bits/chrono.h>
 #include <filesystem>
@@ -40,9 +41,15 @@ Webserver::Webserver(Config config, Database const &database) {
 
   this->svr.Get("/_matrix/federation/v1/version", this->get_server_version);
   this->svr.Get("/_matrix/key/v2/server",
-                [this](const httplib::Request &req, httplib::Response &res) {
+                [this](const Request &req, Response &res) {
                   this->get_server_key(req, res);
                 });
+
+  // TODO: Factor this out to a CS API class
+  this->svr.Post("/_matrix/client/v3/register",
+                 [&](const Request &req, Response &res) {
+                   client_server_api::register_user(database, config, req, res);
+                 });
 }
 
 void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
@@ -60,7 +67,7 @@ void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
     error = "Unknown Exception";
   }
 
-  return_error(res, "M_UNKNOWN", error);
+  return_error(res, "M_UNKNOWN", error, 500);
 }
 
 void Webserver::get_root(const Request & /*req*/, Response &res) {

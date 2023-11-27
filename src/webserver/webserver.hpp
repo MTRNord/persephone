@@ -1,9 +1,9 @@
 #pragma once
 
+#include "database/database.hpp"
 #include "httplib.h"
 #include "utils/config.hpp"
 #include <exception>
-class Database;
 
 using namespace httplib;
 

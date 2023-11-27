@@ -83,6 +83,6 @@
         "ranges": "cpp",
         "shared_mutex": "cpp",
         "valarray": "cpp",
-        "*.sql": "cpp"
+        "*.sql": "sql"
     }
 }

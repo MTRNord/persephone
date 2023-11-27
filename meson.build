@@ -38,6 +38,7 @@ yaml_cpp_dep = dependency('yaml_cpp')
 
 ###### libsodium #######
 libsodium_dep = dependency('libsodium')
+zlib_dep = dependency('zlib')
 
 ####### Tests ############
 snitch_dep = dependency('snitch')
@@ -47,22 +48,26 @@ src = files(
     'src/utils/config.cpp',
     'src/utils/json_utils.cpp',
     'src/utils/utils.cpp',
+    'src/webserver/client_server_api/auth.cpp',
     'src/webserver/webserver.cpp',
 )
+
+deps = [
+    cpp_httplib_dep,
+    json,
+    thread_dep,
+    soci_core,
+    soci_postgresql,
+    yaml_cpp_dep,
+    libsodium_dep,
+    zlib_dep,
+]
 
 executable(
     'persephone',
     src + 'src/main.cpp',
     include_directories: includes,
-    dependencies: [
-        cpp_httplib_dep,
-        json,
-        thread_dep,
-        soci_core,
-        soci_postgresql,
-        yaml_cpp_dep,
-        libsodium_dep,
-    ],
+    dependencies: deps,
     install: true,
 )
 
@@ -72,15 +77,6 @@ test(
         'utils_test',
         src + 'tests/utils_test.cpp',
         include_directories: includes,
-        dependencies: [
-            cpp_httplib_dep,
-            json,
-            thread_dep,
-            soci_core,
-            soci_postgresql,
-            yaml_cpp_dep,
-            libsodium_dep,
-            snitch_dep,
-        ],
+        dependencies: deps + snitch_dep,
     ),
 )

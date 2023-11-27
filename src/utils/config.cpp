@@ -2,9 +2,9 @@
 #include "yaml-cpp/node/impl.h"
 #include "yaml-cpp/node/node.h"
 #include "yaml-cpp/node/parse.h"
+#include <cstddef>
 #include <filesystem>
 #include <iostream>
-#include <stddef.h>
 #include <stdexcept>
 
 Config::Config() {
