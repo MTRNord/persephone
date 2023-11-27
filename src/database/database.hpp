@@ -44,7 +44,12 @@ public:
     std::string device_name;
     std::string password;
   };
-  [[nodiscard]] std::string create_user(UserCreationData const &data) const;
+  struct UserCreationResp {
+    std::string access_token;
+    std::string device_id;
+  };
+  [[nodiscard]] UserCreationResp
+  create_user(UserCreationData const &data) const;
   [[nodiscard]] bool user_exists(std::string matrix_id) const;
 
 private:

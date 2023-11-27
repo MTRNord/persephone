@@ -129,4 +129,19 @@ struct registration_body {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_body, auth, device_id,
                                    inhibit_login, initial_device_display_name,
                                    password, refresh_token, username)
+
+/**
+ * @brief JSON Object for the 200 response of the /register endpoint
+ * See:
+ * https://spec.matrix.org/v1.8/client-server-api/#post_matrixclientv3register
+ */
+struct registration_resp {
+  std::optional<std::string> access_token;
+  std::optional<std::string> device_id;
+  std::optional<long> expires_in_ms;
+  std::optional<std::string> refresh_token;
+  std::string user_id;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_resp, access_token, device_id,
+                                   expires_in_ms, refresh_token, user_id)
 } // namespace client_server_json

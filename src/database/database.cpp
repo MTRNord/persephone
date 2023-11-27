@@ -60,7 +60,8 @@ void Database::migration_v2() {
   tr.commit();
 }
 
-std::string Database::create_user(UserCreationData const &data) const {
+Database::UserCreationResp
+Database::create_user(Database::UserCreationData const &data) const {
   session sql(*this->pool.get());
 
   // TODO: If we have a guest registering we are required to always generate
@@ -88,7 +89,7 @@ std::string Database::create_user(UserCreationData const &data) const {
       use(data.matrix_id), use(device_id), use(data.device_name), use(token);
 
   tr.commit();
-  return token;
+  return {token, device_id};
 }
 
 bool Database::user_exists(std::string matrix_id) const {

@@ -3,6 +3,7 @@
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
 #include <format>
+#include <optional>
 
 using json = nlohmann::json;
 
@@ -55,15 +56,31 @@ void register_user(const Database &db, const Config &config, const Request &req,
   }
 
   // Try to register the user
+  auto access_token = std::make_optional<std::string>();
+  auto device_id = std::make_optional<std::string>();
   try {
     Database::UserCreationData data{
         reg_body.username.value(), reg_body.device_id,
         reg_body.initial_device_display_name.value(), reg_body.password};
-    auto access_token = db.create_user(data);
+    auto device_data = db.create_user(data);
+
+    if (!reg_body.inhibit_login) {
+      access_token = device_data.access_token;
+      device_id = device_data.device_id;
+    }
   } catch (std::exception &e) {
     return_error(res, "M_UNKNOWN", e.what(), 500);
     return;
   }
+
+  client_server_json::registration_resp resp = {
+      .access_token = access_token,
+      .device_id = device_id,
+      .user_id =
+          std::format("@{}:{}", username, config.matrix_config.server_name),
+  };
+  json j = resp;
+  res.set_content(j.dump(), "application/json");
 }
 
 bool is_valid_localpart(std::string const &localpart) {}
