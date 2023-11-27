@@ -12,7 +12,7 @@ void return_error(Response &res, std::string errorcode, std::string error,
 
 [[nodiscard]] std::string random_string(const unsigned long len);
 
-[[nodiscard]] std::string hash_password(std::string password);
+[[nodiscard]] std::string hash_password(std::string const &password);
 
 // Get the localpart of a user's matrix id.
 [[nodiscard]] std::string localpart(std::string const &matrix_id);

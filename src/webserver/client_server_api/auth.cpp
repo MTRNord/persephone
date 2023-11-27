@@ -38,7 +38,7 @@ void register_user(const Database &db, const Config &config, const Request &req,
   // Check if the username is valid. Note that `username` means localpart in
   // matrix terms.
   auto username = reg_body.username.value_or(random_string(25));
-  if (!client_server_api::is_valid_localpart(username)) {
+  if (!client_server_api::is_valid_localpart(username, config)) {
     return_error(res, "M_INVALID_USERNAME", "Invalid username", 400);
     return;
   }
@@ -83,5 +83,43 @@ void register_user(const Database &db, const Config &config, const Request &req,
   res.set_content(j.dump(), "application/json");
 }
 
-bool is_valid_localpart(std::string const &localpart) {}
+/**
+ * Check if a localpard is valid according to
+ * https://spec.matrix.org/v1.8/appendices/#user-identifiers
+ *
+ * ```
+ * user_id_localpart = 1*user_id_char
+ * user_id_char = DIGIT
+ *              / %x61-7A                   ; a-z
+ *              / "-" / "." / "=" / "_" / "/" / "+"
+ * ```
+ *
+ * We also need to check that it not exceeds 255 chars when containing `@`, a
+ * colon and the domain.
+ *
+ * @param localpart The localpart to check
+ * @return true if the localpart is valid, false otherwise
+ */
+bool is_valid_localpart(std::string const &localpart, Config const &config) {
+  for (auto const &c : localpart) {
+    if (std::isdigit(c)) {
+      continue;
+    }
+    if (c >= 'a' && c <= 'z') {
+      continue;
+    }
+    if (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' || c == '+') {
+      continue;
+    }
+    return false;
+  }
+
+  // Check if the localpart is too long
+  if (std::format("@{}:{}", localpart, config.matrix_config.server_name)
+          .length() > 255) {
+    return false;
+  }
+
+  return true;
+}
 } // namespace client_server_api

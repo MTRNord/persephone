@@ -67,7 +67,7 @@ Database::create_user(Database::UserCreationData const &data) const {
   // TODO: If we have a guest registering we are required to always generate
   // this.
   auto device_id = data.device_id.value_or(random_string(7));
-  auto hashed_password = hash_password(std::move(data.password));
+  auto hashed_password = hash_password(data.password);
 
   transaction tr(sql);
   sql << "INSERT INTO users(matrix_id, password_hash) VALUES(:matrix_id, "
