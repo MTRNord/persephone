@@ -2,10 +2,12 @@
 
 #include "database/database.hpp"
 #include "httplib.h"
+#include "nlohmann/json.hpp"
 #include "utils/config.hpp"
 #include <exception>
 
 using namespace httplib;
+using json = nlohmann::json;
 
 class Webserver {
 private:
@@ -26,3 +28,5 @@ public:
   Webserver(Config config, Database const &database);
   void start();
 };
+
+void set_json_response(Response &res, const json &j, int status = 200);

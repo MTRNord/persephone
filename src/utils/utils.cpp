@@ -1,6 +1,7 @@
 #include "utils.hpp"
 #include "sodium.h"
 #include "webserver/json.hpp"
+#include "webserver/webserver.hpp"
 #include <cstdlib>
 #include <format>
 #include <map>
@@ -52,8 +53,7 @@ void return_error(Response &res, std::string errorcode, std::string error,
   generic_json::generic_json_error json_error{std::move(errorcode),
                                               std::move(error)};
   json j = json_error;
-  res.set_content(j.dump(), "application/json");
-  res.status = status_code;
+  set_json_response(res, j, status_code);
 }
 
 std::string random_string(const unsigned long len) {
@@ -71,13 +71,13 @@ std::string random_string(const unsigned long len) {
 }
 
 std::string hash_password(std::string const &password) {
-  std::string hashed_password;
-
-  if (crypto_pwhash_str(hashed_password.data(), password.c_str(),
-                        password.size(), crypto_pwhash_OPSLIMIT_SENSITIVE,
+  char hashed_password_c[crypto_pwhash_STRBYTES];
+  if (crypto_pwhash_str(hashed_password_c, password.c_str(), password.length(),
+                        crypto_pwhash_OPSLIMIT_SENSITIVE,
                         crypto_pwhash_MEMLIMIT_SENSITIVE) != 0) {
     throw std::runtime_error("Failed to hash password");
   }
+  std::string hashed_password(hashed_password_c);
 
   return hashed_password;
 }

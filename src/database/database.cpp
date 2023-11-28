@@ -67,12 +67,12 @@ Database::create_user(Database::UserCreationData const &data) const {
   // TODO: If we have a guest registering we are required to always generate
   // this.
   auto device_id = data.device_id.value_or(random_string(7));
-  auto hashed_password = hash_password(data.password);
+  auto password_hash = hash_password(data.password);
 
   transaction tr(sql);
   sql << "INSERT INTO users(matrix_id, password_hash) VALUES(:matrix_id, "
          ":password_hash)",
-      use(data.matrix_id), use(hashed_password);
+      use(data.matrix_id), use(password_hash);
 
   // This token should have this pattern:
   // `persephone_<unpadded base64 local part of the matrix id>_<random string

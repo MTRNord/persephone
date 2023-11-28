@@ -8,27 +8,6 @@
 #include <map>
 #include <optional>
 
-namespace nlohmann {
-
-template <class T> void to_json(nlohmann::json &j, const std::optional<T> &v) {
-  if (v.has_value()) {
-    j = *v;
-  } else {
-    j = nullptr;
-  }
-}
-
-template <class T>
-void from_json(const nlohmann::json &j, std::optional<T> &v) {
-  if (j.is_null()) {
-    v = std::nullopt;
-  } else {
-    v = j.get<T>();
-  }
-}
-
-} // namespace nlohmann
-
 using json = nlohmann::json;
 
 /**
@@ -117,18 +96,23 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
  * @brief Json types for the C-S API
  */
 namespace client_server_json {
+struct AuthenticationData {
+  std::string session;
+  std::string type;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthenticationData, session, type)
+
 struct registration_body {
-  std::optional<std::map<std::string, json>> auth;
+  std::optional<AuthenticationData> auth;
   std::optional<std::string> device_id;
-  bool inhibit_login;
+  std::optional<bool> inhibit_login;
   std::optional<std::string> initial_device_display_name;
-  std::string password;
-  bool refresh_token;
+  std::optional<std::string> password;
+  std::optional<bool> refresh_token;
   std::optional<std::string> username;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_body, auth, device_id,
-                                   inhibit_login, initial_device_display_name,
-                                   password, refresh_token, username)
+void from_json(const json &obj, registration_body &p);
+void to_json(json &obj, const registration_body &p);
 
 /**
  * @brief JSON Object for the 200 response of the /register endpoint
@@ -142,8 +126,19 @@ struct registration_resp {
   std::optional<std::string> refresh_token;
   std::string user_id;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_resp, access_token, device_id,
-                                   expires_in_ms, refresh_token, user_id)
+void from_json(const json &obj, registration_resp &p);
+void to_json(json &obj, const registration_resp &p);
+
+struct FlowInformation {
+  std::array<std::string, 1> stages;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FlowInformation, stages)
+
+struct incomplete_registration_resp {
+  std::string session;
+  std::array<FlowInformation, 1> flows;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incomplete_registration_resp, session, flows)
 
 /**
  * @brief JSON Object for the 200 response of the /v3/account/whoami endpoint
@@ -155,6 +150,29 @@ struct whoami_resp {
   bool is_guest;
   std::optional<std::string> device_id;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(whoami_resp, user_id, is_guest, device_id)
+
+void from_json(const json &obj, whoami_resp &p);
+void to_json(json &obj, const whoami_resp &p);
+
+/**
+ * @brief JSON Object for the 200 response of the /versions endpoint
+ * See:
+ * https://spec.matrix.org/v1.8/client-server-api/#get_matrixclientversions
+ */
+struct versions {
+  std::array<std::string, 2> versions;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions, versions)
+
+struct LoginFlow {
+  bool get_login_token = false;
+  std::string type;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginFlow, get_login_token, type)
+
+struct GetLogin {
+  std::array<LoginFlow, 1> flows;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GetLogin, flows)
 
 } // namespace client_server_json

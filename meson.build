@@ -49,6 +49,7 @@ src = files(
     'src/utils/json_utils.cpp',
     'src/utils/utils.cpp',
     'src/webserver/client_server_api/auth.cpp',
+    'src/webserver/json.cpp',
     'src/webserver/webserver.cpp',
 )
 

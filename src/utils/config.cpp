@@ -15,7 +15,7 @@ Config::Config() {
 
 void Config::load_db(YAML::Node config) {
   if (!config["database"]) {
-    throw std::runtime_error("Missing 'database' section. Unable to start.");
+    std::runtime_error("Missing 'database' section. Unable to start.");
   }
   if (!config["database"]["url"]) {
     throw std::runtime_error(

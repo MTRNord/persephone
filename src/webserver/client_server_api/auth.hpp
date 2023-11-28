@@ -11,6 +11,5 @@ void register_user(const Database &db, const Config &config, const Request &req,
                    Response &res);
 void check_available(const Database &db, const Config &config,
                      const Request &req, Response &res);
-void whoami(const Database &db, const Config &config, const Request &req,
-            Response &res);
+void whoami(const Database &db, const Request &req, Response &res);
 } // namespace client_server_api

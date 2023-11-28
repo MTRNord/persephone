@@ -1,9 +1,9 @@
 #include "webserver.hpp"
 #include "database/database.hpp"
-#include "nlohmann/json.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/client_server_api/auth.hpp"
+#include "webserver/client_server_api/c_s_api.hpp"
 #include "webserver/json.hpp"
 #include <bits/chrono.h>
 #include <filesystem>
@@ -19,8 +19,6 @@
 #include <utility>
 #include <vector>
 
-using json = nlohmann::json;
-
 Webserver::Webserver(Config config, Database const &database) {
   this->config = config;
   if (!this->svr.is_valid()) {
@@ -34,8 +32,17 @@ Webserver::Webserver(Config config, Database const &database) {
   this->svr.set_logger([](const Request &req, const Response &res) {
     std::cout << log(req, res) << '\n';
   });
-
   this->svr.set_exception_handler(this->handle_exceptions);
+
+  this->svr.Options("/(.*)", [](const auto & /*req*/, auto &res) {
+    res.set_header("Allow", "GET, POST, HEAD, OPTIONS");
+    res.set_header(
+        "Access-Control-Allow-Headers",
+        "Content-Type, Accept, X-Requested-With, Authorization, User-Agent");
+
+    res.set_header("Access-Control-Allow-Origin", "*");
+    res.status = 200;
+  });
 
   this->svr.Get("/", this->get_root);
 
@@ -45,15 +52,7 @@ Webserver::Webserver(Config config, Database const &database) {
                   this->get_server_key(req, res);
                 });
 
-  // TODO: Factor this out to a CS API class
-  this->svr.Post("/_matrix/client/v3/register",
-                 [&](const Request &req, Response &res) {
-                   client_server_api::register_user(database, config, req, res);
-                 });
-  this->svr.Get("/_matrix/client/v3/register/available", [&](const Request &req,
-                                                             Response &res) {
-    client_server_api::check_available(database, config, req, res);
-  });
+  client_server_api::setup_client_server_api(this->svr, database, config);
 }
 
 void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
@@ -65,6 +64,7 @@ void Webserver::handle_exceptions(const Request & /*req*/, Response &res,
     std::rethrow_exception(std::move(ep));
   } catch (std::exception &e) {
     error = e.what();
+    std::cout << "Exception: " << error << '\n';
   } catch (char const *e) {
     error = std::string(e);
   } catch (...) { // See the following NOTE
@@ -83,7 +83,7 @@ void Webserver::get_server_version(const Request & /*req*/, Response &res) {
       .server = {.name = "persephone", .version = "0.1.0"}};
 
   json j = version;
-  res.set_content(j.dump(), "application/json");
+  set_json_response(res, j);
 }
 
 void Webserver::get_server_key(const Request & /*req*/, Response &res) {
@@ -116,10 +116,16 @@ void Webserver::get_server_key(const Request & /*req*/, Response &res) {
   json j = keys;
   json signed_j =
       json_utils::sign_json(server_name, splitted_data[1], private_key, j);
-  res.set_content(signed_j.dump(), "application/json");
+  set_json_response(res, signed_j);
 }
 
 void Webserver::start() {
-  std::cout << "Listening on 8080\n";
-  this->svr.listen("localhost", 8080);
+  std::cout << "Listening on 8008\n";
+  this->svr.listen("localhost", 8008);
+}
+
+void set_json_response(Response &res, const json &j, int status) {
+  res.set_content(j.dump(), "application/json");
+  res.set_header("Access-Control-Allow-Origin", "*");
+  res.status = status;
 }

@@ -1,7 +1,9 @@
 #include "auth.hpp"
+#include "webserver/json.hpp"
+
 #include "nlohmann/json.hpp"
 #include "utils/utils.hpp"
-#include "webserver/json.hpp"
+#include "webserver/webserver.hpp"
 #include <format>
 #include <optional>
 
@@ -35,6 +37,21 @@ void register_user(const Database &db, const Config &config, const Request &req,
     return;
   }
 
+  // Check for session in auth object
+  if (!reg_body.auth && !reg_body.password) {
+    // we need to return flows and a session id.
+    // TODO: Keep track of running sessions
+    client_server_json::FlowInformation dummy_flow = {
+        .stages = {"m.login.dummy"}};
+    client_server_json::incomplete_registration_resp resp = {
+        .session = random_string(25),
+        .flows = {dummy_flow},
+    };
+    json j = resp;
+    set_json_response(res, j);
+    return;
+  }
+
   // Check if the username is valid. Note that `username` means localpart in
   // matrix terms.
   auto username = reg_body.username.value_or(random_string(25));
@@ -61,7 +78,8 @@ void register_user(const Database &db, const Config &config, const Request &req,
   try {
     Database::UserCreationData data{
         reg_body.username.value(), reg_body.device_id,
-        reg_body.initial_device_display_name.value(), reg_body.password};
+        reg_body.initial_device_display_name.value(),
+        reg_body.password.value()};
     auto device_data = db.create_user(data);
 
     if (!reg_body.inhibit_login) {
@@ -80,7 +98,7 @@ void register_user(const Database &db, const Config &config, const Request &req,
           std::format("@{}:{}", username, config.matrix_config.server_name),
   };
   json j = resp;
-  res.set_content(j.dump(), "application/json");
+  set_json_response(res, j);
 }
 
 /**
@@ -149,12 +167,12 @@ void check_available(const Database &db, const Config &config,
   // TODO: Implement this
 
   // Return 200 OK with empty json body
-  res.set_content("{}", "application/json");
-  res.status = 200;
+  auto j = json::object();
+  j["available"] = true;
+  set_json_response(res, j);
 }
 
-void whoami(const Database &db, const Config &config, const Request &req,
-            Response &res) {
+void whoami(const Database &db, const Request &req, Response &res) {
   // Get the access token from the Authorization header
   if (!req.has_header("Authorization")) {
     return_error(res, "M_MISSING_TOKEN", "Missing Authorization header", 401);
@@ -179,7 +197,6 @@ void whoami(const Database &db, const Config &config, const Request &req,
       .device_id = user_info->device_id,
   };
   json j = resp;
-  res.set_content(j.dump(), "application/json");
-  res.status = 200;
+  set_json_response(res, j);
 }
 } // namespace client_server_api
