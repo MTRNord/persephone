@@ -103,6 +103,34 @@ bool Database::user_exists(std::string matrix_id) const {
   return exists == 1;
 }
 
+std::optional<Database::UserInfo>
+Database::get_user_info(std::string auth_token) const {
+  session sql(*this->pool.get());
+
+  std::optional<std::string> device_id;
+  std::string device_id_temp;
+  std::string matrix_id;
+  indicator ind;
+  // TODO: track if the user is a guest in the database
+  bool is_guest = false;
+
+  sql << "select (device_id, matrix_id) from devices where access_token = "
+         ":access_token",
+      use(auth_token), into(device_id_temp, ind), into(matrix_id);
+
+  if (!sql.got_data()) {
+    return std::nullopt;
+  }
+
+  if (ind == i_null) {
+    device_id = std::nullopt;
+  } else {
+    device_id = device_id_temp;
+  }
+
+  return UserInfo{device_id, is_guest, matrix_id};
+}
+
 void Database::listen(std::string channel,
                       std::function<void()> const &callback) {
   session sql(*this->pool.get());

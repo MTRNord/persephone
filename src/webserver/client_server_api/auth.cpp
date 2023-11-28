@@ -122,4 +122,64 @@ bool is_valid_localpart(std::string const &localpart, Config const &config) {
 
   return true;
 }
+void check_available(const Database &db, const Config &config,
+                     const Request &req, Response &res) {
+  // Get the username request query parameter
+  if (!req.has_param("username")) {
+    return_error(res, "M_MISSING_PARAM", "Missing username parameter", 500);
+    return;
+  }
+  auto username = req.get_param_value("username");
+
+  // Check if the username is valid
+  if (!client_server_api::is_valid_localpart(username, config)) {
+    return_error(res, "M_INVALID_USERNAME", "Invalid username", 400);
+    return;
+  }
+
+  // Check if the username is already taken
+  if (db.user_exists(
+          std::format("@{}:{}", username, config.matrix_config.server_name))) {
+    return_error(res, "M_USER_IN_USE", "Username already taken", 400);
+    return;
+  }
+
+  // Check if the username is in a namespace exclusively claimed by an
+  // application service.
+  // TODO: Implement this
+
+  // Return 200 OK with empty json body
+  res.set_content("{}", "application/json");
+  res.status = 200;
+}
+
+void whoami(const Database &db, const Config &config, const Request &req,
+            Response &res) {
+  // Get the access token from the Authorization header
+  if (!req.has_header("Authorization")) {
+    return_error(res, "M_MISSING_TOKEN", "Missing Authorization header", 401);
+    return;
+  }
+  auto auth_header = req.get_header_value("Authorization");
+  // Remove the "Bearer " prefix
+  auto access_token = auth_header.substr(7);
+
+  // Check if we have the access token in the database
+  auto user_info = db.get_user_info(access_token);
+  if (!user_info) {
+    return_error(res, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
+    return;
+  }
+
+  // Return the user id, if the user is a guest and the device id if its set as
+  // json
+  client_server_json::whoami_resp resp = {
+      .user_id = user_info->user_id,
+      .is_guest = user_info->is_guest,
+      .device_id = user_info->device_id,
+  };
+  json j = resp;
+  res.set_content(j.dump(), "application/json");
+  res.status = 200;
+}
 } // namespace client_server_api

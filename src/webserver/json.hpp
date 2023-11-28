@@ -144,4 +144,17 @@ struct registration_resp {
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(registration_resp, access_token, device_id,
                                    expires_in_ms, refresh_token, user_id)
+
+/**
+ * @brief JSON Object for the 200 response of the /v3/account/whoami endpoint
+ * See:
+ * https://spec.matrix.org/v1.8/client-server-api/#current-account-information
+ */
+struct whoami_resp {
+  std::string user_id;
+  bool is_guest;
+  std::optional<std::string> device_id;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(whoami_resp, user_id, is_guest, device_id)
+
 } // namespace client_server_json

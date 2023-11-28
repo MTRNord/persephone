@@ -50,6 +50,10 @@ Webserver::Webserver(Config config, Database const &database) {
                  [&](const Request &req, Response &res) {
                    client_server_api::register_user(database, config, req, res);
                  });
+  this->svr.Get("/_matrix/client/v3/register/available", [&](const Request &req,
+                                                             Response &res) {
+    client_server_api::check_available(database, config, req, res);
+  });
 }
 
 void Webserver::handle_exceptions(const Request & /*req*/, Response &res,

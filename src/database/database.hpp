@@ -51,6 +51,14 @@ public:
   [[nodiscard]] UserCreationResp
   create_user(UserCreationData const &data) const;
   [[nodiscard]] bool user_exists(std::string matrix_id) const;
+  struct UserInfo {
+    // Optional for appservices
+    std::optional<std::string> device_id;
+    bool is_guest;
+    std::string user_id;
+  };
+  [[nodiscard]] std::optional<UserInfo>
+  get_user_info(std::string auth_token) const;
 
 private:
   void migration_v1();

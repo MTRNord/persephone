@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS devices (
     matrix_id TEXT NOT NULL references users(matrix_id),
     device_id TEXT NOT NULL,
     device_name TEXT NOT NULL,
-    access_token TEXT NOT NULL,
+    access_token TEXT NOT NULL UNIQUE,
     PRIMARY KEY (matrix_id, device_id)
 );
 
