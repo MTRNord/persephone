@@ -33,6 +33,9 @@ Webserver::Webserver(Config config, Database const &database) {
     std::cout << log(req, res) << '\n';
   });
   this->svr.set_exception_handler(this->handle_exceptions);
+  this->svr.set_post_routing_handler([](const auto &req, auto &res) {
+    res.set_header("Access-Control-Allow-Origin", "*");
+  });
 
   this->svr.Options("/(.*)", [](const auto & /*req*/, auto &res) {
     res.set_header("Allow", "GET, POST, HEAD, OPTIONS");
@@ -126,6 +129,5 @@ void Webserver::start() {
 
 void set_json_response(Response &res, const json &j, int status) {
   res.set_content(j.dump(), "application/json");
-  res.set_header("Access-Control-Allow-Origin", "*");
   res.status = status;
 }
