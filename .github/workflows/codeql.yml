@@ -51,7 +51,9 @@ jobs:
     #     CC: clang
     #     CCX: clang++
 
-    - run: |
+    - name: Build
+      run: |
+        /usr/bin/clang++ --version
         CC=/usr/bin/clang CXX=/usr/bin/clang++ meson setup --reconfigure --buildtype=release builddir
         pushd builddir
         CC=/usr/bin/clang CXX=/usr/bin/clang++ meson dist
