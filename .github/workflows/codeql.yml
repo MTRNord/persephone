@@ -31,7 +31,7 @@ jobs:
       uses: actions/setup-python@v4
     - name: Install dependencies
       run: |
-        sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev
+        sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev
         sudo pip3 install meson
 
     # Initializes the CodeQL tools for scanning.
