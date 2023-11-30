@@ -36,13 +36,13 @@ public:
 
   void migrate();
 
-  struct UserCreationData {
+  struct [[nodiscard]] UserCreationData {
     std::string matrix_id;
     std::optional<std::string> device_id;
     std::optional<std::string> device_name;
     std::string password;
   };
-  struct UserCreationResp {
+  struct [[nodiscard]] UserCreationResp {
     std::string access_token;
     std::string device_id;
   };

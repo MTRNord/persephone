@@ -9,17 +9,17 @@
 #include <filesystem>
 #include <string>
 
-struct DBConfig {
+struct [[nodiscard]] DBConfig {
   std::string url;
   std::size_t pool_size;
 };
 
-struct MatrixConfig {
+struct [[nodiscard]] MatrixConfig {
   std::string server_name;
   std::filesystem::path server_key_location;
 };
 
-struct Config {
+struct [[nodiscard]] Config {
   DBConfig db_config;
   MatrixConfig matrix_config;
 
