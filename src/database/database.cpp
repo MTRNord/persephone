@@ -1,7 +1,6 @@
 #include "database.hpp"
 #include "libpq-fe.h"
 #include "soci/postgresql/soci-postgresql.h"
-#include "soci/transaction.h"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include <cerrno>

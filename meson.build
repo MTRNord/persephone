@@ -9,8 +9,14 @@ project(
         #'werror=true',
         'b_lto=true',
         'b_thinlto_cache=true',
+        # https://github.com/SOCI/soci/issues/1103
+        #'b_sanitize=address,undefined',
+        'b_sanitize=address',
+        # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
+        'b_lundef=false',
     ],
 )
+#
 add_project_arguments(
     '-DCPPHTTPLIB_USE_POLL=true',
     '-DJSON_DIAGNOSTICS=1',
@@ -18,7 +24,9 @@ add_project_arguments(
     '-Wshadow',
     '-Wconversion',
     '-Wpedantic',
+    '-DWITH_BOOST=OFF',
     '-D_FORTIFY_SOURCE=2',
+    #'-fno-sanitize=vptr',
     language: ['c', 'cpp'],
 )
 
