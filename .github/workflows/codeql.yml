@@ -41,20 +41,19 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-    # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
-    # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
-      env:
-        CC: clang
-        CCX: clang++
-
-    # - run: |
-    #     make bootstrap
-    #     make release
+    # # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
+    # # If this step fails, then you should remove it and run the build manually (see below)
+    # - name: Autobuild
+    #   uses: github/codeql-action/autobuild@v2
     #   env:
     #     CC: clang
     #     CCX: clang++
+
+    - run: |
+        CC=clang CXX=clang++ meson setup --reconfigure --buildtype=release builddir
+        pushd builddir
+        meson dist
+        popd
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
