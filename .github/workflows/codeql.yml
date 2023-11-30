@@ -32,6 +32,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo ./.github/llvm.sh 17 all
+        which clang
         sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev
         sudo pip3 install meson
 
