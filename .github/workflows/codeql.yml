@@ -56,7 +56,7 @@ jobs:
         /usr/bin/clang++-17 --version
         CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir
         pushd builddir
-        CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson dist -Db_lto=false -Db_thinlto_cache=false
+        CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson dist
         popd
 
     - name: Perform CodeQL Analysis
