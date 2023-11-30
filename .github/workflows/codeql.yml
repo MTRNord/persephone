@@ -31,7 +31,7 @@ jobs:
       uses: actions/setup-python@v4
     - name: Install dependencies
       run: |
-        sudo ./.github/llvm.sh 17
+        sudo ./.github/llvm.sh 17 all
         sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev
         sudo pip3 install meson
 
@@ -41,13 +41,20 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-
-    - run: |
-        make bootstrap
-        make release
+    # Autobuild attempts to build any compiled languages (C/C++, C#, Go, Java, or Swift).
+    # If this step fails, then you should remove it and run the build manually (see below)
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
       env:
         CC: clang
         CCX: clang++
+
+    # - run: |
+    #     make bootstrap
+    #     make release
+    #   env:
+    #     CC: clang
+    #     CCX: clang++
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
