@@ -80,16 +80,19 @@ Database::create_user(Database::UserCreationData const &data) const {
   auto localpart_str = localpart(data.matrix_id);
   std::vector<unsigned char> localpart_vec(localpart_str.begin(),
                                            localpart_str.end());
-  auto token = std::format(
+  auto access_token = std::format(
       "persephone_{}_{}_{}", json_utils::base64_key(localpart_vec),
       random_string(20), base62_encode(crc32_helper(data.matrix_id)));
 
-  sql << "INSERT INTO devices(matrix_id, device_id, device_name, access_token) "
+  auto device_name = data.device_name.value_or(random_string(7));
+
+  sql << "INSERT INTO devices(matrix_id, device_id, device_name, "
+         "access_token) "
          "VALUES(:matrix_id, :device_id, :device_name, :access_token)",
-      use(data.matrix_id), use(device_id), use(data.device_name), use(token);
+      use(data.matrix_id), use(device_id), use(device_name), use(access_token);
 
   tr.commit();
-  return {token, device_id};
+  return {access_token, device_id};
 }
 
 bool Database::user_exists(std::string matrix_id) const {
@@ -137,7 +140,7 @@ void Database::listen(std::string channel,
 
   sql << std::format("Listen {}", channel);
 
-  postgresql_session_backend *sessionBackEnd =
+  auto *sessionBackEnd =
       static_cast<postgresql_session_backend *>(sql.get_backend());
 
   auto conn = sessionBackEnd->conn_;

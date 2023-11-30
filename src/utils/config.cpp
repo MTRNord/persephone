@@ -15,7 +15,7 @@ Config::Config() {
 
 void Config::load_db(YAML::Node config) {
   if (!config["database"]) {
-    std::runtime_error("Missing 'database' section. Unable to start.");
+    throw std::runtime_error("Missing 'database' section. Unable to start.");
   }
   if (!config["database"]["url"]) {
     throw std::runtime_error(
@@ -30,7 +30,6 @@ void Config::load_db(YAML::Node config) {
     this->db_config.pool_size = 10;
   } else {
     this->db_config.pool_size = config["database"]["pool_size"].as<size_t>();
-    ;
   }
 }
 

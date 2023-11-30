@@ -7,10 +7,5 @@ Checks: >
     performance-*,
     modernize-*,
     bugprone-*,
-    -modernize-use-trailing-return-type,
-    -modernize-concat-nested-namespaces,
-    -modernize-use-auto,
-    -clang-analyzer-cplusplus.NewDeleteLeaks,
-    -clang-analyzer-security.FloatLoopCounter
+    -modernize-use-trailing-return-type
 ...
-

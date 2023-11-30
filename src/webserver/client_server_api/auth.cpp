@@ -38,7 +38,7 @@ void register_user(const Database &db, const Config &config, const Request &req,
   }
 
   // Check for session in auth object
-  if (!reg_body.auth && !reg_body.password) {
+  if (!reg_body.auth.has_value() && !reg_body.password.has_value()) {
     // we need to return flows and a session id.
     // TODO: Keep track of running sessions
     client_server_json::FlowInformation dummy_flow = {
@@ -75,10 +75,19 @@ void register_user(const Database &db, const Config &config, const Request &req,
   // Try to register the user
   auto access_token = std::make_optional<std::string>();
   auto device_id = std::make_optional<std::string>();
+
+  if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
+    return_error(res, "M_UNKNOWN",
+                 "Invalid input. You are missing either username or password",
+                 500);
+    return;
+  }
+
   try {
     Database::UserCreationData data{
-        reg_body.username.value(), reg_body.device_id,
-        reg_body.initial_device_display_name.value(),
+        std::format("@{}:{}", reg_body.username.value(),
+                    config.matrix_config.server_name),
+        reg_body.device_id, reg_body.initial_device_display_name,
         reg_body.password.value()};
     auto device_data = db.create_user(data);
 
@@ -87,6 +96,7 @@ void register_user(const Database &db, const Config &config, const Request &req,
       device_id = device_data.device_id;
     }
   } catch (std::exception &e) {
+    std::cout << "Error: " << e.what() << '\n';
     return_error(res, "M_UNKNOWN", e.what(), 500);
     return;
   }
@@ -167,8 +177,11 @@ void check_available(const Database &db, const Config &config,
   // TODO: Implement this
 
   // Return 200 OK with empty json body
-  auto j = json::object();
-  j["available"] = true;
+  const auto j = []() {
+    auto j = json::object();
+    j["available"] = true;
+    return j;
+  }();
   set_json_response(res, j);
 }
 

@@ -41,7 +41,7 @@ public:
   struct UserCreationData {
     std::string matrix_id;
     std::optional<std::string> device_id;
-    std::string device_name;
+    std::optional<std::string> device_name;
     std::string password;
   };
   struct UserCreationResp {

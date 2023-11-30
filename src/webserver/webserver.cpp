@@ -33,7 +33,7 @@ Webserver::Webserver(Config config, Database const &database) {
     std::cout << log(req, res) << '\n';
   });
   this->svr.set_exception_handler(this->handle_exceptions);
-  this->svr.set_post_routing_handler([](const auto &req, auto &res) {
+  this->svr.set_post_routing_handler([](const auto & /*req*/, auto &res) {
     res.set_header("Access-Control-Allow-Origin", "*");
   });
 
@@ -42,8 +42,6 @@ Webserver::Webserver(Config config, Database const &database) {
     res.set_header(
         "Access-Control-Allow-Headers",
         "Content-Type, Accept, X-Requested-With, Authorization, User-Agent");
-
-    res.set_header("Access-Control-Allow-Origin", "*");
     res.status = 200;
   });
 
@@ -82,7 +80,7 @@ void Webserver::get_root(const Request & /*req*/, Response &res) {
 }
 
 void Webserver::get_server_version(const Request & /*req*/, Response &res) {
-  server_server_json::version version = {
+  static constexpr server_server_json::version version = {
       .server = {.name = "persephone", .version = "0.1.0"}};
 
   json j = version;

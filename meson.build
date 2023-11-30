@@ -5,9 +5,10 @@ project(
     default_options: [
         'cpp_std=c++20',
         'warning_level=3',
-        # Yaml-cpp breaks this with clang
-        # 'werror=true',
+        # SOCI and yaml_cpp break werror. Fixes appreciated
+        #'werror=true',
         'b_lto=true',
+        'b_thinlto_cache=true',
     ],
 )
 add_project_arguments(
@@ -79,5 +80,6 @@ test(
         src + 'tests/utils_test.cpp',
         include_directories: includes,
         dependencies: deps + snitch_dep,
+        build_by_default: false,
     ),
 )
