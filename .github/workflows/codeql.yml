@@ -33,6 +33,7 @@ jobs:
       run: |
         sudo ./.github/llvm.sh 17 all
         which clang
+        which clang++
         sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev
         sudo pip3 install meson
 
@@ -51,9 +52,9 @@ jobs:
     #     CCX: clang++
 
     - run: |
-        CC=clang CXX=clang++ meson setup --reconfigure --buildtype=release builddir
+        CC=/usr/bin/clang CXX=/usr/bin/clang++ meson setup --reconfigure --buildtype=release builddir
         pushd builddir
-        meson dist
+        CC=/usr/bin/clang CXX=/usr/bin/clang++ meson dist
         popd
 
     - name: Perform CodeQL Analysis
