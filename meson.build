@@ -21,7 +21,6 @@ add_project_arguments(
     '-DCPPHTTPLIB_USE_POLL=true',
     '-DJSON_DIAGNOSTICS=1',
     '-DJSON_USE_IMPLICIT_CONVERSIONS=0',
-    '-DCMAKE_CXX_STANDARD=20',
     '-Wshadow',
     '-Wconversion',
     '-Wpedantic',
