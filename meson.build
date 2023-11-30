@@ -9,8 +9,12 @@ project(
         #'werror=true',
         'b_lto=true',
         'b_thinlto_cache=true',
+        'b_sanitize=address,undefined',
+        # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
+        'b_lundef=false',
     ],
 )
+#'-D_FORTIFY_SOURCE=2',
 add_project_arguments(
     '-DCPPHTTPLIB_USE_POLL=true',
     '-DJSON_DIAGNOSTICS=1',
@@ -18,7 +22,7 @@ add_project_arguments(
     '-Wshadow',
     '-Wconversion',
     '-Wpedantic',
-    '-D_FORTIFY_SOURCE=2',
+    '-DWITH_BOOST=OFF',
     language: ['c', 'cpp'],
 )
 
