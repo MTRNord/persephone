@@ -4,6 +4,7 @@ project(
     version: '0.1.0',
     default_options: [
         'cpp_std=c++20',
+        'c_std=c11',
         'warning_level=3',
         # SOCI and yaml_cpp break werror. Fixes appreciated
         #'werror=true',
@@ -11,14 +12,13 @@ project(
         'b_thinlto_cache=true',
         # https://github.com/SOCI/soci/issues/1103
         #'b_sanitize=address,undefined',
-        'b_sanitize=address',
+        #        'b_sanitize=address',
         # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
-        'b_lundef=false',
+        #        'b_lundef=false',
     ],
 )
 #
 add_project_arguments(
-    '-DCPPHTTPLIB_USE_POLL=true',
     '-DJSON_DIAGNOSTICS=1',
     '-DJSON_USE_IMPLICIT_CONVERSIONS=0',
     '-Wshadow',
@@ -33,14 +33,9 @@ add_project_arguments(
 includes = include_directories('src')
 
 ####### Webserver/Matrix ############
-cpp_httplib_dep = dependency('cpp-httplib')
-thread_dep = dependency('threads')
+drogon_dep = dependency('Drogon')
 
 json = dependency('nlohmann_json')
-
-####### Database ############
-soci_core = dependency('soci_core')
-soci_postgresql = dependency('soci_postgresql')
 
 ###### Config #######
 yaml_cpp_dep = dependency('yaml_cpp')
@@ -57,17 +52,14 @@ src = files(
     'src/utils/config.cpp',
     'src/utils/json_utils.cpp',
     'src/utils/utils.cpp',
-    'src/webserver/client_server_api/auth.cpp',
+    'src/webserver/client_server_api/ClientServerCtrl.cpp',
     'src/webserver/json.cpp',
-    'src/webserver/webserver.cpp',
+    'src/webserver/server_server_api/ServerServerCtrl.cpp',
 )
 
 deps = [
-    cpp_httplib_dep,
+    drogon_dep,
     json,
-    thread_dep,
-    soci_core,
-    soci_postgresql,
     yaml_cpp_dep,
     libsodium_dep,
     zlib_dep,

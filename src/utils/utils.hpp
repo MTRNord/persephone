@@ -1,14 +1,11 @@
 #pragma once
-#include "httplib.h"
+#include "drogon/drogon.h"
 #include <string>
 
-using namespace httplib;
+using namespace drogon;
 
-std::string dump_headers(const Headers &headers);
-std::string log(const Request &req, const Response &res);
-
-void return_error(Response &res, std::string errorcode, std::string error,
-                  int status_code);
+void return_error(std::function<void(const HttpResponsePtr &)> const &callback,
+                  std::string errorcode, std::string error, int status_code);
 
 [[nodiscard]] std::string random_string(const unsigned long len);
 

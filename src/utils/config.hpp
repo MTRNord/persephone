@@ -10,8 +10,11 @@
 #include <string>
 
 struct [[nodiscard]] DBConfig {
-  std::string url;
-  std::size_t pool_size;
+  std::string host;
+  unsigned short port;
+  std::string database_name;
+  std::string user;
+  std::string password;
 };
 
 struct [[nodiscard]] MatrixConfig {

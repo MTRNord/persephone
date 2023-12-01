@@ -4,6 +4,7 @@
         "*.embeddedhtml": "html",
         "*.rs": "rust",
         "*.zonefile": "zone",
+        "*.mdoc": "markdown",
         "cstdlib": "cpp",
         "cctype": "cpp",
         "clocale": "cpp",
@@ -83,6 +84,9 @@
         "ranges": "cpp",
         "shared_mutex": "cpp",
         "valarray": "cpp",
-        "*.sql": "sql"
-    }
+        "*.sql": "sql",
+        "coroutine": "cpp",
+        "*.inc": "cpp"
+    },
+    "cmake.configureOnOpen": false
 }

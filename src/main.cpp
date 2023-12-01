@@ -1,8 +1,8 @@
+#include "database/database.hpp"
+#include "drogon/drogon.h"
 #include "utils/config.hpp"
 #include "utils/json_utils.hpp"
-#include "webserver/webserver.hpp"
 #include "yaml-cpp/exceptions.h"
-#include <database/database.hpp>
 #include <iostream>
 #include <sodium/core.h>
 #include <stdexcept>
@@ -10,7 +10,7 @@
 int main() {
   // Libsodium init
   if (sodium_init() < 0) {
-    std::cout << "Failed to init libsodium\n";
+    LOG_ERROR << "Failed to init libsodium";
     return 1;
   }
 
@@ -21,21 +21,36 @@ int main() {
     try {
       json_utils::ensure_server_keys(config);
     } catch (std::runtime_error &error) {
-      std::cout << "Failed to ensure_server_keys: " << error.what() << '\n';
+      LOG_ERROR << "Failed to ensure_server_keys: " << error.what();
       return 1;
     }
 
-    Database database(config.db_config.url, config.db_config.pool_size);
-    database.migrate();
-    Webserver webserver(config, database);
+    LOG_INFO << "Server running on 127.0.0.1:8008";
+    drogon::app()
+        .addListener("0.0.0.0", 8008)
+        .setThreadNum(0)
+        .setLogLevel(trantor::Logger::LogLevel::kDebug)
+        .createDbClient("postgresql", config.db_config.host,
+                        config.db_config.port, config.db_config.database_name,
+                        config.db_config.user, config.db_config.password, 1, "",
+                        "default", true)
+        .enableGzip(true)
+        .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
+                                       const drogon::HttpResponsePtr &resp) {
+          resp->addHeader("Access-Control-Allow-Origin", "*");
+        })
+        .registerBeginningAdvice([]() {
+          Database db{};
+          db.migrate();
+        });
 
-    webserver.start();
+    drogon::app().run();
   } catch (YAML::BadFile &error) {
-    std::cout << "Missing or invalid config.yaml file. Make sure to create it "
-                 "prior to running persephone \n";
+    LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "
+                 "prior to running persephone";
     return 1;
   } catch (std::runtime_error &error) {
-    std::cout << error.what() << "\n";
+    LOG_ERROR << error.what();
     return 1;
   }
 

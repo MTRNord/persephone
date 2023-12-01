@@ -1,60 +1,23 @@
 #include "utils.hpp"
 #include "sodium.h"
 #include "webserver/json.hpp"
-#include "webserver/webserver.hpp"
-#include <cstdlib>
 #include <format>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <utility>
+#include <zlib.h>
 
-std::string dump_headers(const Headers &headers) {
-  std::string s;
-
-  for (const auto &x : headers) {
-    s += std::format("{}: {}\n", x.first, x.second);
-  }
-
-  return s;
-}
-
-std::string log(const Request &req, const Response &res) {
-  std::string s;
-
-  s += "================================\n";
-  s += std::format("{} {} {}\n", req.method, req.version, req.path);
-
-  std::string query;
-  for (auto it = req.params.begin(); it != req.params.end(); ++it) {
-    const auto &x = *it;
-    query += std::format("{}{}={}\n", (it == req.params.begin()) ? '?' : '&',
-                         x.first, x.second);
-  }
-
-  s += std::format("{}\n", query);
-  s += dump_headers(req.headers);
-
-  s += "--------------------------------\n";
-  s += std::format("{} {}\n", res.status, res.version);
-
-  s += dump_headers(res.headers);
-  s += "\n";
-
-  if (!res.body.empty()) {
-    s += res.body;
-  }
-
-  s += "\n";
-  return s;
-}
-
-void return_error(Response &res, std::string errorcode, std::string error,
-                  int status_code) {
+void return_error(std::function<void(const HttpResponsePtr &)> const &callback,
+                  std::string errorcode, std::string error, int status_code) {
   generic_json::generic_json_error json_error{std::move(errorcode),
                                               std::move(error)};
   json j = json_error;
-  set_json_response(res, j, status_code);
+  auto resp = HttpResponse::newHttpResponse();
+  resp->setBody(j.dump());
+  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  resp->setCustomStatusCode(status_code);
+  callback(resp);
 }
 
 std::string random_string(const std::size_t len) {

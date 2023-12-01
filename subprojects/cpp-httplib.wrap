@@ -1,9 +1,0 @@
-[wrap-file]
-directory = cpp-httplib-0.14.1
-source_url = https://github.com/yhirose/cpp-httplib/archive/v0.14.1.tar.gz
-source_filename = cpp-httplib-0.14.1.tar.gz
-source_hash = 2d4fb5544da643e5d0a82585555d8b7502b4137eb321a4abbb075e21d2f00e96
-wrapdb_version = 0.13.1-1
-
-[provide]
-cpp-httplib = cpp_httplib_dep
