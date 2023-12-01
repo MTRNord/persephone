@@ -42,9 +42,9 @@ jobs:
         git submodule update --init
         mkdir build
         pushd build
-        export CMAKE_INSTALL_PREFIX=/usr
         cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
         make && sudo make install
+        sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
         popd
         popd
         popd
