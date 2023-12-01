@@ -34,8 +34,19 @@ jobs:
         sudo ./.github/llvm.sh 17 all
         which clang-17
         which clang++-17
-        sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev
+        sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev
         sudo pip3 install meson
+        pushd /tmp
+        git clone https://github.com/drogonframework/drogon
+        pushd drogon
+        git submodule update --init
+        mkdir build
+        pushd build
+        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+        make && sudo make install
+        popd
+        popd
+        popd
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
