@@ -30,6 +30,8 @@ jobs:
     - name: Install Python
       uses: actions/setup-python@v4
     - name: Install dependencies
+      env:
+        CMAKE_INSTALL_PREFIX: /usr
       run: |
         sudo ./.github/llvm.sh 17 all
         which clang-17
