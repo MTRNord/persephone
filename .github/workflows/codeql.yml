@@ -30,8 +30,6 @@ jobs:
     - name: Install Python
       uses: actions/setup-python@v4
     - name: Install dependencies
-      env:
-        CMAKE_INSTALL_PREFIX: /usr
       run: |
         sudo ./.github/llvm.sh 17 all
         which clang-17
@@ -44,6 +42,7 @@ jobs:
         git submodule update --init
         mkdir build
         pushd build
+        export CMAKE_INSTALL_PREFIX=/usr
         cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
         make && sudo make install
         popd
