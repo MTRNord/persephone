@@ -17,6 +17,10 @@ struct [[nodiscard]] DBConfig {
   std::string password;
 };
 
+struct [[nodiscard]] WebserverConfig {
+  bool ssl;
+};
+
 struct [[nodiscard]] MatrixConfig {
   std::string server_name;
   std::filesystem::path server_key_location;
@@ -25,10 +29,12 @@ struct [[nodiscard]] MatrixConfig {
 struct [[nodiscard]] Config {
   DBConfig db_config;
   MatrixConfig matrix_config;
+  WebserverConfig webserver_config;
 
   Config();
 
 private:
-  void load_db(YAML::Node config);
-  void load_matrix(YAML::Node config);
+  void load_db(const YAML::Node &config);
+  void load_matrix(const YAML::Node &config);
+  void load_webserver(const YAML::Node &config);
 };

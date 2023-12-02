@@ -24,6 +24,7 @@ add_project_arguments(
     '-Wshadow',
     '-Wconversion',
     '-Wpedantic',
+    '-Wunitialized',
     '-DWITH_BOOST=OFF',
     '-D_FORTIFY_SOURCE=2',
     #'-fno-sanitize=vptr',

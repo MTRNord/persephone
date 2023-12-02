@@ -1,11 +1,11 @@
 database:
   host: localhost
   port: 5432
-  database_name: persephone
-  user: persephone
+  database_name: postgres
+  user: postgres
   password: ""
 matrix:
   server_name: localhost
   server_key_location: ./server_key.key
 webserver:
-  ssl: false
+  ssl: true

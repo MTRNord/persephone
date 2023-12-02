@@ -44,6 +44,11 @@ int main() {
           db.migrate();
         });
 
+    if (config.webserver_config.ssl) {
+      drogon::app().addListener("0.0.0.0", 8448, true, "./server.crt",
+                                "./server.key", false);
+    }
+
     drogon::app().run();
   } catch (YAML::BadFile &error) {
     LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "

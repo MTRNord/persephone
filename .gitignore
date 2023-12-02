@@ -6,7 +6,7 @@ subprojects/*
 
 .idea
 
-config.yaml
+/config.yaml
 
 codeql_db
 _codeql_build_dir

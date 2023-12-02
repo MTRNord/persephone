@@ -13,9 +13,10 @@ Config::Config() {
   YAML::Node config = YAML::LoadFile("config.yaml");
   this->load_db(config);
   this->load_matrix(config);
+  this->load_webserver(config);
 }
 
-void Config::load_db(YAML::Node config) {
+void Config::load_db(const YAML::Node &config) {
   if (!config["database"]) {
     throw std::runtime_error("Missing 'database' section. Unable to start.");
   }
@@ -55,7 +56,7 @@ void Config::load_db(YAML::Node config) {
   this->db_config.password = config["database"]["password"].as<std::string>();
 }
 
-void Config::load_matrix(YAML::Node config) {
+void Config::load_matrix(const YAML::Node &config) {
   if (!config["matrix"]) {
     throw std::runtime_error("Missing 'matrix' section. Unable to start.");
   }
@@ -78,4 +79,12 @@ void Config::load_matrix(YAML::Node config) {
   auto server_key_location =
       config["matrix"]["server_key_location"].as<std::string>();
   this->matrix_config.server_key_location = server_key_location;
+}
+
+void Config::load_webserver(const YAML::Node &config) {
+  if (config["ssl"]) {
+    this->webserver_config.ssl = config["ssl"].as<bool>();
+  } else {
+    this->webserver_config.ssl = false;
+  }
 }
