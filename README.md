@@ -21,6 +21,9 @@ The technology used will be:
 
 - C++20
 - Postgresql
-  - SOCI (DB driver)
-- cpp-httplib
+- [drogon](https://drogonframework.github.io)
 - snitch2
+
+## Building
+
+TODO. Bulk of it: Install ninja, meson and cmake and install drogon.
