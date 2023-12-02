@@ -24,7 +24,7 @@ done \n\
 # that come from the COPY . . file don't contaminate the build
 RUN mkdir /persephone
 
-COPY .
+COPY . .
 COPY .github/llvm.sh .
 RUN sudo ./llvm.sh 17 all && which clang-17 && which clang++-17
 RUN pip3 install meson ninja
