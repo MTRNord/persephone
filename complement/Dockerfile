@@ -26,11 +26,11 @@ RUN mkdir /persephone
 
 COPY . .
 COPY .github/llvm.sh .
-RUN sudo ./llvm.sh 17 all && which clang-17 && which clang++-17
+RUN ./llvm.sh 17 all && which clang-17 && which clang++-17
 RUN pip3 install meson ninja
 
 # Install drogon
-RUN pushd /tmp && git clone https://github.com/drogonframework/drogon && pushd drogon && git submodule update --init && mkdir build && pushd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && sudo make install && sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1 && popd && popd && popd
+RUN pushd /tmp && git clone https://github.com/drogonframework/drogon && pushd drogon && git submodule update --init && mkdir build && pushd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && make install && ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1 && popd && popd && popd
 
 # Build and install persephone
 RUN CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir && pushd builddir && meson compile && popd
