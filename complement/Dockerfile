@@ -26,6 +26,8 @@ RUN mkdir /persephone
 
 COPY . .
 COPY .github/llvm.sh .
+# For some reason the tooling doesnt work here properly otherwise
+RUN echo "deb http://apt.llvm.org/bookworm/ llvm-toolchain-bookworm-17 main" >> /etc/apt/sources.list
 RUN ./llvm.sh 17 all && which clang-17 && which clang++-17
 RUN pip3 install meson ninja
 
