@@ -1,17 +1,17 @@
-FROM python:3.12-bookworm
-RUN apt-get update && apt-get install -y postgresql cmake nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget software-properties-common gnupg
+FROM debian:trixie
+RUN apt-get update && apt-get install -y python3 python3-pip postgresql cmake nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget software-properties-common gnupg
 WORKDIR /build
 
 # No password when connecting over localhost
-RUN sed -i "s%127.0.0.1/32            md5%127.0.0.1/32            trust%g" /etc/postgresql/15/main/pg_hba.conf && \
+RUN sed -i "s%127.0.0.1/32            md5%127.0.0.1/32            trust%g" /etc/postgresql/16/main/pg_hba.conf && \
     # Bump up max conns for moar concurrency
-    sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/15/main/postgresql.conf
+    sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/16/main/postgresql.conf
 
 # This entry script starts postgres, waits for it to be up then starts persephone
 RUN echo '\
 #!/bin/bash -eu \n\
 pg_lsclusters \n\
-pg_ctlcluster 15 main start \n\
+pg_ctlcluster 16 main start \n\
  \n\
 until pg_isready \n\
 do \n\
@@ -35,7 +35,7 @@ RUN pip3 install meson ninja
 RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon && git submodule update --init && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && make install && ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
 
 # Build and install persephone
-RUN CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir && cd builddir && meson compile
+RUN CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir && cd builddir && CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson compile
 
 WORKDIR /build/builddir
 
