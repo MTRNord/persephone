@@ -3,7 +3,9 @@ RUN apt-get update && apt-get install -y python3 python3-pip postgresql pkg-conf
 WORKDIR /build
 
 # No password when connecting over localhost
-RUN sed -i "s%127.0.0.1/32            md5%127.0.0.1/32            trust%g" /etc/postgresql/16/main/pg_hba.conf && \
+RUN cat /etc/postgresql/16/main/pg_hba.conf && \
+    sed -i "s%127.0.0.1/32            md5%127.0.0.1/32            trust%g" /etc/postgresql/16/main/pg_hba.conf && \
+    sed -i "s%127.0.0.1/32            ident%127.0.0.1/32            trust%g" /etc/postgresql/16/main/pg_hba.conf && \
     # Bump up max conns for moar concurrency
     sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/16/main/postgresql.conf
 
@@ -12,6 +14,7 @@ RUN echo "\
 #!/bin/bash -eu \n\
 pg_lsclusters \n\
 pg_ctlcluster 16 main start \n\
+pg_ctl reload \n\
  \n\
 until pg_isready \n\
 do \n\
