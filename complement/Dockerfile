@@ -18,6 +18,7 @@ do \n\
   echo "Waiting for postgres"; \n\
   sleep 1; \n\
 done \n\
+psql -u postgres -c "ALTER USER postgres PASSWORD \'testing\':"
 ' > run_postgres.sh && chmod +x run_postgres.sh
 
 # we will dump the binaries and config file to this location to ensure any local untracked files
