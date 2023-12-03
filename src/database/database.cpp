@@ -7,12 +7,26 @@
 
 void Database::migrate() {
   LOG_INFO << "Starting database migration";
-  this->migration_v1();
-  this->migration_v2();
+  this->migration_v0([this]() {
+    this->migration_v1([this]() { this->migration_v2([]() {}); });
+  });
+
   LOG_INFO << "Finished database migration";
 }
 
-void Database::migration_v1() {
+void Database::migration_v0(std::function<void()> &&callback) {
+  auto sql = drogon::app().getFastDbClient("default");
+  assert(sql);
+  sql->execSqlAsync(
+      "CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL)",
+      [=](const drogon::orm::Result &) { callback(); },
+      [&, callback](const drogon::orm::DrogonDbException &e) {
+        LOG_ERROR << "Error:" << e.base().what();
+        callback();
+      });
+}
+
+void Database::migration_v1(std::function<void()> &&callback) {
   LOG_INFO << "Starting database migration v0->v1";
   auto sql = drogon::app().getFastDbClient("default");
   assert(sql);
@@ -22,11 +36,13 @@ void Database::migration_v1() {
       [=](const drogon::orm::Result &result) {
         if (result.at(0)["exists"].as<bool>()) {
           LOG_INFO << "Migration v0->v1 already ran";
+          callback();
           return;
         }
         LOG_DEBUG << "First time migrating to v1";
         sql->newTransactionAsync(
-            [](const std::shared_ptr<drogon::orm::Transaction> &transPtr) {
+            [&, callback](
+                const std::shared_ptr<drogon::orm::Transaction> &transPtr) {
               assert(transPtr);
 
               auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
@@ -38,18 +54,21 @@ void Database::migration_v1() {
                   query,
                   [=](const drogon::orm::Result &) {
                     LOG_INFO << "Finished database migration v0->v1";
+                    callback();
                   },
-                  [](const drogon::orm::DrogonDbException &e) {
+                  [&, callback](const drogon::orm::DrogonDbException &e) {
                     LOG_ERROR << "Error:" << e.base().what();
+                    callback();
                   });
             });
       },
-      [](const drogon::orm::DrogonDbException &e) {
+      [&, callback](const drogon::orm::DrogonDbException &e) {
         LOG_ERROR << "Error:" << e.base().what();
+        callback();
       });
 }
 
-void Database::migration_v2() {
+void Database::migration_v2(std::function<void()> &&callback) {
   LOG_INFO << "Starting database migration v1->v2";
   auto sql = drogon::app().getFastDbClient();
   assert(sql);
@@ -59,11 +78,13 @@ void Database::migration_v2() {
       [=](const drogon::orm::Result &result) {
         if (result.at(0)["exists"].as<bool>()) {
           LOG_INFO << "Migration v1->v2 already ran";
+          callback();
           return;
         }
 
         sql->newTransactionAsync(
-            [](const std::shared_ptr<drogon::orm::Transaction> &transPtr) {
+            [&, callback](
+                const std::shared_ptr<drogon::orm::Transaction> &transPtr) {
               assert(transPtr);
 
               auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
@@ -75,14 +96,17 @@ void Database::migration_v2() {
                   query,
                   [=](const drogon::orm::Result &) {
                     LOG_INFO << "Finished database migration v1->v2";
+                    callback();
                   },
-                  [](const drogon::orm::DrogonDbException &e) {
+                  [&, callback](const drogon::orm::DrogonDbException &e) {
                     LOG_ERROR << "Error:" << e.base().what();
+                    callback();
                   });
             });
       },
-      [](const drogon::orm::DrogonDbException &e) {
+      [&, callback](const drogon::orm::DrogonDbException &e) {
         LOG_ERROR << "Error:" << e.base().what();
+        callback();
       });
 }
 

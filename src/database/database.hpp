@@ -46,6 +46,7 @@ public:
                 std::function<void(std::optional<UserInfo>)> &&callback) const;
 
 private:
-  void migration_v1();
-  void migration_v2();
+  void migration_v0(std::function<void()> &&callback);
+  void migration_v1(std::function<void()> &&callback);
+  void migration_v2(std::function<void()> &&callback);
 };
