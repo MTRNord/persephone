@@ -8,18 +8,18 @@ RUN sed -i "s%127.0.0.1/32            md5%127.0.0.1/32            trust%g" /etc/
     sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/16/main/postgresql.conf
 
 # This entry script starts postgres, waits for it to be up then starts persephone
-RUN echo '\
+RUN echo "\
 #!/bin/bash -eu \n\
 pg_lsclusters \n\
 pg_ctlcluster 16 main start \n\
  \n\
 until pg_isready \n\
 do \n\
-  echo "Waiting for postgres"; \n\
+  echo \"Waiting for postgres\"; \n\
   sleep 1; \n\
 done \n\
-psql -u postgres -c "ALTER USER postgres PASSWORD \'testing\';" \n\
-' > run_postgres.sh && chmod +x run_postgres.sh
+psql -u postgres -c \"ALTER USER postgres PASSWORD 'testing';\" \n\
+" > run_postgres.sh && chmod +x run_postgres.sh
 
 # we will dump the binaries and config file to this location to ensure any local untracked files
 # that come from the COPY . . file don't contaminate the build
