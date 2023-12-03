@@ -9,12 +9,14 @@ on:
       - '**.hpp'                # only execute on changes to hpp files
       - 'meson.build'           # or dependency updates
       - '.github/workflows/**'  # or workflow changes
+      - 'complement/**'         # or complement changes
   pull_request:
     paths:
       - '**.cpp'                # only execute on changes to cpp files
       - '**.hpp'                # only execute on changes to hpp files
       - 'meson.build'           # or dependency updates
       - '.github/workflows/**'  # or workflow changes
+      - 'complement/**'         # or complement changes
   release:
     types: [published]
   workflow_dispatch:
