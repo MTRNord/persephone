@@ -4,9 +4,20 @@ on:
   push:
     branches:
       - main
+    paths:
+      - '**.cpp'                # only execute on changes to cpp files
+      - '**.hpp'                # only execute on changes to hpp files
+      - 'meson.build'           # or dependency updates
+      - '.github/workflows/**'  # or workflow changes
   pull_request:
+    paths:
+      - '**.cpp'                # only execute on changes to cpp files
+      - '**.hpp'                # only execute on changes to hpp files
+      - 'meson.build'           # or dependency updates
+      - '.github/workflows/**'  # or workflow changes
   release:
     types: [published]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -109,14 +120,15 @@ jobs:
       # Build initial Persephone image
       - run: docker build -t complement-persephone -f complement/Dockerfile .
         working-directory: persephone
+        env:
+          DOCKER_BUILDKIT: 1
 
       # Run Complement
       - run: |
           set -o pipefail &&
-          go test -v -json -tags persephone_blacklist ./tests/... 2>&1 | gotestfmt
+          go test -v -json -tags persephone_blacklist ./tests  ./tests/csapi 2>&1 | gotestfmt -hide all
         shell: bash
         name: Run Complement Tests
         env:
           COMPLEMENT_BASE_IMAGE: complement-persephone:latest
-          API: ${{ matrix.api && 1 }}
         working-directory: complement
