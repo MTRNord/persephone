@@ -126,6 +126,7 @@
                 inherit system;
               };
                 makeTest {
+                  name = "persephone";
                   nodes = {
                     client = {...}: {
                       imports = [self.nixosModules.persephone];
