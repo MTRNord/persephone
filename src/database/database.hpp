@@ -30,23 +30,18 @@ public:
     std::string access_token;
     std::string device_id;
   };
-  void
-  create_user(UserCreationData const &data,
-              std::function<void(const UserCreationResp &)> &&callback) const;
-  void user_exists(std::string matrix_id,
-                   std::function<void(bool)> &&callback) const;
+  Database::UserCreationResp create_user(UserCreationData const &data) const;
+  bool user_exists(std::string matrix_id) const;
   struct UserInfo {
     // Optional for appservices
     std::optional<std::string> device_id;
     bool is_guest;
     std::string user_id;
   };
-  void
-  get_user_info(std::string auth_token,
-                std::function<void(std::optional<UserInfo>)> &&callback) const;
+  std::optional<Database::UserInfo> get_user_info(std::string auth_token) const;
 
 private:
-  void migration_v0(std::function<void()> &&callback);
-  void migration_v1(std::function<void()> &&callback);
-  void migration_v2(std::function<void()> &&callback);
+  void migration_v0();
+  void migration_v1();
+  void migration_v2();
 };

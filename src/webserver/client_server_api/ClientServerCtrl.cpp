@@ -44,27 +44,25 @@ void ClientServerCtrl::whoami(
   auto resp = HttpResponse::newHttpResponse();
 
   // Check if we have the access token in the database
-  db.get_user_info(access_token,
-                   [=](std::optional<Database::UserInfo> user_info) {
-                     if (!user_info) {
-                       return_error(callback, "M_UNKNOWN_TOKEN",
-                                    "Unknown access token", 401);
-                       return;
-                     }
+  auto user_info = db.get_user_info(access_token);
 
-                     // Return the user id, if the user is a guest and the
-                     // device id if its set as json
-                     client_server_json::whoami_resp j_resp = {
-                         .user_id = user_info->user_id,
-                         .is_guest = user_info->is_guest,
-                         .device_id = user_info->device_id,
-                     };
-                     json j = j_resp;
+  if (!user_info) {
+    return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
+    return;
+  }
 
-                     resp->setBody(j.dump());
-                     resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-                     callback(resp);
-                   });
+  // Return the user id, if the user is a guest and the
+  // device id if its set as json
+  client_server_json::whoami_resp j_resp = {
+      .user_id = user_info->user_id,
+      .is_guest = user_info->is_guest,
+      .device_id = user_info->device_id,
+  };
+  json j = j_resp;
+
+  resp->setBody(j.dump());
+  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  callback(resp);
 }
 
 void ClientServerCtrl::user_available(
@@ -85,30 +83,29 @@ void ClientServerCtrl::user_available(
   Database db{};
   auto resp = HttpResponse::newHttpResponse();
   // Check if the username is already taken
-  db.user_exists(std::format("@{}:{}", username, server_name),
-                 [=](bool user_exists) {
-                   if (user_exists) {
-                     return_error(callback, "M_USER_IN_USE",
-                                  "Username already taken", 400);
-                     return;
-                   }
+  auto user_exists =
+      db.user_exists(std::format("@{}:{}", username, server_name));
 
-                   // Check if the username is in a namespace exclusively
-                   // claimed by an application service.
-                   // TODO: Implement this
+  if (user_exists) {
+    return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
+    return;
+  }
 
-                   // Return 200 OK with empty json body
-                   const auto json_data = []() {
-                     auto j = json::object();
-                     j["available"] = true;
-                     return j.dump();
-                   }();
+  // Check if the username is in a namespace exclusively
+  // claimed by an application service.
+  // TODO: Implement this
 
-                   resp->setBody(json_data);
-                   resp->setExpiredTime(0);
-                   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-                   callback(resp);
-                 });
+  // Return 200 OK with empty json body
+  const auto json_data = []() {
+    auto j = json::object();
+    j["available"] = true;
+    return j.dump();
+  }();
+
+  resp->setBody(json_data);
+  resp->setExpiredTime(0);
+  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  callback(resp);
 }
 
 void ClientServerCtrl::login(
@@ -189,50 +186,49 @@ void ClientServerCtrl::register_user(
 
   Database db{};
   auto resp = HttpResponse::newHttpResponse();
-  db.user_exists(user_id, [&, callback, reg_body, user_id](bool user_exists) {
-    // Check if the username is already taken
-    if (user_exists) {
-      return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
-      return;
-    }
-    auto initial_device_display_name = reg_body.initial_device_display_name;
-    auto device_id = reg_body.device_id;
+  auto user_exists = db.user_exists(user_id);
 
-    // If we have no initial_device_display_name, we set it to the
-    // device_id
-    if (!initial_device_display_name) {
-      initial_device_display_name = device_id;
-    }
+  // Check if the username is already taken
+  if (user_exists) {
+    return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
+    return;
+  }
+  auto initial_device_display_name = reg_body.initial_device_display_name;
+  auto device_id = reg_body.device_id;
 
-    if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
-      return_error(callback, "M_UNKNOWN",
-                   "Invalid input. You are missing either username or password",
-                   500);
-      return;
-    }
+  // If we have no initial_device_display_name, we set it to the
+  // device_id
+  if (!initial_device_display_name) {
+    initial_device_display_name = device_id;
+  }
 
-    // Try to register the user
-    Database::UserCreationData data{user_id, device_id,
-                                    initial_device_display_name,
-                                    reg_body.password.value()};
-    db.create_user(data, [&, callback, user_id](
-                             const Database::UserCreationResp &device_data) {
-      auto access_token = std::make_optional<std::string>();
-      auto device_id = std::make_optional<std::string>();
-      if (!reg_body.inhibit_login) {
-        access_token = device_data.access_token;
-        device_id = device_data.device_id;
-      }
+  if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
+    return_error(callback, "M_UNKNOWN",
+                 "Invalid input. You are missing either username or password",
+                 500);
+    return;
+  }
 
-      client_server_json::registration_resp reg_resp = {
-          .access_token = access_token,
-          .device_id = device_id,
-          .user_id = user_id,
-      };
-      json j = reg_resp;
-      resp->setBody(j.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-      callback(resp);
-    });
-  });
+  // Try to register the user
+  Database::UserCreationData data{user_id, device_id,
+                                  initial_device_display_name,
+                                  reg_body.password.value()};
+  auto device_data = db.create_user(data);
+
+  auto access_token = std::make_optional<std::string>();
+  auto device_id_opt = std::make_optional<std::string>();
+  if (!reg_body.inhibit_login) {
+    access_token = device_data.access_token;
+    device_id_opt = device_data.device_id;
+  }
+
+  client_server_json::registration_resp reg_resp = {
+      .access_token = access_token,
+      .device_id = device_id_opt,
+      .user_id = user_id,
+  };
+  json j = reg_resp;
+  resp->setBody(j.dump());
+  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  callback(resp);
 }

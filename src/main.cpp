@@ -32,8 +32,7 @@ int main() {
         .setLogLevel(trantor::Logger::LogLevel::kDebug)
         .createDbClient("postgresql", config.db_config.host,
                         config.db_config.port, config.db_config.database_name,
-                        config.db_config.user, config.db_config.password, 1, "",
-                        "default", true)
+                        config.db_config.user, config.db_config.password, 10)
         .enableGzip(true)
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
                                        const drogon::HttpResponsePtr &resp) {
