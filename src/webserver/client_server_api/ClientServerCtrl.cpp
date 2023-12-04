@@ -165,6 +165,7 @@ void ClientServerCtrl::register_user(
     json j = reg_resp;
 
     auto resp = HttpResponse::newHttpResponse();
+    resp->setStatusCode(k401Unauthorized);
     resp->setBody(j.dump());
     resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
     callback(resp);
