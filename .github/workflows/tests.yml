@@ -40,7 +40,7 @@ jobs:
         with:
           path: |
             /tmp/drogon
-        key: ${{ runner.os }}-drogon
+          key: ${{ runner.os }}-drogon
       - name: Install dependencies
         shell: bash
         run: |
