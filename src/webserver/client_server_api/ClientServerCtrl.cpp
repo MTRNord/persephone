@@ -153,7 +153,7 @@ void ClientServerCtrl::register_user(
   }
 
   // Check for session in auth object
-  if (!reg_body.auth.has_value() && !reg_body.password.has_value()) {
+  if (!reg_body.auth.has_value() || !reg_body.password.has_value()) {
     // we need to return flows and a session id.
     // TODO: Keep track of running sessions
     client_server_json::FlowInformation dummy_flow = {
