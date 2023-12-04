@@ -2,6 +2,21 @@
 
 namespace client_server_json {
 
+void from_json(const json &obj, AuthenticationData &p) {
+  if (obj.contains("session")) {
+    p.session = obj["session"].get<std::string>();
+  }
+  p.type = obj["type"].get<std::string>();
+}
+
+void to_json(json &obj, const AuthenticationData &p) {
+  obj = nlohmann::json::object();
+  if (p.session) {
+    obj["session"] = p.session.value();
+  }
+  obj["type"] = p.type;
+}
+
 void from_json(const json &obj, client_server_json::registration_body &p) {
   if (obj.contains("auth")) {
     p.auth = obj["auth"].get<AuthenticationData>();

@@ -97,10 +97,11 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
  */
 namespace client_server_json {
 struct AuthenticationData {
-  std::string session;
+  std::optional<std::string> session;
   std::string type;
 };
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(AuthenticationData, session, type)
+void from_json(const json &obj, AuthenticationData &p);
+void to_json(json &obj, const AuthenticationData &p);
 
 struct registration_body {
   std::optional<AuthenticationData> auth;
