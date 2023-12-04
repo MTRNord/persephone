@@ -21,7 +21,7 @@ void Database::migration_v0() {
     auto f = sql->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL)");
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
   }
 }
 
@@ -47,9 +47,10 @@ void Database::migration_v1() {
 #include "database/migrations/v1.sql"
     );
 
-    transPtr->execSqlAsyncFuture(query);
+    auto f1 = transPtr->execSqlAsyncFuture(query);
+    f1.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
   }
 }
 
@@ -75,9 +76,10 @@ void Database::migration_v2() {
 #include "database/migrations/v2.sql"
     );
 
-    transPtr->execSqlAsyncFuture(query);
+    auto f1 = transPtr->execSqlAsyncFuture(query);
+    f1.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
   }
 }
 
@@ -112,7 +114,7 @@ Database::create_user(Database::UserCreationData const &data) const {
 
     f.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
   }
 
   try {
@@ -122,7 +124,7 @@ Database::create_user(Database::UserCreationData const &data) const {
         matrix_id, device_id, device_name, access_token);
     f1.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
   }
 
   Database::UserCreationResp resp_data{access_token, device_id};
@@ -138,7 +140,7 @@ bool Database::user_exists(std::string matrix_id) const {
 
     return f.get().at(0)["exists"].as<bool>();
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
 
     // We fail with user exists here to prevent further issues
     return true;
@@ -174,7 +176,7 @@ Database::get_user_info(std::string auth_token) const {
 
     return user_info;
   } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << "Error:" << e.base().what();
+    LOG_ERROR << e.base().what();
     return std::nullopt;
   }
 }

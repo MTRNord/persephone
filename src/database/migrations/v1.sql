@@ -1,6 +1,4 @@
 --x, R"(--
-/* Table for migration tracking */
-CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL);
 
 /* Global events table 
    This is meant to be accompanied with various views for per-room data */
