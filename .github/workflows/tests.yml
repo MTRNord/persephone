@@ -54,7 +54,7 @@ jobs:
           pushd drogon
           git pull
           git submodule update --init
-          mkdir build
+          [ ! -d /tmp/drogon/build ] && mkdir build
           pushd build
           cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
           make && sudo make install
