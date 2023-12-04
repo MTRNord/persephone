@@ -1,4 +1,5 @@
 builddir
+builddir_fuzzing
 
 subprojects/*
 !subprojects/*.wrap

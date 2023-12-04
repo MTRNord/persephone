@@ -74,13 +74,23 @@ executable(
     install: true,
 )
 
-test(
-    'utils',
+if get_option('build_tests')
+    test(
+        'utils',
+        executable(
+            'utils_test',
+            src + 'tests/utils_test.cpp',
+            include_directories: includes,
+            dependencies: deps + snitch_dep,
+        ),
+    )
+endif
+
+if get_option('build_fuzz_targets')
     executable(
-        'utils_test',
-        src + 'tests/utils_test.cpp',
+        'fuzz_json_sign',
+        src + 'fuzz_targets/json_sign.cpp',
         include_directories: includes,
-        dependencies: deps + snitch_dep,
-        build_by_default: false,
-    ),
-)
+        dependencies: deps,
+    )
+endif

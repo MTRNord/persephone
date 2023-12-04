@@ -1,0 +1,10 @@
+option(
+    'build_tests',
+    type: 'boolean',
+    value: true,
+)
+option(
+    'build_fuzz_targets',
+    type: 'boolean',
+    value: true,
+)
