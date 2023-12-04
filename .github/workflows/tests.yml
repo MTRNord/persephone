@@ -34,7 +34,15 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Python
         uses: actions/setup-python@v4
+      - name: Restore cached Drogon
+        id: cache-drogon-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            /tmp/drogon
+        key: ${{ runner.os }}-drogon
       - name: Install dependencies
+        shell: bash
         run: |
           sudo ./.github/llvm.sh 17 all
           which clang-17
@@ -42,8 +50,9 @@ jobs:
           sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev
           sudo pip3 install meson
           pushd /tmp
-          git clone https://github.com/drogonframework/drogon
+          [ ! -f /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
           pushd drogon
+          git pull
           git submodule update --init
           mkdir build
           pushd build
@@ -53,6 +62,13 @@ jobs:
           sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
           popd
           popd
+      - name: Save Drogon
+        id: cache-drogon-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            /tmp/drogon
+          key: ${{ steps.cache-drogon-restore.outputs.cache-primary-key }}
       - name: Test
         run: |
           /usr/bin/clang++-17 --version
@@ -128,7 +144,7 @@ jobs:
       # Run Complement
       - run: |
           set -o pipefail &&
-          go test -v -json -tags persephone_blacklist ./tests/... 2>&1 | gotestfmt
+          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi 2>&1 | gotestfmt
         shell: bash
         name: Run Complement Tests
         env:
