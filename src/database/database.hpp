@@ -30,13 +30,15 @@ public:
     std::string access_token;
     std::string device_id;
   };
-  Database::UserCreationResp create_user(UserCreationData const &data) const;
-  bool user_exists(std::string matrix_id) const;
+  [[nodiscard]] Database::UserCreationResp
+  create_user(UserCreationData const &data) const;
+  [[nodiscard]] bool user_exists(std::string matrix_id) const;
   struct UserInfo {
     // Optional for appservices
     std::optional<std::string> device_id;
     bool is_guest;
     std::string user_id;
   };
-  std::optional<Database::UserInfo> get_user_info(std::string auth_token) const;
+  [[nodiscard]] std::optional<Database::UserInfo>
+  get_user_info(std::string auth_token) const;
 };
