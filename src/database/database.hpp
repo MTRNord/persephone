@@ -39,9 +39,4 @@ public:
     std::string user_id;
   };
   std::optional<Database::UserInfo> get_user_info(std::string auth_token) const;
-
-private:
-  void migration_v0();
-  void migration_v1();
-  void migration_v2();
 };

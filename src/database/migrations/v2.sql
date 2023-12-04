@@ -1,6 +1,6 @@
 --x, R"(--
--- Used to generate the users table
--- These are LOCAL users only.
+/* Used to generate the users table
+   These are LOCAL users only.*/
 CREATE TABLE IF NOT EXISTS users (
     matrix_id TEXT PRIMARY KEY,
     password_hash TEXT NOT NULL,

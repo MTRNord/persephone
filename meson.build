@@ -50,6 +50,7 @@ snitch_dep = dependency('snitch')
 
 src = files(
     'src/database/database.cpp',
+    'src/database/migrations/migrator.cpp',
     'src/utils/config.cpp',
     'src/utils/json_utils.cpp',
     'src/utils/utils.cpp',

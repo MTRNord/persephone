@@ -1,4 +1,5 @@
 #include "database.hpp"
+#include "database/migrations/migrator.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include <format>
@@ -6,81 +7,8 @@
 #include <zlib.h>
 
 void Database::migrate() {
-  LOG_INFO << "Starting database migration";
-  this->migration_v0();
-  this->migration_v1();
-  this->migration_v2();
-
-  LOG_INFO << "Finished database migration";
-}
-
-void Database::migration_v0() {
-  auto sql = drogon::app().getDbClient("default");
-  assert(sql);
-  try {
-    auto f = sql->execSqlAsyncFuture(
-        "CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL)");
-  } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << e.base().what();
-  }
-}
-
-void Database::migration_v1() {
-  LOG_INFO << "Starting database migration v0->v1";
-  auto sql = drogon::app().getDbClient("default");
-  assert(sql);
-
-  try {
-    auto f = sql->execSqlAsyncFuture(
-        "select exists(select 1 from migrations where version = 1) as exists");
-
-    if (f.get().at(0)["exists"].as<bool>()) {
-      LOG_INFO << "Migration v0->v1 already ran";
-      return;
-    }
-    LOG_DEBUG << "First time migrating to v1";
-    auto transPtr = sql->newTransaction();
-    assert(transPtr);
-
-    auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
-    auto query = (
-#include "database/migrations/v1.sql"
-    );
-
-    auto f1 = transPtr->execSqlAsyncFuture(query);
-    f1.wait();
-  } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << e.base().what();
-  }
-}
-
-void Database::migration_v2() {
-  LOG_INFO << "Starting database migration v1->v2";
-  auto sql = drogon::app().getDbClient();
-  assert(sql);
-
-  try {
-    auto f = sql->execSqlAsyncFuture(
-        "select exists(select 1 from migrations where version = 2) as exists");
-
-    if (f.get().at(0)["exists"].as<bool>()) {
-      LOG_INFO << "Migration v1->v2 already ran";
-      return;
-    }
-    LOG_DEBUG << "First time migrating to v2";
-    auto transPtr = sql->newTransaction();
-    assert(transPtr);
-
-    auto x = 0; // NOLINT(clang-diagnostic-unused-but-set-variable)
-    auto query = (
-#include "database/migrations/v2.sql"
-    );
-
-    auto f1 = transPtr->execSqlAsyncFuture(query);
-    f1.wait();
-  } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << e.base().what();
-  }
+  Migrator migrator;
+  migrator.migrate();
 }
 
 Database::UserCreationResp
