@@ -84,7 +84,7 @@
 
     # A NixOS module, if applicable (e.g. if the package provides a system service).
     nixosModules.persephone = {pkgs, ...}: {
-      nixpkgs.overlays = [self.overlays];
+      nixpkgs.overlays = [self.overlays.default];
 
       environment.systemPackages = [pkgs.persephone];
 
