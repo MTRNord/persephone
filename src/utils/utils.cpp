@@ -117,7 +117,6 @@ std::string migrate_localpart(const std::string &original_mxid) {
 
   for (auto const &c : original_mxid) {
     if (c >= 'A' && c <= 'Z') {
-      migrated_mxid.push_back('_');
       migrated_mxid.push_back(static_cast<char>(c + 32));
     } else if (c == '_') {
       migrated_mxid.push_back('_');
