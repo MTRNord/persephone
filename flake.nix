@@ -2,7 +2,7 @@
   description = "Persephone is an experimental and WIP matrix homeserver written in C++20.";
 
   # Nixpkgs / NixOS version to use.
-  inputs.nixpkgs.url = "nixpkgs/staging";
+  inputs.nixpkgs.url = "nixpkgs/nixos-unstable";
   inputs.flake-compat = {
     url = "github:edolstra/flake-compat";
     flake = false;
