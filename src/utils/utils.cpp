@@ -124,7 +124,7 @@ std::string migrate_localpart(const std::string &original_mxid) {
     } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+' ||
                (c >= 'a' && c <= 'z') ||
                /*Check if outside of range of historic ids*/
-               !((c >= 0x21 && c <= 0x39) || (c >= 0x3B && c <= 0x7E))) {
+               (c >= 0x21 && c <= 0x39) || (c >= 0x3B && c <= 0x7E)) {
       migrated_mxid.push_back(c);
     } else {
       migrated_mxid += std::format("={:02x}", static_cast<unsigned char>(c));
