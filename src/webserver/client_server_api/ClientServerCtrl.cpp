@@ -76,7 +76,7 @@ void ClientServerCtrl::user_available(
 
   // Check if the username is valid
   auto fixed_username = migrate_localpart(username);
-  if (!client_server_api::is_valid_localpart(fixed_username, server_name)) {
+  if (!is_valid_localpart(fixed_username, server_name)) {
     return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
     return;
   }
@@ -182,7 +182,7 @@ void ClientServerCtrl::register_user(
   auto username = reg_body.username.value_or(random_string(25));
   auto fixed_username = migrate_localpart(username);
   auto user_id = std::format("@{}:{}", fixed_username, server_name);
-  if (!client_server_api::is_valid_localpart(fixed_username, server_name)) {
+  if (!is_valid_localpart(fixed_username, server_name)) {
     return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
     return;
   }

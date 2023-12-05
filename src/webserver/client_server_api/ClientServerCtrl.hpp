@@ -32,44 +32,4 @@ protected:
   register_user(const HttpRequestPtr &req,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
 };
-
-/**
- * Check if a localpard is valid according to
- * https://spec.matrix.org/v1.8/appendices/#user-identifiers
- *
- * ```
- * user_id_localpart = 1*user_id_char
- * user_id_char = DIGIT
- *              / %x61-7A                   ; a-z
- *              / "-" / "." / "=" / "_" / "/" / "+"
- * ```
- *
- * We also need to check that it not exceeds 255 chars when containing `@`, a
- * colon and the domain.
- *
- * @param localpart The localpart to check
- * @return true if the localpart is valid, false otherwise
- */
-bool is_valid_localpart(const std::string &localpart,
-                        const std::string &server_name) {
-  for (auto const &c : localpart) {
-    if (std::isdigit(c)) {
-      continue;
-    }
-    if (c >= 'a' && c <= 'z') {
-      continue;
-    }
-    if (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' || c == '+') {
-      continue;
-    }
-    return false;
-  }
-
-  // Check if the localpart is too long
-  if (std::format("@{}:{}", localpart, server_name).length() > 255) {
-    return false;
-  }
-
-  return true;
-}
 } // namespace client_server_api

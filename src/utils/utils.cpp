@@ -111,25 +111,63 @@ std::string base62_encode(unsigned long input) {
  *             / "-" / "." / "=" / "_" / "/" / "+"
  * ```
  */
-std::string migrate_localpart(const std::string &original_mxid) {
-  std::string migrated_mxid;
-  migrated_mxid.reserve(original_mxid.size());
+std::string migrate_localpart(const std::string &localpart) {
+  std::string migrated_localpart;
+  migrated_localpart.reserve(localpart.size());
 
-  for (auto const &c : original_mxid) {
+  for (auto const &c : localpart) {
     if (c >= 'A' && c <= 'Z') {
-      migrated_mxid.push_back(static_cast<char>(c + 32));
+      migrated_localpart.push_back(static_cast<char>(c + 32));
     } else if (c == '_') {
-      migrated_mxid.push_back('_');
-      migrated_mxid.push_back('_');
+      migrated_localpart.push_back('_');
+      migrated_localpart.push_back('_');
     } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+' ||
                (c >= 'a' && c <= 'z') ||
                /*Check if outside of range of historic ids*/
                (c >= 0x21 && c <= 0x39) || (c >= 0x3B && c <= 0x7E)) {
-      migrated_mxid.push_back(c);
+      migrated_localpart.push_back(c);
     } else {
-      migrated_mxid += std::format("={:02x}", static_cast<unsigned char>(c));
+      migrated_localpart +=
+          std::format("={:02x}", static_cast<unsigned char>(c));
     }
   }
 
-  return migrated_mxid;
+  return migrated_localpart;
+}
+
+/**
+ * Check if a localpard is valid according to
+ * https://spec.matrix.org/v1.8/appendices/#user-identifiers
+ *
+ * ```
+ * user_id_localpart = 1*user_id_char
+ * user_id_char = DIGIT
+ *              / %x61-7A                   ; a-z
+ *              / "-" / "." / "=" / "_" / "/" / "+"
+ * ```
+ *
+ * We also need to check that it not exceeds 255 chars when containing `@`, a
+ * colon and the domain.
+ *
+ * @param localpart The localpart to check
+ * @return true if the localpart is valid, false otherwise
+ */
+bool is_valid_localpart(const std::string &localpart,
+                        const std::string &server_name) {
+  for (auto const &c : localpart) {
+    if (std::isdigit(c) || (c >= 'a' && c <= 'z') ||
+        (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' ||
+         c == '+')) {
+      continue;
+    } else {
+      return false;
+    }
+  }
+
+  // Check if the localpart is too long
+  if (std::format("@{}:{}", localpart, server_name).length() > 255) {
+    return false;
+  }
+
+  return true;
 }

@@ -1,6 +1,7 @@
 // Placeholder for now
 #include "nlohmann/json.hpp"
 #include "utils/json_utils.hpp"
+#include "utils/utils.hpp"
 #include <snitch/snitch.hpp>
 #include <vector>
 
@@ -12,6 +13,8 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
   auto private_key = std::get<1>(server_key);
   std::vector<unsigned char> private_key_vec(private_key.begin(),
                                              private_key.end());
+
+  std::cout << "test" << '\n';
 
   SECTION("Doesn't sign null") {
     auto json_data = json{};
@@ -31,5 +34,47 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
     REQUIRE(signed_json["signatures"]["test"].is_object());
     REQUIRE(signed_json["signatures"]["test"].contains("ed25519:test"));
     REQUIRE(signed_json["signatures"]["test"]["ed25519:test"].is_string());
+  }
+}
+
+TEST_CASE("Incorrect IDs are properly migrated", "[user_id_migration]") {
+  SECTION("Uppercase") {
+    auto user_id = "Test";
+    auto expected = "test";
+
+    auto real = migrate_localpart(user_id);
+
+    REQUIRE(expected == real);
+  }
+
+  SECTION("Preserves special chars") {
+    auto user_id = "Test[]";
+    auto expected = "test[]";
+
+    auto real = migrate_localpart(user_id);
+
+    REQUIRE(expected == real);
+  }
+
+  SECTION("Preserves special chars and fails as invalid") {
+    auto user_id = "Test[]";
+    auto expected = "test[]";
+
+    auto real = migrate_localpart(user_id);
+    auto result = is_valid_localpart(real, "localhost");
+
+    REQUIRE(expected == real);
+    REQUIRE_FALSE(result);
+  }
+
+  SECTION("Works with valid usernames") {
+    auto user_id = "test";
+    auto expected = "test";
+
+    auto real = migrate_localpart(user_id);
+    auto result = is_valid_localpart(real, "localhost");
+
+    REQUIRE(expected == real);
+    REQUIRE(result);
   }
 }
