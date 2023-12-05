@@ -48,7 +48,7 @@ EXPOSE 8008 8448
 # At runtime, generate TLS cert based on the CA now mounted at /ca
 # At runtime, replace the SERVER_NAME with what we are told
 CMD /build/run_postgres.sh && openssl genrsa -out server.key 2048 && \
- sed -i 's/  server_name: localhost/  server_name: $SERVER_NAME/g' /build/complement/config.yaml && \
+ sed -i "s/  server_name: localhost/  server_name: ${SERVER_NAME}/g" /build/complement/config.yaml && \
  openssl req -new -sha256 -key server.key -subj "/C=DE/ST=CA/O=MyOrg, Inc./CN=$SERVER_NAME" -out server.csr && \
  openssl x509 -req -in server.csr -CA /complement/ca/ca.crt -CAkey /complement/ca/ca.key -CAcreateserial -out server.crt -days 1 -sha256 && \
  cp /build/complement/config.yaml ./config.yaml && \
