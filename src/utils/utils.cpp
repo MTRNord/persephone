@@ -92,16 +92,6 @@ std::string base62_encode(unsigned long input) {
  *    `=`, as their hexadecimal value, prefixed with
  *    `=`. For example, `#` becomes `=23`; `á` becomes `=c3=a1`.
  *
- * For migration the chars must be in this grammar:
- *
- * ```
- * extended_user_id_char = %x21-39 / %x3B-7E  ; all ASCII printing chars except
- *                                            ; `:`
- * ```
- *
- * otherwise we do not change the chars as they then will be invalidated in the
- * next stage.
- *
  * Allowed in the localpart itself is:
  *
  * ```
@@ -121,14 +111,8 @@ std::string migrate_localpart(const std::string &localpart) {
     } else if (c == '_') {
       migrated_localpart.push_back('_');
       migrated_localpart.push_back('_');
-    } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+' ||
-               (c >= 'a' && c <= 'z') ||
-               /*Check if outside of range of historic ids*/
-               (c >= 0x21 && c <= 0x39) || (c >= 0x3B && c <= 0x7E)) {
-      migrated_localpart.push_back(c);
     } else {
-      migrated_localpart +=
-          std::format("={:02x}", static_cast<unsigned char>(c));
+      migrated_localpart.push_back(c);
     }
   }
 

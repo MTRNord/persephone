@@ -57,8 +57,8 @@ TEST_CASE("Incorrect IDs are properly migrated", "[user_id_migration]") {
   }
 
   SECTION("Preserves special chars and fails as invalid") {
-    auto user_id = "Test[]";
-    auto expected = "test[]";
+    auto user_id = "Test!\":?\\@[]{|}£é\n'";
+    auto expected = "test!\":?\\@[]{|}£é\n'";
 
     auto real = migrate_localpart(user_id);
     auto result = is_valid_localpart(real, "localhost");
