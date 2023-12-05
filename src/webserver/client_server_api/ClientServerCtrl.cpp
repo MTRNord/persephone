@@ -75,7 +75,8 @@ void ClientServerCtrl::user_available(
   auto server_name = config.matrix_config.server_name;
 
   // Check if the username is valid
-  if (!client_server_api::is_valid_localpart(username, server_name)) {
+  auto fixed_username = migrate_localpart(username);
+  if (!client_server_api::is_valid_localpart(fixed_username, server_name)) {
     return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
     return;
   }
@@ -83,7 +84,6 @@ void ClientServerCtrl::user_available(
   Database db{};
   auto resp = HttpResponse::newHttpResponse();
   // Check if the username is already taken
-  auto fixed_username = migrate_localpart(username);
   auto user_exists =
       db.user_exists(std::format("@{}:{}", fixed_username, server_name));
 

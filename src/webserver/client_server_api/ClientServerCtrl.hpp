@@ -50,7 +50,8 @@ protected:
  * @param localpart The localpart to check
  * @return true if the localpart is valid, false otherwise
  */
-bool is_valid_localpart(std::string const &localpart, std::string server_name) {
+bool is_valid_localpart(const std::string &localpart,
+                        const std::string &server_name) {
   for (auto const &c : localpart) {
     if (std::isdigit(c)) {
       continue;

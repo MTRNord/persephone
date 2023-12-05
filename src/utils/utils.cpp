@@ -8,10 +8,10 @@
 #include <utility>
 #include <zlib.h>
 
-void return_error(std::function<void(const HttpResponsePtr &)> const &callback,
-                  std::string errorcode, std::string error, int status_code) {
-  generic_json::generic_json_error json_error{std::move(errorcode),
-                                              std::move(error)};
+void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
+                  const std::string &errorcode, const std::string &error,
+                  const int status_code) {
+  generic_json::generic_json_error json_error{errorcode, error};
   json j = json_error;
   auto resp = HttpResponse::newHttpResponse();
   resp->setBody(j.dump());
@@ -40,7 +40,7 @@ std::string random_string(const std::size_t len) {
   return tmp_s;
 }
 
-std::string hash_password(std::string const &password) {
+std::string hash_password(const std::string &password) {
   std::array<char, crypto_pwhash_STRBYTES> hashed_password_array;
   if (crypto_pwhash_str(hashed_password_array.data(), password.c_str(),
                         password.length(), crypto_pwhash_OPSLIMIT_SENSITIVE,
@@ -52,12 +52,12 @@ std::string hash_password(std::string const &password) {
   return hashed_password;
 }
 
-std::string localpart(std::string const &matrix_id) {
+std::string localpart(const std::string &matrix_id) {
   return matrix_id.substr(1, matrix_id.find(':') - 1);
 }
 
 // Helper to generate a crc32 checksum.
-unsigned long crc32_helper(std::string const &input) {
+unsigned long crc32_helper(const std::string &input) {
   unsigned long crc = crc32(0L, Z_NULL, 0);
 
   crc = crc32(crc, reinterpret_cast<const Bytef *>(input.data()),
@@ -92,6 +92,16 @@ std::string base62_encode(unsigned long input) {
  *    `=`, as their hexadecimal value, prefixed with
  *    `=`. For example, `#` becomes `=23`; `á` becomes `=c3=a1`.
  *
+ * For migration the chars must be in this grammar:
+ *
+ * ```
+ * extended_user_id_char = %x21-39 / %x3B-7E  ; all ASCII printing chars except
+ *                                            ; `:`
+ * ```
+ *
+ * otherwise we do not change the chars as they then will be invalidated in the
+ * next stage.
+ *
  * Allowed in the localpart itself is:
  *
  * ```
@@ -101,24 +111,26 @@ std::string base62_encode(unsigned long input) {
  *             / "-" / "." / "=" / "_" / "/" / "+"
  * ```
  */
-std::string migrate_localpart(std::string const &original_mxid) {
-  std::string new_mxid;
-  new_mxid.reserve(original_mxid.size());
+std::string migrate_localpart(const std::string &original_mxid) {
+  std::string migrated_mxid;
+  migrated_mxid.reserve(original_mxid.size());
 
   for (auto const &c : original_mxid) {
     if (c >= 'A' && c <= 'Z') {
-      new_mxid += '_';
-      new_mxid += static_cast<char>(c + 32);
+      migrated_mxid.push_back('_');
+      migrated_mxid.push_back(static_cast<char>(c + 32));
     } else if (c == '_') {
-      new_mxid += "__";
-    } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+') {
-      new_mxid += c;
-    } else if (c >= 'a' && c <= 'z') {
-      new_mxid += c;
+      migrated_mxid.push_back('_');
+      migrated_mxid.push_back('_');
+    } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+' ||
+               (c >= 'a' && c <= 'z') ||
+               /*Check if outside of range of historic ids*/
+               !((c >= 0x21 && c <= 0x39) || (c >= 0x3B && c <= 0x7E))) {
+      migrated_mxid.push_back(c);
     } else {
-      new_mxid += std::format("={:02x}", static_cast<unsigned char>(c));
+      migrated_mxid += std::format("={:02x}", static_cast<unsigned char>(c));
     }
   }
 
-  return new_mxid;
+  return migrated_mxid;
 }

@@ -48,8 +48,8 @@ std::string base64_key(std::vector<unsigned char> input) {
   return base64_str;
 }
 
-json sign_json(std::string const &server_name, std::string const &key_id,
-               std::vector<unsigned char> secret_key, json &json_data) {
+json sign_json(const std::string &server_name, const std::string &key_id,
+               const std::vector<unsigned char> &secret_key, json json_data) {
   // Get existing (or not yet existing) signatures and unsigned fields
   auto signatures = json_data.value("signatures", json(json::value_t::object));
   auto unsigned_value = json_data.value("unsigned", json{});
@@ -95,11 +95,11 @@ generate_server_key() {
   return std::make_tuple(pk, sk);
 }
 
-void write_server_key(Config const &config,
-                      std::vector<unsigned char> private_key) {
+void write_server_key(const Config &config,
+                      const std::vector<unsigned char> &private_key) {
   const std::string algo = "ed25519";
 
-  auto base64_str = json_utils::base64_key(std::move(private_key));
+  auto base64_str = json_utils::base64_key(private_key);
 
   std::string version = std::format("a_{}", random_string(4));
   std::ofstream keyfile(config.matrix_config.server_key_location);
@@ -109,7 +109,7 @@ void write_server_key(Config const &config,
   }
 }
 
-void ensure_server_keys(Config const &config) {
+void ensure_server_keys(const Config &config) {
   if (!std::filesystem::exists(config.matrix_config.server_key_location)) {
     auto server_key = json_utils::generate_server_key();
     auto private_key = std::get<1>(server_key);
