@@ -14,6 +14,8 @@ void return_error(std::function<void(const HttpResponsePtr &)> const &callback,
 // Get the localpart of a user's matrix id.
 [[nodiscard]] std::string localpart(std::string const &matrix_id);
 
+[[nodiscard]] std::string migrate_localpart(std::string const &original_mxid);
+
 // Helper to generate a crc32 checksum.
 [[nodiscard]] unsigned long crc32_helper(std::string const &input);
 

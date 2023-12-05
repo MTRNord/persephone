@@ -78,3 +78,47 @@ std::string base62_encode(unsigned long input) {
 
   return output;
 }
+
+/**
+ * Migrates the historic localpart format to the new one.
+ *
+ * 1. Encode character strings as UTF-8.
+ * 2. Convert the bytes `A-Z` to lower-case.
+ *     2a. In the case where a bridge must be able to distinguish two different
+ *        users with ids which differ only by case, escape upper-case characters
+ *        by prefixing with `_` before downcasing. For example, `A` becomes
+ * `_a`. Escape a real `_` with a second `_`.
+ * 3. Encode any remaining bytes outside the allowed character set, as well as
+ *    `=`, as their hexadecimal value, prefixed with
+ *    `=`. For example, `#` becomes `=23`; `á` becomes `=c3=a1`.
+ *
+ * Allowed in the localpart itself is:
+ *
+ * ```
+ * user_id_localpart = 1*user_id_char
+ * user_id_char = DIGIT
+ *             / %x61-7A                   ; a-z
+ *             / "-" / "." / "=" / "_" / "/" / "+"
+ * ```
+ */
+std::string migrate_localpart(std::string const &original_mxid) {
+  std::string new_mxid;
+  new_mxid.reserve(original_mxid.size());
+
+  for (auto const &c : original_mxid) {
+    if (c >= 'A' && c <= 'Z') {
+      new_mxid += '_';
+      new_mxid += static_cast<char>(c + 32);
+    } else if (c == '_') {
+      new_mxid += "__";
+    } else if (c == '.' || c == '-' || c == '=' || c == '/' || c == '+') {
+      new_mxid += c;
+    } else if (c >= 'a' && c <= 'z') {
+      new_mxid += c;
+    } else {
+      new_mxid += std::format("={:02x}", static_cast<unsigned char>(c));
+    }
+  }
+
+  return new_mxid;
+}

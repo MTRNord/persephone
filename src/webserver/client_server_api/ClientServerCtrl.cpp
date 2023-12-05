@@ -83,8 +83,9 @@ void ClientServerCtrl::user_available(
   Database db{};
   auto resp = HttpResponse::newHttpResponse();
   // Check if the username is already taken
+  auto fixed_username = migrate_localpart(username);
   auto user_exists =
-      db.user_exists(std::format("@{}:{}", username, server_name));
+      db.user_exists(std::format("@{}:{}", fixed_username, server_name));
 
   if (user_exists) {
     return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
@@ -179,8 +180,9 @@ void ClientServerCtrl::register_user(
   // Check if the username is valid. Note that `username` means localpart in
   // matrix terms.
   auto username = reg_body.username.value_or(random_string(25));
-  auto user_id = std::format("@{}:{}", username, server_name);
-  if (!client_server_api::is_valid_localpart(username, server_name)) {
+  auto fixed_username = migrate_localpart(username);
+  auto user_id = std::format("@{}:{}", fixed_username, server_name);
+  if (!client_server_api::is_valid_localpart(fixed_username, server_name)) {
     return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
     return;
   }
