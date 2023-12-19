@@ -55,9 +55,10 @@ void ServerServerCtrl::server_key(
                        {.key = public_key_base64}}},
   };
   json j = keys;
+  auto signed_j = json_utils::sign_json(server_name, splitted_data[1], private_key, j);
 
   auto resp = HttpResponse::newHttpResponse();
-  resp->setBody(j.dump());
+  resp->setBody(signed_j.dump());
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
   callback(resp);
 }
