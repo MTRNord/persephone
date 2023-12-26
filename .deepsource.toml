@@ -1,0 +1,17 @@
+version = 1
+
+test_patterns = ["tests/**"]
+
+exclude_patterns = ["complement/**"]
+
+[[analyzers]]
+name = "test-coverage"
+
+[[analyzers]]
+name = "cxx"
+
+[[analyzers]]
+name = "shell"
+
+[[analyzers]]
+name = "secrets"
