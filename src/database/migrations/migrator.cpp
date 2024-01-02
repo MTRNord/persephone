@@ -5,6 +5,7 @@ void Migrator::migrate() {
   this->migration_v0();
   this->migration_v1();
   this->migration_v2();
+  this->migration_v3();
 
   LOG_INFO << "Finished database migration";
 }
@@ -17,6 +18,7 @@ void Migrator::migration_v0() {
         "CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL)");
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -150,6 +152,7 @@ void Migrator::migration_v1() {
 
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -193,5 +196,39 @@ void Migrator::migration_v2() {
     f3.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
+    exit(EXIT_FAILURE);
+  }
+}
+
+void Migrator::migration_v3() {
+  LOG_INFO << "Starting database migration v2->v3";
+  auto sql = drogon::app().getDbClient();
+  assert(sql);
+
+  try {
+    auto f = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 3) as exists");
+
+    if (f.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v2->v3 already ran\n";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v3\n";
+    auto transPtr = sql->newTransaction();
+    assert(transPtr);
+
+    /*Create an index for state events*/
+    auto f1 =
+        transPtr->execSqlAsyncFuture("CREATE INDEX ON events (room_id, type, "
+                                     "state_key) WHERE state_key IS NOT NULL;");
+    f1.wait();
+
+    /* Mark the migration as completed */
+    auto f3 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (3);");
+    f3.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    exit(EXIT_FAILURE);
   }
 }

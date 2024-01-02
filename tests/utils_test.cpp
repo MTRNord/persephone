@@ -78,3 +78,93 @@ TEST_CASE("Incorrect IDs are properly migrated", "[user_id_migration]") {
     REQUIRE(result);
   }
 }
+
+TEST_CASE("Parse Query Parameter String into Map", "[query_param_parsing]") {
+  SECTION("Single key with multiple values") {
+    std::string queryString = "key=1&key=2&key=3";
+    auto paramMap = parseQueryParamString(queryString);
+
+    REQUIRE(paramMap["key"].size() == 3);
+    REQUIRE(paramMap["key"][0] == "1");
+    REQUIRE(paramMap["key"][1] == "2");
+    REQUIRE(paramMap["key"][2] == "3");
+  }
+
+  SECTION("Multiple keys with single value each") {
+    std::string queryString = "id=123&name=John&age=30";
+    auto paramMap = parseQueryParamString(queryString);
+
+    REQUIRE(paramMap["id"].size() == 1);
+    REQUIRE(paramMap["name"].size() == 1);
+    REQUIRE(paramMap["age"].size() == 1);
+    REQUIRE(paramMap["id"][0] == "123");
+    REQUIRE(paramMap["name"][0] == "John");
+    REQUIRE(paramMap["age"][0] == "30");
+  }
+
+  SECTION("Empty query string") {
+    std::string queryString = "";
+    auto paramMap = parseQueryParamString(queryString);
+
+    REQUIRE(paramMap.empty());
+  }
+
+  SECTION("Query string with no values") {
+    std::string queryString = "key1=&key2=";
+    auto paramMap = parseQueryParamString(queryString);
+
+    REQUIRE(paramMap["key1"].size() == 0);
+    REQUIRE(paramMap["key2"].size() == 0);
+  }
+
+  SECTION("Single key-value pair") {
+    std::string queryString = "key=value";
+    auto paramMap = parseQueryParamString(queryString);
+
+    REQUIRE(paramMap.size() == 1);
+    REQUIRE(paramMap["key"].size() == 1);
+    REQUIRE(paramMap["key"][0] == "value");
+  }
+}
+
+TEST_CASE("Generate HTTP Query Parameter String", "[query_param_generation]") {
+  SECTION("Empty values vector") {
+    std::vector<std::string> values = {};
+    std::string keyName = "test";
+    std::string expected = "?test=";
+
+    std::string result = generateQueryParamString(keyName, values);
+
+    REQUIRE(result == expected);
+  }
+
+  SECTION("Single value") {
+    std::vector<std::string> values = {"value1"};
+    std::string keyName = "test";
+    std::string expected = "?test=value1";
+
+    std::string result = generateQueryParamString(keyName, values);
+
+    REQUIRE(result == expected);
+  }
+
+  SECTION("Multiple values") {
+    std::vector<std::string> values = {"value1", "value2", "value3"};
+    std::string keyName = "test";
+    std::string expected = "?test=value1&test=value2&test=value3";
+
+    std::string result = generateQueryParamString(keyName, values);
+
+    REQUIRE(result == expected);
+  }
+
+  SECTION("Key with special characters") {
+    std::vector<std::string> values = {"val ue1", "val&ue2"};
+    std::string keyName = "te!@st";
+    std::string expected = "?te!@st=val+ue1&te!@st=val%26ue2";
+
+    std::string result = generateQueryParamString(keyName, values);
+
+    REQUIRE(result == expected);
+  }
+}

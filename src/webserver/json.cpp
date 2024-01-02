@@ -1,5 +1,51 @@
 #include "json.hpp"
 
+namespace server_server_json {
+
+void from_json(const json &obj, MembershipEventContent &p) {
+  if (obj.contains("join_authorised_via_users_server")) {
+    p.join_authorised_via_users_server =
+        obj["join_authorised_via_users_server"].get<std::string>();
+  }
+  p.membership = obj["membership"].get<std::string>();
+}
+void to_json(json &obj, const MembershipEventContent &p) {
+  obj = nlohmann::json::object();
+  if (p.join_authorised_via_users_server) {
+    obj["join_authorised_via_users_server"] =
+        p.join_authorised_via_users_server.value();
+  }
+  obj["membership"] = p.membership;
+}
+
+void from_json(const json &obj, MakeJoinResp &p) {
+  if (obj.contains("room_version")) {
+    p.room_version = obj["room_version"].get<std::string>();
+  }
+  p.event = obj["event"].get<MakeJoinEventTemplate>();
+}
+void to_json(json &obj, const MakeJoinResp &p) {
+  obj = nlohmann::json::object();
+  if (p.room_version) {
+    obj["room_version"] = p.room_version.value();
+  }
+  obj["event"] = p.event;
+}
+
+void from_json(const json &obj, well_known &p) {
+  if (obj.contains("m.server")) {
+    p.m_server = obj["m.server"].get<std::string>();
+  }
+}
+
+void to_json(json &obj, const well_known &p) {
+  obj = nlohmann::json::object();
+  if (p.m_server) {
+    obj["m.server"] = p.m_server.value();
+  }
+}
+} // namespace server_server_json
+
 namespace client_server_json {
 
 void from_json(const json &obj, AuthenticationData &p) {
@@ -17,7 +63,7 @@ void to_json(json &obj, const AuthenticationData &p) {
   obj["type"] = p.type;
 }
 
-void from_json(const json &obj, client_server_json::registration_body &p) {
+void from_json(const json &obj, registration_body &p) {
   if (obj.contains("auth")) {
     p.auth = obj["auth"].get<AuthenticationData>();
   }
@@ -42,7 +88,7 @@ void from_json(const json &obj, client_server_json::registration_body &p) {
   }
 }
 
-void to_json(json &obj, const client_server_json::registration_body &p) {
+void to_json(json &obj, const registration_body &p) {
   obj = nlohmann::json::object();
   if (p.auth) {
     obj["auth"] = p.auth.value();
@@ -67,7 +113,7 @@ void to_json(json &obj, const client_server_json::registration_body &p) {
   }
 }
 
-void from_json(const json &obj, client_server_json::registration_resp &p) {
+void from_json(const json &obj, registration_resp &p) {
   if (obj.contains("access_token")) {
     p.access_token = obj["access_token"].get<std::string>();
   }
@@ -83,7 +129,7 @@ void from_json(const json &obj, client_server_json::registration_resp &p) {
   p.user_id = obj["user_id"].get<std::string>();
 }
 
-void to_json(json &obj, const client_server_json::registration_resp &p) {
+void to_json(json &obj, const registration_resp &p) {
   obj = nlohmann::json::object();
   if (p.access_token) {
     obj["access_token"] = p.access_token.value();
@@ -100,7 +146,7 @@ void to_json(json &obj, const client_server_json::registration_resp &p) {
   obj["user_id"] = p.user_id;
 }
 
-void from_json(const json &obj, client_server_json::whoami_resp &p) {
+void from_json(const json &obj, whoami_resp &p) {
   p.user_id = obj["user_id"].get<std::string>();
   p.is_guest = obj["is_guest"].get<bool>();
   if (obj.contains("device_id")) {
@@ -108,12 +154,31 @@ void from_json(const json &obj, client_server_json::whoami_resp &p) {
   }
 }
 
-void to_json(json &obj, const client_server_json::whoami_resp &p) {
+void to_json(json &obj, const whoami_resp &p) {
   obj = nlohmann::json::object();
   obj["user_id"] = p.user_id;
   obj["is_guest"] = p.is_guest;
   if (p.device_id) {
     obj["device_id"] = p.device_id.value();
+  }
+}
+
+void from_json(const json &obj, JoinBody &p) {
+  if (obj.contains("reason")) {
+    p.reason = obj["reason"].get<std::string>();
+  }
+  if (obj.contains("third_party_signed")) {
+    p.third_party_signed = obj["third_party_signed"].get<ThirdPartySigned>();
+  }
+}
+
+void to_json(json &obj, const JoinBody &p) {
+  obj = nlohmann::json::object();
+  if (p.reason) {
+    obj["reason"] = p.reason.value();
+  }
+  if (p.third_party_signed) {
+    obj["third_party_signed"] = p.third_party_signed.value();
   }
 }
 } // namespace client_server_json

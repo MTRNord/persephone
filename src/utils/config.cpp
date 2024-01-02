@@ -17,73 +17,61 @@ Config::Config() {
 }
 
 void Config::load_db(const YAML::Node &config) {
-  if (!config["database"]) {
-    throw std::runtime_error("Missing 'database' section. Unable to start.");
-  }
-  if (!config["database"]["host"]) {
+  db_config.host = config["database"]["host"].as<std::string>();
+  // Default to 5432 if not provided
+  db_config.port = config["database"]["port"].as<unsigned short>(
+      static_cast<unsigned short>(5432));
+  db_config.database_name =
+      config["database"]["database_name"].as<std::string>();
+  db_config.user = config["database"]["user"].as<std::string>();
+  db_config.password = config["database"]["password"].as<std::string>();
+
+  if (db_config.host.empty()) {
     throw std::runtime_error(
         "Missing 'database.host' field. Unable to start. Make sure you set "
         "the database host for postgres.");
   }
-  this->db_config.host = config["database"]["host"].as<std::string>();
 
-  if (!config["database"]["port"]) {
-    throw std::runtime_error("'database.port' not set. Defaulting to port 5432 "
-                             "for the database port.\n");
-    this->db_config.port = 5432;
-  } else {
-    this->db_config.port = config["database"]["port"].as<unsigned short>();
-  }
-
-  if (!config["database"]["database_name"]) {
+  if (db_config.database_name.empty()) {
     throw std::runtime_error("Missing 'database.database_name' field. Unable "
                              "to start. Make sure you set the database name.");
   }
-  this->db_config.database_name =
-      config["database"]["database_name"].as<std::string>();
 
-  if (!config["database"]["user"]) {
+  if (db_config.user.empty()) {
     throw std::runtime_error("Missing 'database.user' field. Unable "
                              "to start. Make sure you set the database user.");
   }
-  this->db_config.user = config["database"]["user"].as<std::string>();
 
-  if (!config["database"]["password"]) {
+  if (db_config.password.empty()) {
     throw std::runtime_error(
         "Missing 'database.password' field. Unable "
         "to start. Make sure you set the database password.");
   }
-  this->db_config.password = config["database"]["password"].as<std::string>();
 }
 
 void Config::load_matrix(const YAML::Node &config) {
-  if (!config["matrix"]) {
-    throw std::runtime_error("Missing 'matrix' section. Unable to start.");
-  }
+  matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
+  matrix_config.server_key_location =
+      config["matrix"]["server_key_location"].as<std::string>();
 
-  if (!config["matrix"]["server_name"]) {
+  if (matrix_config.server_name.empty()) {
     throw std::runtime_error(
         "Missing 'matrix.server_name'. Unable to start. Make sure you set "
         "the server_name of the homeserver. This usually is a domain WITHOUT "
         "the matrix subdomain. It is used in the user id.");
   }
-  this->matrix_config.server_name =
-      config["matrix"]["server_name"].as<std::string>();
 
-  if (!config["matrix"]["server_key_location"]) {
+  if (matrix_config.server_key_location.empty()) {
     throw std::runtime_error(
         "Missing 'matrix.server_key_location'. Unable to start. Make sure you "
         "set the location where the server key should be stored. This should "
         "be an absolute path to a file.");
   }
-  auto server_key_location =
-      config["matrix"]["server_key_location"].as<std::string>();
-  this->matrix_config.server_key_location = server_key_location;
 }
 
 void Config::load_webserver(const YAML::Node &config) {
-  if (config["ssl"]) {
-    this->webserver_config.ssl = config["ssl"].as<bool>();
+  if (config["webserver"]["ssl"]) {
+    this->webserver_config.ssl = config["webserver"]["ssl"].as<bool>();
   } else {
     this->webserver_config.ssl = false;
   }

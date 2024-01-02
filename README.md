@@ -1,3 +1,5 @@
+[![DeepSource](https://app.deepsource.com/gh/MTRNord/persephone.svg/?label=active+issues&show_trend=true&token=ySiOHgM0IAnpEO5N3mWVcmVg)](https://app.deepsource.com/gh/MTRNord/persephone/)
+
 # Persephone
 
 Persephone is an experimental and WIP matrix homeserver written in C++20.
@@ -23,6 +25,7 @@ The technology used will be:
 - Postgresql
 - [drogon](https://drogonframework.github.io)
 - snitch2
+- c-ares
 
 ## Building
 

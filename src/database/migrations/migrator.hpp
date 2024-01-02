@@ -9,4 +9,5 @@ private:
   void migration_v0();
   void migration_v1();
   void migration_v2();
+  void migration_v3();
 };

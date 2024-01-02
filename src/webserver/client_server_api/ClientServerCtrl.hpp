@@ -1,22 +1,40 @@
 #pragma once
 
+#include "database/database.hpp"
+#include "utils/config.hpp"
 #include <drogon/HttpController.h>
+#include <drogon/HttpFilter.h>
 
 using namespace drogon;
 
 namespace client_server_api {
-class ClientServerCtrl : public drogon::HttpController<ClientServerCtrl> {
+class AccessTokenFilter : public drogon::HttpFilter<AccessTokenFilter> {
+public:
+  void doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
+                FilterChainCallback &&ccb) override;
+};
+
+class ClientServerCtrl
+    : public drogon::HttpController<ClientServerCtrl, false> {
 public:
   METHOD_LIST_BEGIN
   ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get);
   ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
-                Get);
+                Get, "client_server_api::AccessTokenFilter");
   ADD_METHOD_TO(ClientServerCtrl::user_available,
                 "/_matrix/client/v3/register/available?username={1}", Get);
   ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get);
   ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
                 Post, Options);
+
+  // Room joining
+  ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
+                "_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
+                "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
+
+  explicit ClientServerCtrl(Config config, Database db)
+      : _config(std::move(config)), _db(db) {}
 
 protected:
   void versions(const HttpRequestPtr &,
@@ -31,5 +49,13 @@ protected:
   void
   register_user(const HttpRequestPtr &req,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void
+  joinRoomIdOrAlias(const HttpRequestPtr &req,
+                    std::function<void(const HttpResponsePtr &)> &&callback,
+                    const std::string &roomIdOrAlias) const;
+
+private:
+  Config _config;
+  Database _db;
 };
 } // namespace client_server_api

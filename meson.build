@@ -6,27 +6,24 @@ project(
         'cpp_std=c++20',
         'c_std=c11',
         'warning_level=3',
-        # SOCI and yaml_cpp break werror. Fixes appreciated
+        # yaml_cpp break werror. Fixes appreciated
         #'werror=true',
         'b_lto=true',
         'b_thinlto_cache=true',
-        # https://github.com/SOCI/soci/issues/1103
         #'b_sanitize=address,undefined',
-        #        'b_sanitize=address',
         # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
-        #        'b_lundef=false',
+        #'b_lundef=false',
     ],
 )
 #
 add_project_arguments(
-    '-DJSON_DIAGNOSTICS=1',
+    '-DJSON_DIAGNOSTICS=0',
     '-DJSON_USE_IMPLICIT_CONVERSIONS=0',
     '-Wshadow',
     '-Wconversion',
     '-Wpedantic',
     '-Wuninitialized',
     '-DWITH_BOOST=OFF',
-    '-D_FORTIFY_SOURCE=2',
     #'-fno-sanitize=vptr',
     language: ['c', 'cpp'],
 )
@@ -45,6 +42,9 @@ yaml_cpp_dep = dependency('yaml_cpp')
 libsodium_dep = dependency('libsodium')
 zlib_dep = dependency('zlib')
 
+###### DNS #######
+c_ares = dependency('libcares')
+
 ####### Tests ############
 snitch_dep = dependency('snitch')
 
@@ -54,6 +54,7 @@ src = files(
     'src/utils/config.cpp',
     'src/utils/json_utils.cpp',
     'src/utils/utils.cpp',
+    'src/utils/state_res.cpp',
     'src/webserver/client_server_api/ClientServerCtrl.cpp',
     'src/webserver/json.cpp',
     'src/webserver/server_server_api/ServerServerCtrl.cpp',
@@ -65,6 +66,7 @@ deps = [
     yaml_cpp_dep,
     libsodium_dep,
     zlib_dep,
+    c_ares,
 ]
 
 executable(
@@ -75,17 +77,26 @@ executable(
     install: true,
 )
 
-if get_option('build_tests')
-    test(
-        'utils',
-        executable(
-            'utils_test',
-            src + 'tests/utils_test.cpp',
-            include_directories: includes,
-            dependencies: deps + snitch_dep,
-        ),
-    )
-endif
+test(
+    'utils',
+    executable(
+        'utils_test',
+        src + 'tests/utils_test.cpp',
+        include_directories: includes,
+        dependencies: deps + snitch_dep,
+    ),
+)
+
+test(
+    'state_res',
+    executable(
+        'state_res_test',
+        src + 'tests/state_res_test.cpp',
+        include_directories: includes,
+        dependencies: deps + snitch_dep,
+    ),
+)
+
 
 if get_option('build_fuzz_targets')
     executable(

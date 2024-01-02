@@ -11,11 +11,11 @@ void Database::migrate() {
   migrator.migrate();
 }
 
-Database::UserCreationResp
+drogon::Task<Database::UserCreationResp>
 Database::create_user(Database::UserCreationData const &data) const {
   auto sql = drogon::app().getDbClient();
 
-  auto transPtr = sql->newTransaction();
+  auto transPtr = co_await sql->newTransactionCoro();
   assert(transPtr);
 
   // TODO: If we have a guest registering we are required to always
@@ -31,65 +31,67 @@ Database::create_user(Database::UserCreationData const &data) const {
   auto localpart_str = localpart(matrix_id);
   std::vector<unsigned char> localpart_vec(localpart_str.begin(),
                                            localpart_str.end());
+
+  auto random_component = random_string(20);
   auto access_token =
       std::format("persephone_{}_{}_{}", json_utils::base64_key(localpart_vec),
-                  random_string(20), base62_encode(crc32_helper(matrix_id)));
+                  random_component,
+                  base62_encode(crc32_helper(
+                      std::format("{}_{}", matrix_id, random_component))));
 
   try {
-    auto f = transPtr->execSqlAsyncFuture(
+    co_await transPtr->execSqlCoro(
         "INSERT INTO users(matrix_id, password_hash) VALUES($1, $2)", matrix_id,
         password_hash);
-
-    f.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to create user due to database error");
   }
 
   try {
-    auto f1 = transPtr->execSqlAsyncFuture(
+    co_await transPtr->execSqlCoro(
         "INSERT INTO devices(matrix_id, device_id, "
         "device_name, access_token) VALUES($1, $2, $3, $4)",
         matrix_id, device_id, device_name, access_token);
-    f1.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to create user due to database error");
   }
 
   Database::UserCreationResp resp_data{access_token, device_id};
-  return resp_data;
+  co_return resp_data;
 }
 
-bool Database::user_exists(std::string matrix_id) const {
+drogon::Task<bool> Database::user_exists(std::string matrix_id) const {
   auto sql = drogon::app().getDbClient();
   try {
-    auto f = sql->execSqlAsyncFuture(
+    auto f = co_await sql->execSqlCoro(
         "select exists(select 1 from users where matrix_id = $1) as exists",
         matrix_id);
 
-    return f.get().at(0)["exists"].as<bool>();
+    co_return f.at(0)["exists"].as<bool>();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
 
     // We fail with user exists here to prevent further issues
-    return true;
+    co_return true;
   }
 }
 
-std::optional<Database::UserInfo>
+drogon::Task<std::optional<Database::UserInfo>>
 Database::get_user_info(std::string auth_token) const {
   auto sql = drogon::app().getDbClient();
   try {
-    auto f = sql->execSqlAsyncFuture(
+    auto result = co_await sql->execSqlCoro(
         "select device_id, matrix_id from devices where access_token = $1",
         auth_token);
 
-    auto result = f.get();
     std::optional<std::string> device_id;
     // TODO: track if the user is a guest in the database
     bool is_guest = false;
 
     if (result.size() == 0) {
-      return std::nullopt;
+      co_return std::nullopt;
     }
 
     auto first_row = result.at(0);
@@ -102,9 +104,24 @@ Database::get_user_info(std::string auth_token) const {
     auto matrix_id = first_row["matrix_id"].as<std::string>();
     UserInfo user_info{device_id, is_guest, matrix_id};
 
-    return user_info;
+    co_return user_info;
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
-    return std::nullopt;
+    co_return std::nullopt;
+  }
+}
+
+drogon::Task<bool>
+Database::validate_access_token(std::string auth_token) const {
+  auto sql = drogon::app().getDbClient();
+  try {
+    auto f = co_await sql->execSqlCoro("select exists(select 1 from devices "
+                                       "where access_token = $1) as exists",
+                                       auth_token);
+
+    co_return f.at(0)["exists"].as<bool>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return false;
   }
 }

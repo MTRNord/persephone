@@ -30,15 +30,18 @@ public:
     std::string access_token;
     std::string device_id;
   };
-  [[nodiscard]] Database::UserCreationResp
-  create_user(UserCreationData const &data) const;
-  [[nodiscard]] bool user_exists(std::string matrix_id) const;
-  struct UserInfo {
+  struct [[nodiscard]] UserInfo {
     // Optional for appservices
     std::optional<std::string> device_id;
     bool is_guest;
     std::string user_id;
   };
-  [[nodiscard]] std::optional<Database::UserInfo>
+
+  [[nodiscard]] drogon::Task<Database::UserCreationResp>
+  create_user(UserCreationData const &data) const;
+  [[nodiscard]] drogon::Task<bool> user_exists(std::string matrix_id) const;
+  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
   get_user_info(std::string auth_token) const;
+  [[nodiscard]] drogon::Task<bool>
+  validate_access_token(std::string auth_token) const;
 };

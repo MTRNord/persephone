@@ -17,8 +17,7 @@
 namespace json_utils {
 std::vector<unsigned char> unbase64_key(std::string input) {
   size_t b64_str_len = input.size();
-
-  size_t bin_len = 4 * (b64_str_len / 3);
+  size_t bin_len = b64_str_len * (static_cast<size_t>(4) * 3);
   std::vector<unsigned char> bin_str(bin_len);
 
   int status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
@@ -32,7 +31,7 @@ std::vector<unsigned char> unbase64_key(std::string input) {
   return bin_str;
 }
 
-std::string base64_key(std::vector<unsigned char> input) {
+std::string base64_key(const std::vector<unsigned char> &input) {
   unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
       private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
@@ -59,15 +58,14 @@ json sign_json(const std::string &server_name, const std::string &key_id,
 
   // Sign canonical json
   std::string canonical_json = json_data.dump();
-  unsigned long canonical_json_len = canonical_json.size();
   std::vector<unsigned char> signed_message(crypto_sign_BYTES +
-                                            canonical_json_len);
+                                            canonical_json.size());
   unsigned long long signed_message_len = 0;
 
   auto result = crypto_sign(
       signed_message.data(), &signed_message_len,
       reinterpret_cast<const unsigned char *>(canonical_json.c_str()),
-      canonical_json_len, secret_key.data());
+      canonical_json.size(), secret_key.data());
   if (result < 0) {
     throw std::runtime_error("Signing the json failed");
   }
@@ -92,7 +90,7 @@ generate_server_key() {
   std::array<unsigned char, crypto_sign_SECRETKEYBYTES> sk;
   crypto_sign_keypair(pk.data(), sk.data());
 
-  return std::make_tuple(pk, sk);
+  return {pk, sk};
 }
 
 void write_server_key(const Config &config,
@@ -101,7 +99,7 @@ void write_server_key(const Config &config,
 
   auto base64_str = json_utils::base64_key(private_key);
 
-  std::string version = std::format("a_{}", random_string(4));
+  auto version = std::format("a_{}", random_string(4));
   std::ofstream keyfile(config.matrix_config.server_key_location);
   if (keyfile.is_open()) {
     keyfile << std::format("{} {} {}", algo, version, base64_str);

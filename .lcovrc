@@ -1,0 +1,4 @@
+include = src/*.cpp
+include = src/*.hpp
+lcov_branch_coverage = 1
+ignore_errors = mismatch,unused,inconsistent

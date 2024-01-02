@@ -1,9 +1,15 @@
 #include "utils.hpp"
 #include "sodium.h"
+#include "utils/json_utils.hpp"
 #include "webserver/json.hpp"
+#include <algorithm>
+#include <ares.h>
+#include <arpa/nameser.h>
+#include <coroutine>
 #include <format>
+#include <fstream>
+#include <iostream>
 #include <map>
-#include <nlohmann/json.hpp>
 #include <random>
 #include <utility>
 #include <zlib.h>
@@ -21,9 +27,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
 }
 
 std::string random_string(const std::size_t len) {
-  // We dont seed as this is NOT used for crypto but rather just naming things
-  // randomly!
-  std::minstd_rand simple_rand; // NOLINT(cert-msc32-c, cert-msc51-cpp)
+  std::mt19937 mt_gen(std::random_device{}());
 
   std::string alphanum =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -34,7 +38,7 @@ std::string random_string(const std::size_t len) {
   auto size = alphanum.length();
 
   for (std::size_t i = 0; i < len; ++i) {
-    tmp_s += alphanum.at(simple_rand() % (size - 1));
+    tmp_s += alphanum.at(mt_gen() % size);
   }
 
   return tmp_s;
@@ -50,10 +54,6 @@ std::string hash_password(const std::string &password) {
   std::string hashed_password(hashed_password_array.data());
 
   return hashed_password;
-}
-
-std::string localpart(const std::string &matrix_id) {
-  return matrix_id.substr(1, matrix_id.find(':') - 1);
 }
 
 // Helper to generate a crc32 checksum.
@@ -79,79 +79,420 @@ std::string base62_encode(unsigned long input) {
   return output;
 }
 
-/**
- * Migrates the historic localpart format to the new one.
- *
- * 1. Encode character strings as UTF-8.
- * 2. Convert the bytes `A-Z` to lower-case.
- *     2a. In the case where a bridge must be able to distinguish two different
- *        users with ids which differ only by case, escape upper-case characters
- *        by prefixing with `_` before downcasing. For example, `A` becomes
- * `_a`. Escape a real `_` with a second `_`.
- * 3. Encode any remaining bytes outside the allowed character set, as well as
- *    `=`, as their hexadecimal value, prefixed with
- *    `=`. For example, `#` becomes `=23`; `á` becomes `=c3=a1`.
- *
- * Allowed in the localpart itself is:
- *
- * ```
- * user_id_localpart = 1*user_id_char
- * user_id_char = DIGIT
- *             / %x61-7A                   ; a-z
- *             / "-" / "." / "=" / "_" / "/" / "+"
- * ```
- */
-std::string migrate_localpart(const std::string &localpart) {
-  std::string migrated_localpart;
-  migrated_localpart.reserve(localpart.size());
+Task<std::vector<SRVRecord>> get_srv_record(const std::string &address) {
+  std::vector<SRVRecord> records;
+  struct awaiter : public std::suspend_always {
+    std::string address;
+    std::vector<SRVRecord> &records;
+    std::coroutine_handle<> handle;
+    ares_channel channel;
 
-  for (auto const &c : localpart) {
-    if (c >= 'A' && c <= 'Z') {
-      migrated_localpart.push_back(static_cast<char>(c + 32));
-    } else if (c == '_') {
-      migrated_localpart.push_back('_');
-      migrated_localpart.push_back('_');
-    } else {
-      migrated_localpart.push_back(c);
+    awaiter(std::string address, std::vector<SRVRecord> &records)
+        : address(std::move(address)), records(records) {
+      auto status = ares_init(&channel);
+      if (status != ARES_SUCCESS) {
+        throw std::runtime_error(std::format("Failed to init ares channel: {}",
+                                             ares_strerror(status)));
+      }
     }
-  }
 
-  return migrated_localpart;
+    void await_suspend(std::coroutine_handle<> handle_) {
+      this->handle = handle_;
+
+      ares_query(
+          channel, address.c_str(), ns_c_in, ns_t_srv,
+          [](void *arg_, int status, int timeouts, unsigned char *abuf,
+             int alen) {
+            auto arg = static_cast<awaiter *>(arg_);
+            struct ares_srv_reply *reply;
+
+            auto parse_status = ares_parse_srv_reply(abuf, alen, &reply);
+            if (parse_status != ARES_SUCCESS) {
+              throw std::runtime_error(std::format(
+                  "Failed to parse response: {}", ares_strerror(status)));
+            }
+
+            struct ares_srv_reply *next = reply;
+            while (next != nullptr) {
+              SRVRecord record;
+              record.host = next->host;
+              record.port = next->port;
+              record.priority = next->priority;
+              record.weight = next->weight;
+              arg->records.push_back(record);
+              next = next->next;
+            }
+
+            ares_destroy(arg->channel);
+            arg->handle();
+          },
+          this);
+    }
+  };
+
+  //  FIXME: We might need to rethrow here
+  co_await awaiter(std::format("_matrix-fed._tcp.{}", address), records);
+  co_return records;
 }
 
-/**
- * Check if a localpard is valid according to
- * https://spec.matrix.org/v1.8/appendices/#user-identifiers
- *
- * ```
- * user_id_localpart = 1*user_id_char
- * user_id_char = DIGIT
- *              / %x61-7A                   ; a-z
- *              / "-" / "." / "=" / "_" / "/" / "+"
- * ```
- *
- * We also need to check that it not exceeds 255 chars when containing `@`, a
- * colon and the domain.
- *
- * @param localpart The localpart to check
- * @return true if the localpart is valid, false otherwise
- */
-bool is_valid_localpart(const std::string &localpart,
-                        const std::string &server_name) {
-  for (auto const &c : localpart) {
-    if (std::isdigit(c) || (c >= 'a' && c <= 'z') ||
-        (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' ||
-         c == '+')) {
-      continue;
-    } else {
-      return false;
+constexpr std::string remove_brackets(std::string server_name) {
+  server_name.erase(std::remove_if(server_name.begin(), server_name.end(),
+                                   [](char c) {
+                                     switch (c) {
+                                     case '[':
+                                     case ']':
+                                       return true;
+                                     default:
+                                       return false;
+                                     }
+                                   }),
+                    server_name.end());
+  return server_name;
+}
+
+bool check_if_ip_address(const std::string &address) {
+  struct sockaddr_in sa;
+  auto is_ipv4 = false;
+  auto result = inet_pton(AF_INET, address.c_str(), &(sa.sin_addr));
+  is_ipv4 = result == 1;
+
+  auto result_v6 = inet_pton(AF_INET6, address.c_str(), &(sa.sin_addr));
+  return is_ipv4 || result_v6 == 1;
+}
+
+Task<bool> isServerReachable(const SRVRecord &server) {
+  auto client = HttpClient::newHttpClient(
+      std::format("https://{}:{}", server.host, server.port));
+  client->setUserAgent(UserAgent);
+
+  auto req = HttpRequest::newHttpRequest();
+  req->setMethod(drogon::Get);
+  req->setPath("/_matrix/federation/v1/version");
+
+  HttpResponsePtr resp;
+  auto failure = false;
+  try {
+    resp = co_await client->sendRequestCoro(req, 10);
+    if (resp->statusCode() != 200) {
+      failure = true;
+    }
+  } catch (const std::exception &err) {
+    failure = true;
+  }
+  co_return !failure;
+}
+
+Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
+  std::random_device rd;
+  std::mt19937 gen(rd());
+
+  while (!servers.empty()) {
+    // Finding the minimum priority using std::min_element and lambda
+    const auto minPriority =
+        std::min_element(servers.begin(), servers.end(),
+                         [](const SRVRecord &a, const SRVRecord &b) {
+                           return a.priority < b.priority;
+                         });
+
+    const auto minPriorityVal = minPriority->priority;
+
+    // Filtering servers with the minimum priority using std::copy_if and lambda
+    std::vector<SRVRecord> minPriorityServers;
+    std::copy_if(servers.begin(), servers.end(),
+                 std::back_inserter(minPriorityServers),
+                 [minPriorityVal](const SRVRecord &srv) {
+                   return srv.priority == minPriorityVal;
+                 });
+
+    // Sorting the servers based on weight using std::sort and lambda
+    std::sort(minPriorityServers.begin(), minPriorityServers.end(),
+              [](const SRVRecord &a, const SRVRecord &b) {
+                return a.weight > b.weight;
+              });
+
+    unsigned int totalWeight =
+        std::accumulate(minPriorityServers.begin(), minPriorityServers.end(),
+                        0u, [](unsigned int sum, const SRVRecord &srv) {
+                          return sum + srv.weight;
+                        });
+
+    // Selecting a server based on weighted random distribution
+    std::uniform_int_distribution<unsigned int> dist(1, totalWeight);
+    unsigned int selectedWeight = dist(gen);
+    for (const auto &server : minPriorityServers) {
+      selectedWeight -= server.weight;
+      if (selectedWeight <= 0) {
+        if (co_await isServerReachable(server)) {
+          co_return server;
+        }
+        // If server is unreachable, continue to the next server
+      }
     }
   }
 
-  // Check if the localpart is too long
-  if (std::format("@{}:{}", localpart, server_name).length() > 255) {
-    return false;
+  throw std::runtime_error("Error selecting server");
+}
+
+Task<ResolvedServer> discover_server(const std::string &server_name) {
+  /*
+   * If the hostname is an IP literal, then that IP address should be used,
+   * together with the given port number, or 8448 if no port is given. The
+   * target server must present a valid certificate for the IP address. The Host
+   * header in the request should be set to the server name, including the port
+   * if the server name included one.
+   */
+  auto port = server_name.substr(server_name.find_last_of(':') + 1,
+                                 server_name.length() -
+                                     (server_name.find_last_of(':') + 1));
+  auto address = server_name.substr(0, server_name.find_last_of(':') + 1);
+  auto clean_address = remove_brackets(address);
+  if (check_if_ip_address(clean_address)) {
+    unsigned long integer_port = 8448;
+    if (!port.empty()) {
+      integer_port = std::stoul(port);
+    }
+    co_return ResolvedServer{
+        .address = address,
+        .port = integer_port,
+        .server_name = server_name,
+    };
   }
 
-  return true;
+  /*
+   * If the hostname is not an IP literal, and the server name includes an
+   * explicit port, resolve the hostname to an IP address using CNAME, AAAA or A
+   * records. Requests are made to the resolved IP address and given port with a
+   * Host header of the original server name (with port). The target server must
+   * present a valid certificate for the hostname.
+   */
+  if (!port.empty()) {
+    co_return ResolvedServer{
+        .address = address,
+        .port = std::stoul(port),
+        .server_name = server_name,
+    };
+  }
+
+  auto client =
+      HttpClient::newHttpClient(std::format("https://{}", server_name));
+  client->setUserAgent(UserAgent);
+
+  auto req = HttpRequest::newHttpRequest();
+  req->setMethod(drogon::Get);
+  req->setPath("/.well-known/matrix/server");
+
+  HttpResponsePtr resp;
+  auto failure = false;
+  try {
+    resp = co_await client->sendRequestCoro(req, 10);
+    if (resp->statusCode() != 200) {
+      failure = true;
+    }
+  } catch (const std::exception &err) {
+    failure = true;
+  }
+
+  if (!failure) {
+    // Get the response body as json
+    json body = json::parse(resp->body());
+    server_server_json::well_known well_known =
+        body.get<server_server_json::well_known>();
+
+    if (well_known.m_server) {
+      auto delegated_server_name = well_known.m_server.value();
+      auto delegated_port = delegated_server_name.substr(
+          delegated_server_name.find_last_of(':') + 1,
+          delegated_server_name.length() -
+              (delegated_server_name.find_last_of(':') + 1));
+      auto delegated_address = delegated_server_name.substr(
+          0, delegated_server_name.find_last_of(':') + 1);
+      auto delegated_clean_address = remove_brackets(delegated_address);
+
+      if (check_if_ip_address(delegated_clean_address)) {
+        unsigned long integer_port = 8448;
+        if (!port.empty()) {
+          integer_port = std::stoul(delegated_port);
+        }
+        co_return ResolvedServer{
+            .address = delegated_address,
+            .port = integer_port,
+            .server_name = delegated_server_name,
+        };
+      }
+
+      if (!delegated_port.empty()) {
+        co_return ResolvedServer{
+            .address = delegated_address,
+            .port = std::stoul(delegated_port),
+            .server_name = delegated_server_name,
+        };
+      }
+
+      auto srv_resp = co_await get_srv_record(server_name);
+      if (!srv_resp.empty()) {
+        auto server = co_await pick_srv_server(srv_resp);
+        co_return ResolvedServer{
+            .address = server.host,
+            .port = server.port,
+            .server_name = delegated_server_name,
+        };
+      }
+
+      co_return ResolvedServer{
+          .address = delegated_address,
+          .port = 8448,
+          .server_name = delegated_server_name,
+      };
+    }
+  }
+
+  /*
+   *  If the /.well-known request resulted in an error response, a server is
+   * found by resolving an SRV record for _matrix-fed._tcp.<hostname>. This may
+   * result in a hostname (to be resolved using AAAA or A records) and port.
+   * Requests are made to the resolved IP address and port, with a Host header
+   * of <hostname>. The target server must present a valid certificate for
+   * <hostname>.
+   */
+  auto srv_resp = co_await get_srv_record(server_name);
+  if (!srv_resp.empty()) {
+    auto server = co_await pick_srv_server(srv_resp);
+    co_return ResolvedServer{
+        .address = server.host,
+        .port = server.port,
+        .server_name = server_name,
+    };
+  }
+
+  co_return ResolvedServer{
+      .address = address,
+      .port = 8448,
+      .server_name = server_name,
+  };
+}
+
+std::string generate_ss_authheader(const std::string &server_name,
+                                   const std::string &key_id,
+                                   const std::vector<unsigned char> &secret_key,
+                                   const std::string &method,
+                                   const std::string &request_uri,
+                                   std::string origin, std::string target,
+                                   std::optional<json> content) {
+
+  auto request_json = json::object();
+  request_json["method"] = method;
+  request_json["uri"] = request_uri;
+  request_json["origin"] = origin;
+  request_json["destination"] = target;
+
+  if (content) {
+    request_json["content"] = content.value();
+  }
+
+  auto signed_json =
+      json_utils::sign_json(server_name, key_id, secret_key, request_json);
+
+  std::vector<std::string> authorization_headers;
+  for (auto &[key, val] : signed_json.items()) {
+    authorization_headers.push_back(std::format(
+        R"(X-Matrix origin="{}",destination="{}",key="{}",sig="{}")", origin,
+        target, key, val.get<std::string>()));
+  }
+
+  return authorization_headers[0];
+}
+
+// Function to generate a valid HTTP query parameter string
+std::string generateQueryParamString(const std::string &keyName,
+                                     const std::vector<std::string> &values) {
+  std::stringstream ss;
+  ss << '?' << keyName << '=';
+
+  if (!values.empty()) {
+    ss << drogon::utils::urlEncodeComponent(values[0]);
+
+    for (size_t i = 1; i < values.size(); ++i) {
+      ss << '&' << keyName << '='
+         << drogon::utils::urlEncodeComponent(values[i]);
+    }
+  }
+
+  return ss.str();
+}
+
+// Function to parse query parameter string into a map
+std::unordered_map<std::string, std::vector<std::string>>
+parseQueryParamString(const std::string &queryString) {
+  std::unordered_map<std::string, std::vector<std::string>> paramMap;
+
+  std::istringstream iss(queryString);
+  std::string pair;
+
+  while (std::getline(iss, pair, '&')) {
+    std::istringstream pairStream(pair);
+    std::string key;
+    std::string value;
+
+    if (std::getline(pairStream, key, '=') && std::getline(pairStream, value)) {
+      paramMap[key].push_back(value);
+    }
+  }
+
+  return paramMap;
+}
+
+std::string drogon_to_string_method(const drogon::HttpMethod &method) {
+  switch (method) {
+  case drogon::HttpMethod::Get:
+    return "GET";
+  case drogon::HttpMethod::Post:
+    return "POST";
+  case drogon::HttpMethod::Head:
+    return "HEAD";
+  case drogon::HttpMethod::Put:
+    return "PUT";
+  case drogon::HttpMethod::Delete:
+    return "DELETE";
+  case drogon::HttpMethod::Options:
+    return "OPTIONS";
+  case drogon::HttpMethod::Patch:
+    return "PATCH";
+  case drogon::HttpMethod::Invalid:
+    return "INVALID";
+  }
+}
+
+Task<drogon::HttpResponsePtr> federation_request(const HTTPRequest &request) {
+  auto auth_header = generate_ss_authheader(
+      request.origin, request.key_id, request.secret_key,
+      drogon_to_string_method(request.method), request.path, request.origin,
+      request.target, request.content);
+  auto req = HttpRequest::newHttpRequest();
+  req->setMethod(request.method);
+  req->setPath(request.path);
+  req->addHeader("Authorization", auth_header);
+  req->removeHeader("Host");
+  req->addHeader("Host", request.target);
+
+  co_return co_await request.client->sendRequestCoro(req, request.timeout);
+}
+
+VerifyKeyData get_verify_key_data(const Config &config) {
+  std::ifstream t(config.matrix_config.server_key_location);
+  std::string server_key((std::istreambuf_iterator<char>(t)),
+                         std::istreambuf_iterator<char>());
+  std::istringstream buffer(server_key);
+  std::vector<std::string> splitted_data{
+      std::istream_iterator<std::string>(buffer),
+      std::istream_iterator<std::string>()};
+
+  auto private_key = json_utils::unbase64_key(splitted_data[2]);
+  std::vector<unsigned char> public_key(crypto_sign_PUBLICKEYBYTES);
+  crypto_sign_ed25519_sk_to_pk(public_key.data(), private_key.data());
+  auto public_key_base64 = json_utils::base64_key(public_key);
+
+  return {.private_key = private_key,
+          .public_key_base64 = public_key_base64,
+          .key_id = splitted_data[1],
+          .key_type = splitted_data[0]};
 }

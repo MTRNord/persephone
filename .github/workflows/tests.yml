@@ -31,6 +31,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
+        if: toJSON(github.event.pull_request) != '{}'
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ github.event.pull_request.head.sha }}
+      - name: Checkout repository
+        if: toJSON(github.event.pull_request) == '{}'
         uses: actions/checkout@v4
       - name: Install Python
         uses: actions/setup-python@v4
@@ -47,7 +53,7 @@ jobs:
           sudo ./.github/llvm.sh 17 all
           which clang-17
           which clang++-17
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev
+          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov
           sudo pip3 install meson
           pushd /tmp
           [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
@@ -72,10 +78,25 @@ jobs:
       - name: Test
         run: |
           /usr/bin/clang++-17 --version
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false -Db_coverage=true builddir
+          cp ./.lcovrc ~/.lcovrc
           pushd builddir
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson compile
           CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson test
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 ninja coverage-html
           popd
+      - name: Report results to DeepSource
+        run: |
+            # Tests have finished and a test coverage report is available
+
+            # Install deepsource CLI
+            curl https://deepsource.io/cli | sh
+
+            # From the root directory, run the report coverage command
+            ./bin/deepsource report --analyzer test-coverage --key cxx --value-file ./builddir/meson-logs/coverage.info
+
+        env:
+            DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
 
   # run Complement
   complement:

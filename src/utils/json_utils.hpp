@@ -17,7 +17,7 @@ generate_server_key();
                              const std::vector<unsigned char> &secret_key,
                              json json_data);
 [[nodiscard]] std::vector<unsigned char> unbase64_key(std::string input);
-[[nodiscard]] std::string base64_key(std::vector<unsigned char> input);
+[[nodiscard]] std::string base64_key(const std::vector<unsigned char> &input);
 
 void write_server_key(const Config &config,
                       const std::vector<unsigned char> &private_key);

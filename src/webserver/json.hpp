@@ -29,6 +29,38 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(generic_json_error, errcode, error)
  */
 namespace server_server_json {
 
+struct MembershipEventContent {
+  std::optional<std::string> join_authorised_via_users_server;
+  std::string membership;
+};
+void from_json(const json &obj, MembershipEventContent &p);
+void to_json(json &obj, const MembershipEventContent &p);
+
+struct MakeJoinEventTemplate {
+  MembershipEventContent content;
+  std::string origin;
+  int origin_server_ts;
+  std::string sender;
+  std::string state_key;
+  std::string type;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MakeJoinEventTemplate, content, origin,
+                                   origin_server_ts, sender, state_key, type)
+
+struct MakeJoinResp {
+  MakeJoinEventTemplate event;
+  std::optional<std::string> room_version;
+};
+void from_json(const json &obj, MakeJoinResp &p);
+void to_json(json &obj, const MakeJoinResp &p);
+
+struct incompatible_room_version_error
+    : public generic_json::generic_json_error {
+  std::string room_version;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incompatible_room_version_error, errcode,
+                                   error, room_version)
+
 /**
  * @brief JSON Object for the Matrix Server Version
  *
@@ -89,6 +121,18 @@ struct keys {
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
                                    old_verify_keys, verify_keys, signatures)
+
+struct well_known {
+  std::optional<std::string> m_server;
+};
+void from_json(const json &obj, well_known &p);
+void to_json(json &obj, const well_known &p);
+
+struct directory_query {
+  std::string room_id;
+  std::vector<std::string> servers;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(directory_query, room_id, servers)
 
 } // namespace server_server_json
 
@@ -151,7 +195,6 @@ struct whoami_resp {
   bool is_guest;
   std::optional<std::string> device_id;
 };
-
 void from_json(const json &obj, whoami_resp &p);
 void to_json(json &obj, const whoami_resp &p);
 
@@ -175,5 +218,20 @@ struct GetLogin {
   std::array<LoginFlow, 1> flows;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GetLogin, flows)
+
+struct ThirdPartySigned {
+  std::string mxid;
+  std::string sender;
+  std::string token;
+  std::map<std::string, std::map<std::string, std::string>> signatures;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ThirdPartySigned, mxid, sender, token)
+
+struct JoinBody {
+  std::optional<std::string> reason;
+  std::optional<ThirdPartySigned> third_party_signed;
+};
+void from_json(const json &obj, JoinBody &p);
+void to_json(json &obj, const JoinBody &p);
 
 } // namespace client_server_json
