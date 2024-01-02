@@ -14,8 +14,11 @@ void Migrator::migration_v0() {
   auto sql = drogon::app().getDbClient("default");
   assert(sql);
   try {
-    auto f = sql->execSqlAsyncFuture(
-        "CREATE TABLE IF NOT EXISTS migrations (version INTEGER NOT NULL)");
+    LOG_DEBUG << "Creating v0 table as needed";
+    auto f =
+        sql->execSqlAsyncFuture("CREATE TABLE IF NOT EXISTS public.migrations "
+                                "(version INTEGER NOT NULL)");
+    f.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     exit(EXIT_FAILURE);
