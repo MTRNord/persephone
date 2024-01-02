@@ -135,7 +135,7 @@ is_valid_localpart(const std::string &localpart,
   }
 
   // Check if the localpart is too long
-  return std::format("@{}:{}", localpart, server_name).length() > 255;
+  return !(std::format("@{}:{}", localpart, server_name).length() > 255);
 }
 
 [[nodiscard]] constexpr std::string get_serverpart(const std::string &input) {
