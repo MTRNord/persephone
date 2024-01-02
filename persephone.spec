@@ -16,6 +16,9 @@ BuildRequires:  yaml-cpp-devel
 Requires:       c-ares
 Requires:       yaml-cpp
 
+%description
+%{summary}.
+
 %prep
 %autosetup -c
 
