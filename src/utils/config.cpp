@@ -24,7 +24,7 @@ void Config::load_db(const YAML::Node &config) {
   db_config.database_name =
       config["database"]["database_name"].as<std::string>();
   db_config.user = config["database"]["user"].as<std::string>();
-  if (!config["database"].contains("password")) {
+  if (!config["database"]["password"].IsDefined()) {
     throw std::runtime_error(
         "Missing 'database.password' field. Unable "
         "to start. Make sure you set the database password.");

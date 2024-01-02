@@ -27,10 +27,10 @@ struct ResolvedServer {
 
 struct HTTPRequest {
   drogon::HttpClientPtr client;
-  const drogon::HttpMethod &method;
-  const std::string &path;
-  const std::string &key_id;
-  const std::vector<unsigned char> &secret_key;
+  drogon::HttpMethod method;
+  std::string path;
+  std::string key_id;
+  std::vector<unsigned char> secret_key;
   std::string origin;
   std::string target;
   std::optional<json> content;
@@ -135,11 +135,7 @@ is_valid_localpart(const std::string &localpart,
   }
 
   // Check if the localpart is too long
-  if (std::format("@{}:{}", localpart, server_name).length() > 255) {
-    return false;
-  }
-
-  return true;
+  return std::format("@{}:{}", localpart, server_name).length() > 255;
 }
 
 [[nodiscard]] constexpr std::string get_serverpart(const std::string &input) {
