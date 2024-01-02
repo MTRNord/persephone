@@ -9,6 +9,12 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  meson
 BuildRequires:  clang
+BuildRequires:  json-devel
+BuildRequires:  c-ares-devel
+BuildRequires:  yaml-cpp-devel
+
+Requires:       c-ares
+Requires:       yaml-cpp
 
 %prep
 %autosetup -c
