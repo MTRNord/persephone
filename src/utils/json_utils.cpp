@@ -15,7 +15,7 @@
 #include <utility>
 
 namespace json_utils {
-std::vector<unsigned char> unbase64_key(std::string input) {
+std::vector<unsigned char> unbase64_key(const std::string &input) {
   size_t b64_str_len = input.size();
   size_t bin_len = b64_str_len * (static_cast<size_t>(4) * 3);
   std::vector<unsigned char> bin_str(bin_len);

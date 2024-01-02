@@ -2,27 +2,12 @@
 
 namespace server_server_json {
 
-void from_json(const json &obj, MembershipEventContent &p) {
-  if (obj.contains("join_authorised_via_users_server")) {
-    p.join_authorised_via_users_server =
-        obj["join_authorised_via_users_server"].get<std::string>();
-  }
-  p.membership = obj["membership"].get<std::string>();
-}
-void to_json(json &obj, const MembershipEventContent &p) {
-  obj = nlohmann::json::object();
-  if (p.join_authorised_via_users_server) {
-    obj["join_authorised_via_users_server"] =
-        p.join_authorised_via_users_server.value();
-  }
-  obj["membership"] = p.membership;
-}
 
 void from_json(const json &obj, MakeJoinResp &p) {
   if (obj.contains("room_version")) {
     p.room_version = obj["room_version"].get<std::string>();
   }
-  p.event = obj["event"].get<MakeJoinEventTemplate>();
+  p.event = obj["event"].get<json::object_t>();
 }
 void to_json(json &obj, const MakeJoinResp &p) {
   obj = nlohmann::json::object();

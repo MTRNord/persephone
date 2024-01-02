@@ -135,7 +135,7 @@ std::string event_id(const json &event, std::string room_version) {
 
   std::string base64_str(base64_max_len - 1, 0);
   auto encoded_str_char = sodium_bin2base64(
-      base64_str.data(), base64_max_len, (const unsigned char *)hash.c_str(),
+      base64_str.data(), base64_max_len, reinterpret_cast<const unsigned char *>(hash.c_str()),
       hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
     throw std::runtime_error("Base64 Error: Failed to encode string");

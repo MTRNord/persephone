@@ -28,27 +28,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(generic_json_error, errcode, error)
  * @brief Json types for the S-S API
  */
 namespace server_server_json {
-
-struct MembershipEventContent {
-  std::optional<std::string> join_authorised_via_users_server;
-  std::string membership;
-};
-void from_json(const json &obj, MembershipEventContent &p);
-void to_json(json &obj, const MembershipEventContent &p);
-
-struct MakeJoinEventTemplate {
-  MembershipEventContent content;
-  std::string origin;
-  int origin_server_ts;
-  std::string sender;
-  std::string state_key;
-  std::string type;
-};
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(MakeJoinEventTemplate, content, origin,
-                                   origin_server_ts, sender, state_key, type)
-
 struct MakeJoinResp {
-  MakeJoinEventTemplate event;
+  json::object_t event;
   std::optional<std::string> room_version;
 };
 void from_json(const json &obj, MakeJoinResp &p);
