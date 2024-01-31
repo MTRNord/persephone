@@ -1,7 +1,6 @@
 #include "json_utils.hpp"
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
-#include <algorithm>
 #include <cstddef>
 #include <filesystem>
 #include <format>
@@ -12,7 +11,6 @@
 #include <nlohmann/json.hpp>
 #include <sodium/utils.h>
 #include <stdexcept>
-#include <utility>
 
 namespace json_utils {
 std::vector<unsigned char> unbase64_key(const std::string &input) {

@@ -4,7 +4,10 @@
 #include "drogon/utils/coroutine.h"
 #include "utils/config.hpp"
 #include <nlohmann/json.hpp>
+#include <source_location>
 #include <string>
+#include <format>
+#include <string_view>
 
 using json = nlohmann::json;
 using namespace drogon;
@@ -180,3 +183,16 @@ parseQueryParamString(const std::string &queryString);
 federation_request(const HTTPRequest &request);
 
 [[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config);
+
+template <typename... Args>
+struct debug
+{
+    debug(std::string_view format_string, Args&&... args, const std::source_location& loc = std::source_location::current())
+    {
+        auto str = std::format("{}({}): {}\n", loc.file_name(), loc.line(), std::vformat(format_string, std::make_format_args(args...)));
+        std::cout << str;
+    }
+};
+
+template <typename... Args>
+debug(Args&&...) -> debug<Args...>;

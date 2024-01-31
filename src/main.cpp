@@ -76,7 +76,7 @@ int main() {
     }
 
     drogon::app().run();
-  } catch (YAML::BadFile &error) {
+  } catch (const YAML::BadFile &error) {
     LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "
                  "prior to running persephone";
     return 1;

@@ -2,6 +2,7 @@
 #include "database/migrations/migrator.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
+#include <drogon/utils/coroutine.h>
 #include <format>
 #include <stdexcept>
 #include <zlib.h>
@@ -9,6 +10,23 @@
 void Database::migrate() {
   Migrator migrator;
   migrator.migrate();
+  prepare_statements();
+}
+
+/**
+ * \brief Makes sure that at the start of the app all queries we can prepare are prepared.
+ * \warning This function is intentionally sync to make sure it blocks on startup.
+ */
+void prepare_statements() {
+  auto sql = drogon::app().getDbClient();
+  assert(sql);
+  try {
+    auto f = sql->execSqlAsyncFuture("PREPARE insert_user (matrix_id, password_hash) AS INSERT INTO users VALUES($1, $2);");
+    f.wait();
+  } catch(const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    exit(EXIT_FAILURE);
+  }
 }
 
 drogon::Task<Database::UserCreationResp>
@@ -41,7 +59,7 @@ Database::create_user(Database::UserCreationData const &data) const {
 
   try {
     co_await transPtr->execSqlCoro(
-        "INSERT INTO users(matrix_id, password_hash) VALUES($1, $2)", matrix_id,
+        "EXECUTE insert_user($1, $2)", matrix_id,
         password_hash);
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();

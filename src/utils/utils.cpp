@@ -101,8 +101,7 @@ Task<std::vector<SRVRecord>> get_srv_record(const std::string &address) {
 
       ares_query(
           channel, address.c_str(), ns_c_in, ns_t_srv,
-          [](void *arg_, int status, int, unsigned char *abuf,
-             int alen) {
+          [](void *arg_, int status, int, unsigned char *abuf, int alen) {
             auto arg = static_cast<awaiter *>(arg_);
             struct ares_srv_reply *reply;
 

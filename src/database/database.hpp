@@ -12,6 +12,8 @@
 #include <optional>
 #include <string>
 
+void prepare_statements();
+
 /**
  * @brief A wrapper for database operations. This is intentionally stateless and
  * not a cache.

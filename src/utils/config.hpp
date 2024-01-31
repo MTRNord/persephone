@@ -11,10 +11,10 @@
 
 struct [[nodiscard]] DBConfig {
   std::string host;
-  unsigned short port;
   std::string database_name;
   std::string user;
   std::string password;
+  unsigned short port;
 };
 
 struct [[nodiscard]] WebserverConfig {

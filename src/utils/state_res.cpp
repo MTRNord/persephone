@@ -1,8 +1,14 @@
 #include "state_res.hpp"
+#include "drogon/drogon.h"
 #include <format>
+#include <ranges>
 #include <sodium/crypto_hash_sha256.h>
 #include <sodium/utils.h>
 #include <unordered_set>
+#include "utils/errors.hpp"
+
+// Define StateEvent as json::object_t
+using StateEvent = json::object_t;
 
 /**
  * @brief Redacts the provided JSON event object based on Matrix Protocol
@@ -90,13 +96,11 @@ json v11_redact(const json &event) {
   return event_copy;
 }
 
-json redact(const json &event, std::string room_version) {
+json redact(const json &event, const std::string &room_version) {
   if (room_version == "11") {
     return v11_redact(event);
   }
-
-  throw std::runtime_error(
-      std::format("Unsupported room version: {}", room_version));
+  throw MatrixRoomVersionError(room_version);
 }
 
 std::string reference_hash_v11(const json &event) {
@@ -117,29 +121,229 @@ std::string reference_hash_v11(const json &event) {
   return sha256_hash_string;
 }
 
-std::string reference_hash(const json &event, std::string room_version) {
+std::string reference_hash(const json &event, const std::string &room_version) {
   if (room_version == "11") {
     return reference_hash_v11(event);
   }
 
-  throw std::runtime_error(
-      std::format("Unsupported room version: {}", room_version));
+  throw MatrixRoomVersionError(room_version);
 }
 
-std::string event_id(const json &event, std::string room_version) {
-  auto hash = reference_hash(event, std::move(room_version));
+std::string event_id(const json &event, const std::string &room_version) {
+  auto hash = reference_hash(event, room_version);
 
   unsigned long long hash_len = hash.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
       hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
-  auto encoded_str_char = sodium_bin2base64(
-      base64_str.data(), base64_max_len, reinterpret_cast<const unsigned char *>(hash.c_str()),
-      hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+  auto encoded_str_char =
+      sodium_bin2base64(base64_str.data(), base64_max_len,
+                        reinterpret_cast<const unsigned char *>(hash.c_str()),
+                        hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
     throw std::runtime_error("Base64 Error: Failed to encode string");
   }
 
   return base64_str;
+}
+
+using EventType = std::string;
+using StateKey = std::string;
+
+// Function to create the partial state map from unconflicted events while
+// preserving ordering
+std::map<EventType, std::map<StateKey, StateEvent>>
+createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
+  std::map<EventType, std::map<StateKey, StateEvent>> partialState;
+
+  // Populate partial state with unconflicted events while preserving ordering
+  for (const auto &event : unconflictedEvents) {
+    std::string event_type = event.at("type").get<EventType>();
+    std::string state_key = event.at("state_key").get<StateKey>();
+    partialState[event_type][state_key] =
+        event; // Add the event to partial state
+  }
+
+  return partialState;
+}
+
+// Custom struct to hold conflicted and unconflicted state sets
+struct StateEventSets {
+  std::vector<StateEvent> conflictedEvents;
+  std::vector<StateEvent> unconflictedEvents;
+};
+
+StateEventSets splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
+  StateEventSets result;
+  std::vector<std::map<std::pair<EventType, StateKey>, int>> stateTuples(
+      forks.size());
+
+  // Count occurrences of state tuples for each fork
+  for (size_t i = 0; i < forks.size(); ++i) {
+    for (const auto &event : forks[i]) {
+      std::string event_type = event.at("type").get<EventType>();
+      std::string state_key = event.at("state_key").get<StateKey>();
+      stateTuples[i][{event_type, state_key}]++;
+    }
+  }
+
+  // Iterate through events in each fork
+  for (size_t i = 0; i < forks.size(); ++i) {
+    for (const auto &event : forks[i]) {
+      std::string event_type = event.at("type").get<EventType>();
+      std::string state_key = event.at("state_key").get<StateKey>();
+
+      bool isConflicted = false;
+
+      // Check if the state tuple exists in another fork only once
+      int appearingInOtherForks = 0;
+      for (size_t j = 0; j < forks.size(); ++j) {
+        if (j != i && stateTuples[j][{event_type, state_key}] == 1) {
+          appearingInOtherForks++;
+        }
+      }
+
+      if ((stateTuples[i][{event_type, state_key}] > 1 ||
+           appearingInOtherForks > 1) ||
+          (stateTuples[i][{event_type, state_key}] == 1 &&
+           appearingInOtherForks == 0)) {
+        isConflicted = true; // State tuple is conflicted in either fork or
+                             // State tuple exists in only one other fork
+      }
+
+      // Add events to conflicted or unconflicted sets
+      if (isConflicted) {
+        result.conflictedEvents.push_back(event); // Add to conflicted set
+      } else {
+        result.unconflictedEvents.push_back(event); // Add to unconflicted set
+      }
+    }
+  }
+
+  return result;
+}
+
+using ForkID = int;
+
+std::vector<StateEvent>
+findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
+                   const std::vector<std::vector<StateEvent>> &forks) {
+  std::vector<StateEvent> authDifference;
+
+  for (const auto &e : conflictedEvents) {
+    bool found = true;
+
+    for (const auto &authSet : forks) {
+      if (std::find(authSet.begin(), authSet.end(), e) == authSet.end()) {
+        found = false;
+        break;
+      }
+    }
+
+    if (!found) {
+      authDifference.push_back(e);
+    }
+  }
+
+  return authDifference;
+}
+
+using EventID = std::string;
+
+std::map<EventID, int>
+sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
+                      const std::map<EventID, StateEvent> &event_map) {
+  auto comparator = [&](const EventID &x, const EventID &y) {
+    const StateEvent &state_event_x = event_map.at(x);
+    const StateEvent &state_event_y = event_map.at(y);
+    int power_level_x = state_event_x.at("power_level").get<int>();
+    int power_level_y = state_event_y.at("power_level").get<int>();
+
+    time_t origin_server_ts_x =
+        state_event_x.at("origin_server_ts").get<time_t>();
+    time_t origin_server_ts_y =
+        state_event_y.at("origin_server_ts").get<time_t>();
+
+    std::string event_id_x = state_event_x.at("event_id").get<std::string>();
+    std::string event_id_y = state_event_y.at("event_id").get<std::string>();
+
+    return (power_level_x > power_level_y) ||
+           (origin_server_ts_x < origin_server_ts_y) ||
+           (event_id_x < event_id_y);
+  };
+
+  std::map<EventID, int> sorted_edges;
+  std::vector<EventID> keys(incoming_edges.size());
+  for (const auto &[id, _] : incoming_edges) {
+    keys.push_back(id);
+  }
+
+  std::sort(keys.begin(), keys.end(), comparator);
+
+  for (const auto &key : keys) {
+    sorted_edges[key] = incoming_edges.at(key);
+  }
+
+  return sorted_edges;
+}
+
+std::vector<StateEvent>
+kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
+  std::vector<StateEvent> output_events;
+  std::map<EventID, StateEvent> event_map;
+  std::map<EventID, int> incoming_edges;
+
+  for (const auto &e : full_conflicted_set) {
+    auto event_id = e.at("event_id").get<std::string>();
+    event_map[event_id] = e;
+    incoming_edges[event_id] = 0;
+  }
+
+  auto incoming_edges_sorted = sorted_incoming_edges(incoming_edges, event_map);
+
+  while (!incoming_edges.empty()) {
+    for (const auto &[event_id, count] : incoming_edges_sorted) {
+      if (count == 0) {
+
+        output_events.insert(output_events.begin(), event_map[event_id]);
+        auto auth_events = event_map[event_id]
+                               .at("auth_events")
+                               .get<std::vector<json::object_t>>();
+
+        for (const auto &auth_event : auth_events) {
+          auto auth_event_id = auth_event.at("event_id").get<std::string>();
+          incoming_edges[auth_event_id] -= 1;
+        }
+
+        incoming_edges.erase(event_id);
+      }
+    }
+  }
+
+  return output_events;
+}
+
+std::vector<StateEvent>
+stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
+  StateEventSets state_event_sets = splitEvents(forks);
+  std::map<EventType, std::map<StateKey, StateEvent>> partial_state =
+      createPartialState(state_event_sets.unconflictedEvents);
+
+  std::vector<StateEvent> auth_difference =
+      findAuthDifference(state_event_sets.conflictedEvents, forks);
+
+  std::vector<StateEvent> full_conflicted_set;
+  full_conflicted_set.reserve(state_event_sets.conflictedEvents.size() +
+                              auth_difference.size());
+  full_conflicted_set.insert(full_conflicted_set.end(),
+                             state_event_sets.conflictedEvents.begin(),
+                             state_event_sets.conflictedEvents.end());
+  full_conflicted_set.insert(full_conflicted_set.end(), auth_difference.begin(),
+                             auth_difference.end());
+
+  auto sorted_full_conflicted_set = kahns_algorithm(full_conflicted_set);
+
+  //  TODO: continue after the "Iteratively apply resolved control events"
+  //  heading in https://matrix.org/docs/older/stateres-v2/
 }

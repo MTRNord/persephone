@@ -121,6 +121,59 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(directory_query, room_id, servers)
  * @brief Json types for the C-S API
  */
 namespace client_server_json {
+struct StateEvent {
+  json::object_t content;
+
+  // Optional but at parsing defaults to an empty string as per spec
+  // This is different from "normal" staste events
+  std::string state_key;
+
+  std::string type;
+};
+void from_json(const json &obj, StateEvent &p);
+void to_json(json &obj, const StateEvent &p);
+
+struct PowerLevelEventContent {
+  std::optional<int> ban;
+  std::optional<std::map<std::string, int>> events;
+  std::optional<int> events_default;
+  std::optional<int> invite;
+  std::optional<int> kick;
+  std::optional<std::map<std::string, int>> notifications;
+  std::optional<int> redact;
+  std::optional<int> state_default;
+  std::optional<std::map<std::string, int>> users;
+  std::optional<int> users_default;
+};
+void from_json(const json &obj, PowerLevelEventContent &p);
+void to_json(json &obj, const PowerLevelEventContent &p);
+
+struct Invite3pid {
+  std::string address;
+  std::string id_access_token;
+  std::string id_server;
+  std::string medium;
+};
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Invite3pid, address, id_access_token,
+                                   id_server, medium)
+
+struct CreateRoomBody {
+  std::optional<json::object_t> creation_ontent;
+  std::optional<std::vector<StateEvent>> initial_state;
+  std::optional<std::vector<std::string>> invite;
+  std::optional<std::vector<Invite3pid>> invite_3pid;
+  std::optional<std::string> name;
+  std::optional<PowerLevelEventContent> power_level_content_override;
+  std::optional<std::string> preset;
+  std::optional<std::string> room_alias_name;
+  std::optional<std::string> room_version;
+  std::optional<std::string> topic;
+  std::optional<std::string> visibility;
+  std::optional<bool> is_direct;
+};
+void from_json(const json &obj, CreateRoomBody &p);
+void to_json(json &obj, const CreateRoomBody &p);
+
 struct AuthenticationData {
   std::optional<std::string> session;
   std::string type;
@@ -190,8 +243,8 @@ struct versions {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions, versions)
 
 struct LoginFlow {
-  bool get_login_token = false;
   std::string type;
+  bool get_login_token = false;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginFlow, get_login_token, type)
 

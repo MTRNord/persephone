@@ -23,6 +23,7 @@ add_project_arguments(
     '-Wconversion',
     '-Wpedantic',
     '-Wuninitialized',
+    #'-Wpadded',
     '-DWITH_BOOST=OFF',
     #'-fno-sanitize=vptr',
     language: ['c', 'cpp'],
