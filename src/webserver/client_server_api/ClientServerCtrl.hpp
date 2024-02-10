@@ -31,6 +31,10 @@ public:
   ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
                 "_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
                 "client_server_api::AccessTokenFilter");
+
+  // Room creation
+  ADD_METHOD_TO(ClientServerCtrl::createRoom, "_matrix/client/v3/createRoom",
+                Post, Options, "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
 
   explicit ClientServerCtrl(Config config, Database db)
@@ -53,6 +57,9 @@ protected:
   joinRoomIdOrAlias(const HttpRequestPtr &req,
                     std::function<void(const HttpResponsePtr &)> &&callback,
                     const std::string &roomIdOrAlias) const;
+  void
+  createRoom(const HttpRequestPtr &req,
+             std::function<void(const HttpResponsePtr &)> &&callback) const;
 
 private:
   Config _config;

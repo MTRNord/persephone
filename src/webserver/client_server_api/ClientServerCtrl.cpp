@@ -480,3 +480,67 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     co_return;
   });
 }
+
+void ClientServerCtrl::createRoom(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback) const {
+  drogon::async_run([req, callback = std::move(callback),
+                     this]() -> drogon::Task<> {
+    // Get the access token from the Authorization header
+    auto req_auth_header = req->getHeader("Authorization");
+    if (req_auth_header.empty()) {
+      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+                   401);
+      co_return;
+    }
+    // Remove the "Bearer " prefix
+    auto access_token = req_auth_header.substr(7);
+    // Check if we have the access token in the database
+    auto user_info = co_await _db.get_user_info(access_token);
+
+    if (!user_info) {
+      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
+      co_return;
+    }
+
+    // Get the request body as json
+    json body;
+    try {
+      body = json::parse(req->body());
+    } catch (json::parse_error &ex) {
+      LOG_WARN << "Failed to parse json in createRoom: " << ex.what() << '\n';
+      return_error(callback, "M_NOT_JSON",
+                   "Unable to parse json. Is this valid json?", 500);
+      co_return;
+    }
+
+    client_server_json::CreateRoomBody createRoom_body;
+    try {
+      createRoom_body = body.get<client_server_json::CreateRoomBody>();
+    } catch (...) {
+      std::exception_ptr ex_re = std::current_exception();
+      try {
+        std::rethrow_exception(ex_re);
+      } catch (std::bad_exception const &ex) {
+        LOG_WARN << "Failed to parse json as CreateRoomBody in createRoom: "
+                 << ex.what() << '\n';
+      }
+      return_error(
+          callback, "M_BAD_JSON",
+          "Unable to parse json. Ensure all required fields are present?", 500);
+      co_return;
+    }
+
+    if (createRoom_body.room_version) {
+      if (createRoom_body.room_version == "11") {
+        return_error(
+            callback, "M_UNSUPPORTED_ROOM_VERSION",
+            std::format(
+                "The requested room version of this room is {} but your "
+                "Homeserver does not support that version yet.",
+                createRoom_body.room_version.value()),
+            400);
+      }
+    }
+  });
+}
