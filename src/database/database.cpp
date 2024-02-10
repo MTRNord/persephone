@@ -21,7 +21,7 @@ void prepare_statements() {
   auto sql = drogon::app().getDbClient();
   assert(sql);
   try {
-    auto f = sql->execSqlAsyncFuture("PREPARE insert_user (matrix_id, password_hash) AS INSERT INTO users VALUES($1, $2);");
+    auto f = sql->execSqlAsyncFuture("PREPARE insert_user(text, text) AS INSERT INTO users(matrix_id, password_hash) VALUES($1, $2)");
     f.wait();
   } catch(const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
