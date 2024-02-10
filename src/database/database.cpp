@@ -14,16 +14,19 @@ void Database::migrate() {
 }
 
 /**
- * \brief Makes sure that at the start of the app all queries we can prepare are prepared.
- * \warning This function is intentionally sync to make sure it blocks on startup.
+ * \brief Makes sure that at the start of the app all queries we can prepare are
+ * prepared. \warning This function is intentionally sync to make sure it blocks
+ * on startup.
  */
 void prepare_statements() {
   auto sql = drogon::app().getDbClient();
   assert(sql);
   try {
-    auto f = sql->execSqlAsyncFuture("PREPARE insert_user(text, text) AS INSERT INTO users(matrix_id, password_hash) VALUES($1, $2)");
+    auto f = sql->execSqlAsyncFuture(
+        "PREPARE insert_user(text, text) AS INSERT INTO users(matrix_id, "
+        "password_hash) VALUES($1, $2)");
     f.wait();
-  } catch(const drogon::orm::DrogonDbException &e) {
+  } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     exit(EXIT_FAILURE);
   }
@@ -58,9 +61,8 @@ Database::create_user(Database::UserCreationData const &data) const {
                       std::format("{}_{}", matrix_id, random_component))));
 
   try {
-    co_await transPtr->execSqlCoro(
-        "EXECUTE insert_user($1, $2)", matrix_id,
-        password_hash);
+    co_await transPtr->execSqlCoro("EXECUTE insert_user($1, $2)", matrix_id,
+                                   password_hash);
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to create user due to database error");

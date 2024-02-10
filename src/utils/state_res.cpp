@@ -1,11 +1,12 @@
 #include "state_res.hpp"
 #include "drogon/drogon.h"
+#include "utils/errors.hpp"
 #include <format>
 #include <ranges>
 #include <sodium/crypto_hash_sha256.h>
 #include <sodium/utils.h>
+#include <stack>
 #include <unordered_set>
-#include "utils/errors.hpp"
 
 // Define StateEvent as json::object_t
 using StateEvent = json::object_t;
@@ -324,16 +325,91 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return output_events;
 }
 
-std::vector<StateEvent>
-stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
-  StateEventSets state_event_sets = splitEvents(forks);
-  std::map<EventType, std::map<StateKey, StateEvent>> partial_state =
-      createPartialState(state_event_sets.unconflictedEvents);
+// This checks if the event is allowed by the auth checks
+// These are defined in
+// https://spec.matrix.org/v1.9/rooms/v11/#authorization-rules
+bool auth_against_partial_state(
+    const std::string &room_version,
+    const std::map<EventType, std::map<StateKey, StateEvent>>
+        &current_partial_state,
+    const StateEvent &e) {
+  return true;
+}
 
-  std::vector<StateEvent> auth_difference =
+void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
+                      StateEvent &event) {
+  power_level_mainline.push_back(event);
+  for (auto &auth_event : event["auth_events"]) {
+    StateEvent auth_event_obj = auth_event.get<StateEvent>();
+    if (auth_event_obj["event_type"] == "m.room.powerlevel") {
+      mainline_iterate(power_level_mainline, auth_event_obj);
+    }
+  }
+}
+
+StateEvent
+get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
+                           StateEvent &event) {
+  StateEvent closest_mainline_event;
+  std::stack<StateEvent> event_stack;
+  event_stack.push(event);
+
+  while (!event_stack.empty()) {
+    StateEvent current_event = event_stack.top();
+    event_stack.pop();
+
+    auto search_iter = std::find(power_level_mainline.begin(),
+                                 power_level_mainline.end(), current_event);
+    if (search_iter != power_level_mainline.end()) {
+      current_event["position_on_mainline"] =
+          std::distance(power_level_mainline.begin(), search_iter);
+      closest_mainline_event = current_event;
+      break;
+    } else {
+      for (const auto &auth_event : current_event["auth_events"]) {
+        StateEvent auth_event_obj = auth_event.get<StateEvent>();
+        if (auth_event_obj["event_type"] == "m.room.powerlevel") {
+          event_stack.push(auth_event_obj);
+        }
+      }
+    }
+  }
+
+  return closest_mainline_event;
+}
+
+std::vector<StateEvent>
+sorted_normal_state_events(std::vector<StateEvent> normal_events) {
+  auto compare_events = [](StateEvent &x, StateEvent &y) {
+    if (x["position_on_mainline"].get<std::string>() !=
+        y["position_on_mainline"].get<std::string>()) {
+      return x["position_on_mainline"].get<std::string>() <
+             y["position_on_mainline"].get<std::string>();
+    }
+    if (x["origin_server_ts"].get<std::string>() !=
+        y["origin_server_ts"].get<std::string>()) {
+      return x["origin_server_ts"].get<std::string>() <
+             y["origin_server_ts"].get<std::string>();
+    }
+    return x["event_id"].get<std::string>() < y["event_id"].get<std::string>();
+  };
+
+  std::sort(normal_events.begin(), normal_events.end(), compare_events);
+
+  return normal_events;
+}
+
+std::vector<StateEvent>
+stateres_v2(const std::string &room_version,
+            const std::vector<std::vector<StateEvent>> &forks) {
+  auto state_event_sets = splitEvents(forks);
+  auto partial_state = createPartialState(state_event_sets.unconflictedEvents);
+
+  auto auth_difference =
       findAuthDifference(state_event_sets.conflictedEvents, forks);
 
-  std::vector<StateEvent> full_conflicted_set;
+  std::vector<StateEvent> full_conflicted_set, conflicted_control_events,
+      conflicted_others;
   full_conflicted_set.reserve(state_event_sets.conflictedEvents.size() +
                               auth_difference.size());
   full_conflicted_set.insert(full_conflicted_set.end(),
@@ -342,8 +418,72 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   full_conflicted_set.insert(full_conflicted_set.end(), auth_difference.begin(),
                              auth_difference.end());
 
-  auto sorted_full_conflicted_set = kahns_algorithm(full_conflicted_set);
+  // is_control_event returns true if the event meets the criteria for being
+  // classed as a "control" event for reverse topological sorting. If not then
+  // the event will be mainline sorted.
+  auto is_control_event = [](StateEvent event) {
+    if (event["type"].get<std::string>() == "m.room.power_level") {
+      // Power level events with an empty state key are control events.
+      if (event["state_key"].get<std::string>() == "") {
+        return true;
+      }
+    }
+    if (event["type"].get<std::string>() == "m.room.join_rules") {
+      // Join rule events with an empty state key are control events.
+      if (event["state_key"].get<std::string>() == "") {
+        return true;
+      }
+    }
+    if (event["type"].get<std::string>() == "m.room.member") {
+      // Membership events must not have an empty state key.
+      if (event["state_key"].get<std::string>() == "") {
+        return false;
+      }
+      // Membership events are only control events if the sender does not match
+      // the state key, i.e. because the event is caused by an admin or
+      // moderator.
+      if (event["state_key"].get<std::string>() ==
+          event["sender"].get<std::string>()) {
+        return false;
+      }
+      // Membership events are only control events if the "membership" key in
+      // the content is "leave" or "ban" so we need to extract the content.
+      if (event["content"]["membership"].get<std::string>() == "leave" ||
+          event["content"]["membership"].get<std::string>() == "ban") {
+        return true;
+      }
+    }
+    return false;
+  };
 
-  //  TODO: continue after the "Iteratively apply resolved control events"
+  // Partition the vector based on the boolean condition
+  auto partition_point = std::partition(
+      full_conflicted_set.begin(), full_conflicted_set.end(), is_control_event);
+  // Copy elements based on the partition point
+  conflicted_control_events = std::vector<StateEvent>(
+      std::make_move_iterator(full_conflicted_set.begin()),
+      std::make_move_iterator(partition_point));
+  conflicted_others = std::vector<StateEvent>(
+      std::make_move_iterator(partition_point),
+      std::make_move_iterator(full_conflicted_set.end()));
+
+  auto unconflicted = kahns_algorithm(state_event_sets.unconflictedEvents);
+  auto conflicted_control_events_sorted =
+      kahns_algorithm(conflicted_control_events);
+
+  for (auto &e : conflicted_control_events_sorted) {
+    if (auth_against_partial_state(room_version, partial_state, e)) {
+      auto event_type = e["event_type"].get<EventType>();
+      auto state_key = e["state_key"].get<StateKey>();
+      partial_state[event_type][state_key] = e;
+    }
+  }
+
+  auto resolved_power_level_event = partial_state["m.room.power_level"][""];
+  std::vector<StateEvent> power_level_mainline = {resolved_power_level_event};
+
+  mainline_iterate(power_level_mainline, resolved_power_level_event);
+
+  //  TODO: continue after the "Iteratively apply resolved normal state events"
   //  heading in https://matrix.org/docs/older/stateres-v2/
 }
