@@ -325,15 +325,120 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return output_events;
 }
 
+bool matchDomain(std::string str1, std::string str2) {
+  // Find the position of ':' in the strings
+  size_t pos1 = str1.find(':');
+  size_t pos2 = str2.find(':');
+
+  // Extract the domain parts after ':'
+  std::string domain1 = str1.substr(pos1 + 1);
+  std::string domain2 = str2.substr(pos2 + 1);
+
+  // Compare the domain parts
+  return domain1 == domain2;
+}
+
+bool auth_against_partial_state_version_11(
+    const std::map<EventType, std::map<StateKey, StateEvent>>
+        &current_partial_state,
+    StateEvent &e) {
+  // If type is m.room.create
+  if (e["type"].get<std::string>() == "m.room.create") {
+    // If it has any prev_events, reject.
+    if (e.contains("prev_events")) {
+      return false;
+    }
+    // If the domain of the room_id does not match the domain of the sender,
+    // reject.
+    auto room_id = e["room_id"].get<std::string>();
+    auto sender = e["sender"].get<std::string>();
+    if (matchDomain(room_id, sender)) {
+      return false;
+    }
+
+    // If content.room_version is present and is not a recognised version,
+    // reject.
+
+    if (e["content"]["room_version"].get<std::string>() == "11") {
+      return false;
+    }
+
+    return true;
+  }
+
+  // Considering the event's auth_events:
+
+  // If there are duplicate entries for a given type and state_key pair, reject.
+  auto auth_events_ids = e["auth_events"].get<std::vector<std::string>>();
+
+  std::map<EventType, std::map<StateKey, StateEvent>> auth_events_map;
+  for (const auto &[event_type, inner_map] : current_partial_state) {
+    for (const auto &[state_key, state_event] : inner_map) {
+      auto state_event_pure = state_event;
+      if (std::find(auth_events_ids.begin(), auth_events_ids.end(),
+                    state_event_pure["event_id"].get<std::string>()) !=
+          auth_events_ids.end()) {
+        // Check if the (event_type, state_key) pair already exists
+        if (auth_events_map[event_type].find(state_key) ==
+            auth_events_map[event_type].end()) {
+          // Add the matching state_event to auth_events_map
+          auth_events_map[event_type][state_key] = state_event;
+        } else {
+          // Duplicate entry found, reject
+          return false;
+        }
+      }
+    }
+  }
+
+  // If there are entries whose type and state_key don’t match those specified
+  // by the auth events selection algorithm described in the server
+  // specification, reject.
+
+  // Set of allowed EventType values
+  std::set<std::string> allowedEventTypes = {
+      "m.room.create", "m.room.power_levels", "m.room.member"};
+
+  // Find invalid EventTypes using std::find_if
+  auto invalidEventType = std::find_if(
+      auth_events_map.begin(), auth_events_map.end(),
+      [&allowedEventTypes](const auto &pair) {
+        return allowedEventTypes.find(pair.first) == allowedEventTypes.end();
+      });
+
+  // Check if any invalid EventTypes were found
+  if (invalidEventType != auth_events_map.end()) {
+    return false;
+  }
+  // TODO: We need to check if the auth events are also correct according to
+  // https://spec.matrix.org/v1.9/server-server-api/#auth-events-selection
+  return true;
+}
+
 // This checks if the event is allowed by the auth checks
 // These are defined in
 // https://spec.matrix.org/v1.9/rooms/v11/#authorization-rules
 bool auth_against_partial_state(
-    const std::string &room_version,
-    const std::map<EventType, std::map<StateKey, StateEvent>>
-        &current_partial_state,
-    const StateEvent &e) {
-  return true;
+    std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
+    StateEvent &e) {
+  if (e["type"].get<std::string>() == "m.room.create") {
+    if (!e["content"].contains("room_version")) {
+      return false;
+    }
+    if (e["content"]["room_version"].get<std::string>() == "11") {
+      return auth_against_partial_state_version_11(current_partial_state, e);
+    }
+  } else {
+    auto create_event = current_partial_state["m.room.create"][""];
+    if (!create_event["content"].contains("room_version")) {
+      return false;
+    }
+    if (create_event["content"]["room_version"].get<std::string>() == "11") {
+      return auth_against_partial_state_version_11(current_partial_state, e);
+    }
+  }
+
+  return false;
 }
 
 void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
@@ -400,8 +505,7 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
 }
 
 std::map<EventType, std::map<StateKey, StateEvent>>
-stateres_v2(const std::string &room_version,
-            const std::vector<std::vector<StateEvent>> &forks) {
+stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto state_event_sets = splitEvents(forks);
   auto partial_state = createPartialState(state_event_sets.unconflictedEvents);
 
@@ -471,7 +575,7 @@ stateres_v2(const std::string &room_version,
       kahns_algorithm(conflicted_control_events);
 
   for (auto &e : conflicted_control_events_sorted) {
-    if (auth_against_partial_state(room_version, partial_state, e)) {
+    if (auth_against_partial_state(partial_state, e)) {
       auto event_type = e["event_type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = e;
@@ -485,7 +589,7 @@ stateres_v2(const std::string &room_version,
 
   auto sorted_others = sorted_normal_state_events(conflicted_others);
   for (auto &e : sorted_others) {
-    if (auth_against_partial_state(room_version, partial_state, e)) {
+    if (auth_against_partial_state(partial_state, e)) {
       auto event_type = e["event_type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = e;
