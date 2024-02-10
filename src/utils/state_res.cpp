@@ -399,7 +399,7 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   return normal_events;
 }
 
-std::vector<StateEvent>
+std::map<EventType, std::map<StateKey, StateEvent>>
 stateres_v2(const std::string &room_version,
             const std::vector<std::vector<StateEvent>> &forks) {
   auto state_event_sets = splitEvents(forks);
@@ -467,7 +467,6 @@ stateres_v2(const std::string &room_version,
       std::make_move_iterator(partition_point),
       std::make_move_iterator(full_conflicted_set.end()));
 
-  auto unconflicted = kahns_algorithm(state_event_sets.unconflictedEvents);
   auto conflicted_control_events_sorted =
       kahns_algorithm(conflicted_control_events);
 
@@ -484,6 +483,20 @@ stateres_v2(const std::string &room_version,
 
   mainline_iterate(power_level_mainline, resolved_power_level_event);
 
-  //  TODO: continue after the "Iteratively apply resolved normal state events"
-  //  heading in https://matrix.org/docs/older/stateres-v2/
+  auto sorted_others = sorted_normal_state_events(conflicted_others);
+  for (auto &e : sorted_others) {
+    if (auth_against_partial_state(room_version, partial_state, e)) {
+      auto event_type = e["event_type"].get<EventType>();
+      auto state_key = e["state_key"].get<StateKey>();
+      partial_state[event_type][state_key] = e;
+    }
+  }
+
+  for (auto &e : state_event_sets.unconflictedEvents) {
+    auto event_type = e["event_type"].get<EventType>();
+    auto state_key = e["state_key"].get<StateKey>();
+    partial_state[event_type][state_key] = e;
+  }
+
+  return partial_state;
 }
