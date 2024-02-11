@@ -46,8 +46,10 @@ zlib_dep = dependency('zlib')
 ###### DNS #######
 c_ares = dependency('libcares')
 
+if not get_option('disable_tests')
 ####### Tests ############
 snitch_dep = dependency('snitch')
+endif
 
 src = files(
     'src/database/database.cpp',
