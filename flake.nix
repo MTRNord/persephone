@@ -43,19 +43,19 @@
 
           src = ./.;
 
-          #postUnpack = let
-          #  # URLs manually extracted from subprojects directory
-          #  yaml-wrap = fetchurl {
-          #    name = "yaml-wrap";
-          #    url = "https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz";
-          #    hash = "sha256-++dLvc7iHWVnFWiHBto8i+z9lG2SzURwXMYJi7I7OhY=";
-          #  };
-          #in ''
-          #  pushd $sourceRoot/subprojects
-          #  mkdir yaml-cpp-0.8.0
-          #  tar xvf ${yaml-wrap} -C yaml-cpp-0.8.0 --strip-components 1
-          #  popd
-          #'';
+          postUnpack = let
+            # URLs manually extracted from subprojects directory
+            yaml-wrap = fetchurl {
+              name = "yaml-wrap";
+              url = "https://github.com/jbeder/yaml-cpp/archive/refs/tags/0.8.0.tar.gz";
+              hash = "sha256-++dLvc7iHWVnFWiHBto8i+z9lG2SzURwXMYJi7I7OhY=";
+            };
+          in ''
+            pushd $sourceRoot/subprojects
+            mkdir yaml-cpp-0.8.0
+            tar xvf ${yaml-wrap} -C yaml-cpp-0.8.0 --strip-components 1
+            popd
+          '';
 
           nativeBuildInputs = [nixpkgs.legacyPackages."${pkgs.system}".meson ninja pkg-config cmake];
           buildInputs = [yaml-cpp nlohmann_json openssl zlib brotli drogon c-ares libsodium];
