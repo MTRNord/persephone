@@ -61,7 +61,7 @@
           buildInputs = [yaml-cpp libsodium nlohmann_json openssl zlib brotli drogon];
 
           enableParallelBuilding = true;
-          mesonFlags = "-Ddisable_tests=true";
+          mesonFlags = ["-Ddisable_tests=true"];
 
           meta = with pkgs.lib; {
             homepage = "https://git.nordgedanken.dev/mtrnord/persephone";
