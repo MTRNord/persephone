@@ -78,6 +78,7 @@ executable(
     install: true,
 )
 
+if not get_option('disable_tests')
 test(
     'utils',
     executable(
@@ -97,7 +98,7 @@ test(
         dependencies: deps + snitch_dep,
     ),
 )
-
+endif
 
 if get_option('build_fuzz_targets')
     executable(

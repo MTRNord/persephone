@@ -60,6 +60,9 @@
           nativeBuildInputs = [nixpkgs.legacyPackages."${pkgs.system}".meson ninja pkg-config cmake];
           buildInputs = [yaml-cpp libsodium nlohmann_json openssl zlib brotli drogon];
 
+          enableParallelBuilding = true;
+          mesonFlags = "-Ddisable_tests=true";
+
           meta = with pkgs.lib; {
             homepage = "https://git.nordgedanken.dev/mtrnord/persephone";
             license = with licenses; [agpl3Plus];
