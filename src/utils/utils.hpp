@@ -105,7 +105,33 @@ migrate_localpart(const std::string &localpart) {
 [[nodiscard]] unsigned long crc32_helper(const std::string &input);
 
 // Helper to base62 encode the crc32 checksum.
-[[nodiscard]] std::string base62_encode(unsigned long input);
+[[nodiscard]] constexpr std::string base62_encode(unsigned long input) {
+  std::string alphabet =
+      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  std::string output;
+
+  while (input > 0) {
+    output.push_back(alphabet[input % 62]);
+    input /= 62;
+  }
+
+  return output;
+}
+
+[[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
+  server_name.erase(std::remove_if(server_name.begin(), server_name.end(),
+                                   [](char c) {
+                                     switch (c) {
+                                     case '[':
+                                     case ']':
+                                       return true;
+                                     default:
+                                       return false;
+                                     }
+                                   }),
+                    server_name.end());
+  return server_name;
+}
 
 /**
  * Check if a localpard is valid according to
@@ -159,12 +185,26 @@ discover_server(const std::string &server_name);
 [[nodiscard]] std::string generate_ss_authheader(
     const std::string &server_name, const std::string &key_id,
     const std::vector<unsigned char> &secret_key, const std::string &method,
-    const std::string &request_uri, std::string origin, std::string target,
-    std::optional<json> content);
+    const std::string &request_uri, const std::string &origin,
+    const std::string &target, std::optional<json> content);
 
-[[nodiscard]] std::string
+// Function to generate a valid HTTP query parameter string
+[[nodiscard]] constexpr std::string
 generateQueryParamString(const std::string &keyName,
-                         const std::vector<std::string> &values);
+                         const std::vector<std::string> &values) {
+  std::string ss{};
+  ss += '?' + keyName + '=';
+
+  if (!values.empty()) {
+    ss += drogon::utils::urlEncodeComponent(values[0]);
+
+    for (size_t i = 1; i < values.size(); ++i) {
+      ss += '&' + keyName + '=' + drogon::utils::urlEncodeComponent(values[i]);
+    }
+  }
+
+  return ss;
+}
 
 /**
  * This is supposed to fix the missing array availability for drogon
@@ -195,3 +235,25 @@ template <typename... Args> struct debug {
 };
 
 template <typename... Args> debug(Args &&...) -> debug<Args...>;
+
+[[nodiscard]] constexpr std::string
+drogon_to_string_method(const drogon::HttpMethod &method) {
+  switch (method) {
+  case drogon::HttpMethod::Get:
+    return "GET";
+  case drogon::HttpMethod::Post:
+    return "POST";
+  case drogon::HttpMethod::Head:
+    return "HEAD";
+  case drogon::HttpMethod::Put:
+    return "PUT";
+  case drogon::HttpMethod::Delete:
+    return "DELETE";
+  case drogon::HttpMethod::Options:
+    return "OPTIONS";
+  case drogon::HttpMethod::Patch:
+    return "PATCH";
+  case drogon::HttpMethod::Invalid:
+    return "INVALID";
+  }
+}

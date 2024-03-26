@@ -8,9 +8,6 @@
 #include <stack>
 #include <unordered_set>
 
-// Define StateEvent as json::object_t
-using StateEvent = json::object_t;
-
 /**
  * @brief Redacts the provided JSON event object based on Matrix Protocol
  * version 11 rules.
@@ -149,9 +146,6 @@ std::string event_id(const json &event, const std::string &room_version) {
   return base64_str;
 }
 
-using EventType = std::string;
-using StateKey = std::string;
-
 // Function to create the partial state map from unconflicted events while
 // preserving ordering
 std::map<EventType, std::map<StateKey, StateEvent>>
@@ -168,12 +162,6 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
 
   return partialState;
 }
-
-// Custom struct to hold conflicted and unconflicted state sets
-struct StateEventSets {
-  std::vector<StateEvent> conflictedEvents;
-  std::vector<StateEvent> unconflictedEvents;
-};
 
 StateEventSets splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   StateEventSets result;
@@ -224,33 +212,6 @@ StateEventSets splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
 
   return result;
 }
-
-using ForkID = int;
-
-std::vector<StateEvent>
-findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
-                   const std::vector<std::vector<StateEvent>> &forks) {
-  std::vector<StateEvent> authDifference;
-
-  for (const auto &e : conflictedEvents) {
-    bool found = true;
-
-    for (const auto &authSet : forks) {
-      if (std::find(authSet.begin(), authSet.end(), e) == authSet.end()) {
-        found = false;
-        break;
-      }
-    }
-
-    if (!found) {
-      authDifference.push_back(e);
-    }
-  }
-
-  return authDifference;
-}
-
-using EventID = std::string;
 
 std::map<EventID, int>
 sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
@@ -323,19 +284,6 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   }
 
   return output_events;
-}
-
-bool matchDomain(std::string str1, std::string str2) {
-  // Find the position of ':' in the strings
-  size_t pos1 = str1.find(':');
-  size_t pos2 = str2.find(':');
-
-  // Extract the domain parts after ':'
-  std::string domain1 = str1.substr(pos1 + 1);
-  std::string domain2 = str2.substr(pos2 + 1);
-
-  // Compare the domain parts
-  return domain1 == domain2;
 }
 
 bool auth_against_partial_state_version_11(

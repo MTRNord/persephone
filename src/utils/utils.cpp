@@ -26,7 +26,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
   callback(resp);
 }
 
-std::string random_string(const std::size_t len) {
+[[nodiscard]] std::string random_string(const std::size_t len) {
   std::mt19937 mt_gen(std::random_device{}());
 
   std::string alphanum =
@@ -44,7 +44,7 @@ std::string random_string(const std::size_t len) {
   return tmp_s;
 }
 
-std::string hash_password(const std::string &password) {
+[[nodiscard]] std::string hash_password(const std::string &password) {
   std::array<char, crypto_pwhash_STRBYTES> hashed_password_array;
   if (crypto_pwhash_str(hashed_password_array.data(), password.c_str(),
                         password.length(), crypto_pwhash_OPSLIMIT_SENSITIVE,
@@ -57,7 +57,7 @@ std::string hash_password(const std::string &password) {
 }
 
 // Helper to generate a crc32 checksum.
-unsigned long crc32_helper(const std::string &input) {
+[[nodiscard]] unsigned long crc32_helper(const std::string &input) {
   unsigned long crc = crc32(0L, Z_NULL, 0);
 
   crc = crc32(crc, reinterpret_cast<const Bytef *>(input.data()),
@@ -65,21 +65,8 @@ unsigned long crc32_helper(const std::string &input) {
   return crc;
 }
 
-// Helper to base62 encode the crc32 checksum.
-std::string base62_encode(unsigned long input) {
-  std::string alphabet =
-      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  std::string output;
-
-  while (input > 0) {
-    output.push_back(alphabet[input % 62]);
-    input /= 62;
-  }
-
-  return output;
-}
-
-Task<std::vector<SRVRecord>> get_srv_record(const std::string &address) {
+[[nodiscard]] Task<std::vector<SRVRecord>>
+get_srv_record(const std::string &address) {
   std::vector<SRVRecord> records;
   struct awaiter : public std::suspend_always {
     std::string address;
@@ -134,22 +121,7 @@ Task<std::vector<SRVRecord>> get_srv_record(const std::string &address) {
   co_return records;
 }
 
-constexpr std::string remove_brackets(std::string server_name) {
-  server_name.erase(std::remove_if(server_name.begin(), server_name.end(),
-                                   [](char c) {
-                                     switch (c) {
-                                     case '[':
-                                     case ']':
-                                       return true;
-                                     default:
-                                       return false;
-                                     }
-                                   }),
-                    server_name.end());
-  return server_name;
-}
-
-bool check_if_ip_address(const std::string &address) {
+[[nodiscard]] bool check_if_ip_address(const std::string &address) {
   struct sockaddr_in sa;
   auto is_ipv4 = false;
   auto result = inet_pton(AF_INET, address.c_str(), &(sa.sin_addr));
@@ -159,7 +131,7 @@ bool check_if_ip_address(const std::string &address) {
   return is_ipv4 || result_v6 == 1;
 }
 
-Task<bool> isServerReachable(const SRVRecord &server) {
+[[nodiscard]] Task<bool> isServerReachable(const SRVRecord &server) {
   auto client = HttpClient::newHttpClient(
       std::format("https://{}:{}", server.host, server.port));
   client->setUserAgent(UserAgent);
@@ -181,7 +153,7 @@ Task<bool> isServerReachable(const SRVRecord &server) {
   co_return !failure;
 }
 
-Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
+[[nodiscard]] Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
   std::random_device rd;
   std::mt19937 gen(rd());
 
@@ -232,7 +204,8 @@ Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
   throw std::runtime_error("Error selecting server");
 }
 
-Task<ResolvedServer> discover_server(const std::string &server_name) {
+[[nodiscard]] Task<ResolvedServer>
+discover_server(const std::string &server_name) {
   /*
    * If the hostname is an IP literal, then that IP address should be used,
    * together with the given port number, or 8448 if no port is given. The
@@ -370,13 +343,11 @@ Task<ResolvedServer> discover_server(const std::string &server_name) {
   };
 }
 
-std::string generate_ss_authheader(const std::string &server_name,
-                                   const std::string &key_id,
-                                   const std::vector<unsigned char> &secret_key,
-                                   const std::string &method,
-                                   const std::string &request_uri,
-                                   std::string origin, std::string target,
-                                   std::optional<json> content) {
+[[nodiscard]] std::string generate_ss_authheader(
+    const std::string &server_name, const std::string &key_id,
+    const std::vector<unsigned char> &secret_key, const std::string &method,
+    const std::string &request_uri, const std::string &origin,
+    const std::string &target, std::optional<json> content) {
 
   auto request_json = json::object();
   request_json["method"] = method;
@@ -401,26 +372,8 @@ std::string generate_ss_authheader(const std::string &server_name,
   return authorization_headers[0];
 }
 
-// Function to generate a valid HTTP query parameter string
-std::string generateQueryParamString(const std::string &keyName,
-                                     const std::vector<std::string> &values) {
-  std::stringstream ss;
-  ss << '?' << keyName << '=';
-
-  if (!values.empty()) {
-    ss << drogon::utils::urlEncodeComponent(values[0]);
-
-    for (size_t i = 1; i < values.size(); ++i) {
-      ss << '&' << keyName << '='
-         << drogon::utils::urlEncodeComponent(values[i]);
-    }
-  }
-
-  return ss.str();
-}
-
 // Function to parse query parameter string into a map
-std::unordered_map<std::string, std::vector<std::string>>
+[[nodiscard]] std::unordered_map<std::string, std::vector<std::string>>
 parseQueryParamString(const std::string &queryString) {
   std::unordered_map<std::string, std::vector<std::string>> paramMap;
 
@@ -440,28 +393,8 @@ parseQueryParamString(const std::string &queryString) {
   return paramMap;
 }
 
-std::string drogon_to_string_method(const drogon::HttpMethod &method) {
-  switch (method) {
-  case drogon::HttpMethod::Get:
-    return "GET";
-  case drogon::HttpMethod::Post:
-    return "POST";
-  case drogon::HttpMethod::Head:
-    return "HEAD";
-  case drogon::HttpMethod::Put:
-    return "PUT";
-  case drogon::HttpMethod::Delete:
-    return "DELETE";
-  case drogon::HttpMethod::Options:
-    return "OPTIONS";
-  case drogon::HttpMethod::Patch:
-    return "PATCH";
-  case drogon::HttpMethod::Invalid:
-    return "INVALID";
-  }
-}
-
-Task<drogon::HttpResponsePtr> federation_request(const HTTPRequest &request) {
+[[nodiscard]] Task<drogon::HttpResponsePtr>
+federation_request(const HTTPRequest &request) {
   auto auth_header = generate_ss_authheader(
       request.origin, request.key_id, request.secret_key,
       drogon_to_string_method(request.method), request.path, request.origin,
@@ -476,7 +409,7 @@ Task<drogon::HttpResponsePtr> federation_request(const HTTPRequest &request) {
   co_return co_await request.client->sendRequestCoro(req, request.timeout);
 }
 
-VerifyKeyData get_verify_key_data(const Config &config) {
+[[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config) {
   std::ifstream t(config.matrix_config.server_key_location);
   std::string server_key((std::istreambuf_iterator<char>(t)),
                          std::istreambuf_iterator<char>());

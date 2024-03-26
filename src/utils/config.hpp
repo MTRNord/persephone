@@ -4,6 +4,7 @@
 /// @brief The Configuration of the application.
 /// This allows to have a nice structure as a struct instead of using brackets.
 
+#include "drogon/drogon.h"
 #include "yaml-cpp/yaml.h"
 #include <cstddef>
 #include <filesystem>
@@ -31,7 +32,13 @@ struct [[nodiscard]] Config {
   MatrixConfig matrix_config;
   WebserverConfig webserver_config;
 
-  Config();
+  explicit Config() {
+    LOG_INFO << "Loading config file";
+    YAML::Node config = YAML::LoadFile("config.yaml");
+    this->load_db(config);
+    this->load_matrix(config);
+    this->load_webserver(config);
+  }
 
 private:
   void load_db(const YAML::Node &config);

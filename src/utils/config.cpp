@@ -1,5 +1,4 @@
 #include "utils/config.hpp"
-#include "drogon/drogon.h"
 #include "yaml-cpp/node/impl.h"
 #include "yaml-cpp/node/node.h"
 #include "yaml-cpp/node/parse.h"
@@ -7,14 +6,6 @@
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
-
-Config::Config() {
-  LOG_INFO << "Loading config file";
-  YAML::Node config = YAML::LoadFile("config.yaml");
-  this->load_db(config);
-  this->load_matrix(config);
-  this->load_webserver(config);
-}
 
 void Config::load_db(const YAML::Node &config) {
   db_config.host = config["database"]["host"].as<std::string>();
