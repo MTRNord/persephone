@@ -3,11 +3,11 @@
 
 class Migrator {
 public:
-  void migrate();
+  void migrate() const;
 
 private:
-  void migration_v0();
-  void migration_v1();
-  void migration_v2();
-  void migration_v3();
+  void migration_v0() const;
+  void migration_v1() const;
+  void migration_v2() const;
+  void migration_v3() const;
 };

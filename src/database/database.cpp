@@ -7,12 +7,12 @@
 #include <stdexcept>
 #include <zlib.h>
 
-void Database::migrate() {
+void Database::migrate() const {
   Migrator migrator;
   migrator.migrate();
 }
 
-drogon::Task<Database::UserCreationResp>
+[[nodiscard]] drogon::Task<Database::UserCreationResp>
 Database::create_user(Database::UserCreationData const &data) const {
   auto sql = drogon::app().getDbClient();
 
@@ -63,7 +63,8 @@ Database::create_user(Database::UserCreationData const &data) const {
   co_return resp_data;
 }
 
-drogon::Task<bool> Database::user_exists(std::string matrix_id) const {
+[[nodiscard]] drogon::Task<bool>
+Database::user_exists(std::string matrix_id) const {
   auto sql = drogon::app().getDbClient();
   try {
     auto f = co_await sql->execSqlCoro(
@@ -79,7 +80,7 @@ drogon::Task<bool> Database::user_exists(std::string matrix_id) const {
   }
 }
 
-drogon::Task<std::optional<Database::UserInfo>>
+[[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
 Database::get_user_info(std::string auth_token) const {
   auto sql = drogon::app().getDbClient();
   try {
@@ -112,7 +113,7 @@ Database::get_user_info(std::string auth_token) const {
   }
 }
 
-drogon::Task<bool>
+[[nodiscard]] drogon::Task<bool>
 Database::validate_access_token(std::string auth_token) const {
   auto sql = drogon::app().getDbClient();
   try {

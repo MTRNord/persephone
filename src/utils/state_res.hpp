@@ -11,7 +11,7 @@ using EventType = std::string;
 using StateKey = std::string;
 
 // Custom struct to hold conflicted and unconflicted state sets
-struct StateEventSets {
+struct [[nodiscard]] StateEventSets {
   std::vector<StateEvent> conflictedEvents;
   std::vector<StateEvent> unconflictedEvents;
 };

@@ -32,7 +32,7 @@ struct [[nodiscard]] Config {
   MatrixConfig matrix_config;
   WebserverConfig webserver_config;
 
-  explicit Config() {
+  [[nodiscard]] explicit Config() {
     LOG_INFO << "Loading config file";
     YAML::Node config = YAML::LoadFile("config.yaml");
     this->load_db(config);

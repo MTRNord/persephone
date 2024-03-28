@@ -27,7 +27,7 @@
  * "m.room.join_rules", "m.room.power_levels", "m.room.history_visibility",
  * "m.room.redaction", and others.
  */
-json v11_redact(const json &event) {
+[[nodiscard]] json v11_redact(const json &event) {
   //  We copy here to (if needed) have the original still intact
   json event_copy(event);
 
@@ -94,14 +94,14 @@ json v11_redact(const json &event) {
   return event_copy;
 }
 
-json redact(const json &event, const std::string &room_version) {
+[[nodiscard]] json redact(const json &event, const std::string &room_version) {
   if (room_version == "11") {
     return v11_redact(event);
   }
   throw MatrixRoomVersionError(room_version);
 }
 
-std::string reference_hash_v11(const json &event) {
+[[nodiscard]] std::string reference_hash_v11(const json &event) {
   //  We copy here to (if needed) have the original still intact
   json event_copy(event);
 
@@ -119,7 +119,8 @@ std::string reference_hash_v11(const json &event) {
   return sha256_hash_string;
 }
 
-std::string reference_hash(const json &event, const std::string &room_version) {
+[[nodiscard]] std::string reference_hash(const json &event,
+                                         const std::string &room_version) {
   if (room_version == "11") {
     return reference_hash_v11(event);
   }
@@ -127,7 +128,8 @@ std::string reference_hash(const json &event, const std::string &room_version) {
   throw MatrixRoomVersionError(room_version);
 }
 
-std::string event_id(const json &event, const std::string &room_version) {
+[[nodiscard]] std::string event_id(const json &event,
+                                   const std::string &room_version) {
   auto hash = reference_hash(event, room_version);
 
   unsigned long long hash_len = hash.size();
@@ -148,7 +150,7 @@ std::string event_id(const json &event, const std::string &room_version) {
 
 // Function to create the partial state map from unconflicted events while
 // preserving ordering
-std::map<EventType, std::map<StateKey, StateEvent>>
+[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
   std::map<EventType, std::map<StateKey, StateEvent>> partialState;
 
@@ -163,7 +165,8 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
   return partialState;
 }
 
-StateEventSets splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
+[[nodiscard]] StateEventSets
+splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   StateEventSets result;
   std::vector<std::map<std::pair<EventType, StateKey>, int>> stateTuples(
       forks.size());
@@ -213,7 +216,7 @@ StateEventSets splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   return result;
 }
 
-std::map<EventID, int>
+[[nodiscard]] std::map<EventID, int>
 sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
                       const std::map<EventID, StateEvent> &event_map) {
   auto comparator = [&](const EventID &x, const EventID &y) {
@@ -250,7 +253,7 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
   return sorted_edges;
 }
 
-std::vector<StateEvent>
+[[nodiscard]] std::vector<StateEvent>
 kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::vector<StateEvent> output_events;
   std::map<EventID, StateEvent> event_map;
@@ -286,7 +289,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return output_events;
 }
 
-bool auth_against_partial_state_version_11(
+[[nodiscard]] bool auth_against_partial_state_version_11(
     const std::map<EventType, std::map<StateKey, StateEvent>>
         &current_partial_state,
     StateEvent &e) {
@@ -366,7 +369,7 @@ bool auth_against_partial_state_version_11(
 // This checks if the event is allowed by the auth checks
 // These are defined in
 // https://spec.matrix.org/v1.9/rooms/v11/#authorization-rules
-bool auth_against_partial_state(
+[[nodiscard]] bool auth_against_partial_state(
     std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
     StateEvent &e) {
   if (e["type"].get<std::string>() == "m.room.create") {
@@ -400,7 +403,7 @@ void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
   }
 }
 
-StateEvent
+[[nodiscard]] StateEvent
 get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
                            StateEvent &event) {
   StateEvent closest_mainline_event;
@@ -431,7 +434,7 @@ get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
   return closest_mainline_event;
 }
 
-std::vector<StateEvent>
+[[nodiscard]] std::vector<StateEvent>
 sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   auto compare_events = [](StateEvent &x, StateEvent &y) {
     if (x["position_on_mainline"].get<std::string>() !=
@@ -452,7 +455,7 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   return normal_events;
 }
 
-std::map<EventType, std::map<StateKey, StateEvent>>
+[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto state_event_sets = splitEvents(forks);
   auto partial_state = createPartialState(state_event_sets.unconflictedEvents);

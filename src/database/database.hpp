@@ -20,7 +20,7 @@ void prepare_statements();
  */
 class Database {
 public:
-  void migrate();
+  void migrate() const;
 
   struct [[nodiscard]] UserCreationData {
     std::string matrix_id;

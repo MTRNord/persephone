@@ -1,19 +1,18 @@
 project(
-    'persephone',
-    'cpp',
-    version: '0.1.0',
-    default_options: [
-        'cpp_std=c++20',
-        'c_std=c11',
-        'warning_level=3',
-        # yaml_cpp break werror. Fixes appreciated
-        #'werror=true',
-        'b_lto=true',
-        'b_thinlto_cache=true',
-        #'b_sanitize=address,undefined',
-        # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
-        #'b_lundef=false',
-    ],
+  'persephone',
+  'cpp',
+  version : '0.1.0',
+  default_options : [
+    'cpp_std=c++23',
+    'c_std=c17',
+    'warning_level=3',
+    # yaml_cpp break werror. Fixes appreciated
+    #'werror=true',
+    'b_lto=true',
+    'b_thinlto_cache=true',
+    # Clang fails to link with sanatizers without this: https://github.com/mesonbuild/meson/issues/764
+    #'b_lundef=false',
+  ]
 )
 #
 add_project_arguments(

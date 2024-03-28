@@ -13,7 +13,8 @@
 #include <stdexcept>
 
 namespace json_utils {
-std::vector<unsigned char> unbase64_key(const std::string &input) {
+[[nodiscard]] std::vector<unsigned char>
+unbase64_key(const std::string &input) {
   size_t b64_str_len = input.size();
   size_t bin_len = b64_str_len * (static_cast<size_t>(4) * 3);
   std::vector<unsigned char> bin_str(bin_len);
@@ -29,7 +30,7 @@ std::vector<unsigned char> unbase64_key(const std::string &input) {
   return bin_str;
 }
 
-std::string base64_key(const std::vector<unsigned char> &input) {
+[[nodiscard]] std::string base64_key(const std::vector<unsigned char> &input) {
   unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
       private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
@@ -45,8 +46,10 @@ std::string base64_key(const std::vector<unsigned char> &input) {
   return base64_str;
 }
 
-json sign_json(const std::string &server_name, const std::string &key_id,
-               const std::vector<unsigned char> &secret_key, json json_data) {
+[[nodiscard]] json sign_json(const std::string &server_name,
+                             const std::string &key_id,
+                             const std::vector<unsigned char> &secret_key,
+                             json json_data) {
   // Get existing (or not yet existing) signatures and unsigned fields
   auto signatures = json_data.value("signatures", json(json::value_t::object));
   auto unsigned_value = json_data.value("unsigned", json{});
@@ -81,8 +84,8 @@ json sign_json(const std::string &server_name, const std::string &key_id,
   return json_data;
 }
 
-std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
-           std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
+[[nodiscard]] std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
+                         std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key() {
   std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> pk;
   std::array<unsigned char, crypto_sign_SECRETKEYBYTES> sk;

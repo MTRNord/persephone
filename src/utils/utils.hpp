@@ -14,21 +14,21 @@ using namespace drogon;
 
 constexpr auto UserAgent = "persephone/0.1.0";
 
-struct SRVRecord {
+struct [[nodiscard]] SRVRecord {
   std::string host;
   unsigned int port;
   unsigned short int priority;
   unsigned short int weight;
 };
 
-struct ResolvedServer {
+struct [[nodiscard]] ResolvedServer {
   std::string address;
   // Unsigned long since conversion from string is a little easier here
   unsigned long port;
   std::string server_name;
 };
 
-struct HTTPRequest {
+struct [[nodiscard]] HTTPRequest {
   drogon::HttpClientPtr client;
   drogon::HttpMethod method;
   std::string path;
@@ -40,7 +40,7 @@ struct HTTPRequest {
   int timeout;
 };
 
-struct VerifyKeyData {
+struct [[nodiscard]] VerifyKeyData {
   std::vector<unsigned char> private_key;
   std::string public_key_base64;
   std::string key_id;

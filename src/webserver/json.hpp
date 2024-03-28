@@ -17,7 +17,7 @@ namespace generic_json {
 /**
  * @brief The structure of generic errors for most return values
  */
-struct generic_json_error {
+struct [[nodiscard]] generic_json_error {
   std::string errcode;
   std::string error;
 };
@@ -28,7 +28,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(generic_json_error, errcode, error)
  * @brief Json types for the S-S API
  */
 namespace server_server_json {
-struct MakeJoinResp {
+struct [[nodiscard]] MakeJoinResp {
   json::object_t event;
   std::optional<std::string> room_version;
 };
@@ -48,7 +48,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incompatible_room_version_error, errcode,
  * See:
  * https://spec.matrix.org/v1.8/server-server-api/#get_matrixfederationv1version
  */
-struct server_version {
+struct [[nodiscard]] server_version {
   std::string name;
   std::string version;
 };
@@ -60,7 +60,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(server_version, name, version)
  * See:
  * https://spec.matrix.org/v1.8/server-server-api/#get_matrixfederationv1version
  */
-struct version {
+struct [[nodiscard]] version {
   server_server_json::server_version server;
 };
 
@@ -71,7 +71,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(version, server)
  *
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
-struct old_verify_key {
+struct [[nodiscard]] old_verify_key {
   std::string key;
   int expired_ts;
 };
@@ -82,7 +82,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(old_verify_key, key, expired_ts)
  *
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
-struct verify_key {
+struct [[nodiscard]] verify_key {
   std::string key;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(verify_key, key)
@@ -92,7 +92,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(verify_key, key)
  *
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
-struct keys {
+struct [[nodiscard]] keys {
   std::string server_name;
   long valid_until_ts;
   std::map<std::string, server_server_json::old_verify_key> old_verify_keys;
@@ -103,13 +103,13 @@ struct keys {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
                                    old_verify_keys, verify_keys, signatures)
 
-struct well_known {
+struct [[nodiscard]] well_known {
   std::optional<std::string> m_server;
 };
 void from_json(const json &obj, well_known &p);
 void to_json(json &obj, const well_known &p);
 
-struct directory_query {
+struct [[nodiscard]] directory_query {
   std::string room_id;
   std::vector<std::string> servers;
 };
@@ -121,7 +121,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(directory_query, room_id, servers)
  * @brief Json types for the C-S API
  */
 namespace client_server_json {
-struct StateEvent {
+struct [[nodiscard]] StateEvent {
   json::object_t content;
 
   // Optional but at parsing defaults to an empty string as per spec
@@ -133,7 +133,7 @@ struct StateEvent {
 void from_json(const json &obj, StateEvent &p);
 void to_json(json &obj, const StateEvent &p);
 
-struct PowerLevelEventContent {
+struct [[nodiscard]] PowerLevelEventContent {
   std::optional<int> ban;
   std::optional<std::map<std::string, int>> events;
   std::optional<int> events_default;
@@ -148,7 +148,7 @@ struct PowerLevelEventContent {
 void from_json(const json &obj, PowerLevelEventContent &p);
 void to_json(json &obj, const PowerLevelEventContent &p);
 
-struct Invite3pid {
+struct [[nodiscard]] Invite3pid {
   std::string address;
   std::string id_access_token;
   std::string id_server;
@@ -157,7 +157,7 @@ struct Invite3pid {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Invite3pid, address, id_access_token,
                                    id_server, medium)
 
-struct CreateRoomBody {
+struct [[nodiscard]] CreateRoomBody {
   std::optional<json::object_t> creation_ontent;
   std::optional<std::vector<StateEvent>> initial_state;
   std::optional<std::vector<std::string>> invite;
@@ -174,14 +174,14 @@ struct CreateRoomBody {
 void from_json(const json &obj, CreateRoomBody &p);
 void to_json(json &obj, const CreateRoomBody &p);
 
-struct AuthenticationData {
+struct [[nodiscard]] AuthenticationData {
   std::optional<std::string> session;
   std::string type;
 };
 void from_json(const json &obj, AuthenticationData &p);
 void to_json(json &obj, const AuthenticationData &p);
 
-struct registration_body {
+struct [[nodiscard]] registration_body {
   std::optional<AuthenticationData> auth;
   std::optional<std::string> device_id;
   std::optional<bool> inhibit_login;
@@ -198,7 +198,7 @@ void to_json(json &obj, const registration_body &p);
  * See:
  * https://spec.matrix.org/v1.8/client-server-api/#post_matrixclientv3register
  */
-struct registration_resp {
+struct [[nodiscard]] registration_resp {
   std::optional<std::string> access_token;
   std::optional<std::string> device_id;
   std::optional<long> expires_in_ms;
@@ -208,12 +208,12 @@ struct registration_resp {
 void from_json(const json &obj, registration_resp &p);
 void to_json(json &obj, const registration_resp &p);
 
-struct FlowInformation {
+struct [[nodiscard]] FlowInformation {
   std::array<std::string, 1> stages;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FlowInformation, stages)
 
-struct incomplete_registration_resp {
+struct [[nodiscard]] incomplete_registration_resp {
   std::string session;
   std::array<FlowInformation, 1> flows;
 };
@@ -224,7 +224,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incomplete_registration_resp, session, flows)
  * See:
  * https://spec.matrix.org/v1.8/client-server-api/#current-account-information
  */
-struct whoami_resp {
+struct [[nodiscard]] whoami_resp {
   std::string user_id;
   bool is_guest;
   std::optional<std::string> device_id;
@@ -237,23 +237,23 @@ void to_json(json &obj, const whoami_resp &p);
  * See:
  * https://spec.matrix.org/v1.8/client-server-api/#get_matrixclientversions
  */
-struct versions {
+struct [[nodiscard]] versions {
   std::array<std::string, 2> versions;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions, versions)
 
-struct LoginFlow {
+struct [[nodiscard]] LoginFlow {
   std::string type;
   bool get_login_token = false;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LoginFlow, get_login_token, type)
 
-struct GetLogin {
+struct [[nodiscard]] GetLogin {
   std::array<LoginFlow, 1> flows;
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GetLogin, flows)
 
-struct ThirdPartySigned {
+struct [[nodiscard]] ThirdPartySigned {
   std::string mxid;
   std::string sender;
   std::string token;
@@ -261,7 +261,7 @@ struct ThirdPartySigned {
 };
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ThirdPartySigned, mxid, sender, token)
 
-struct JoinBody {
+struct [[nodiscard]] JoinBody {
   std::optional<std::string> reason;
   std::optional<ThirdPartySigned> third_party_signed;
 };

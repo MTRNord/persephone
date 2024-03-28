@@ -1,6 +1,6 @@
 #include "migrator.hpp"
 
-void Migrator::migrate() {
+void Migrator::migrate() const {
   LOG_INFO << "Starting database migration";
   this->migration_v0();
   this->migration_v1();
@@ -10,7 +10,7 @@ void Migrator::migrate() {
   LOG_INFO << "Finished database migration";
 }
 
-void Migrator::migration_v0() {
+void Migrator::migration_v0() const {
   auto sql = drogon::app().getDbClient("default");
   assert(sql);
   try {
@@ -25,7 +25,7 @@ void Migrator::migration_v0() {
   }
 }
 
-void Migrator::migration_v1() {
+void Migrator::migration_v1() const {
   LOG_INFO << "Starting database migration v0->v1";
   auto sql = drogon::app().getDbClient("default");
   assert(sql);
@@ -159,7 +159,7 @@ void Migrator::migration_v1() {
   }
 }
 
-void Migrator::migration_v2() {
+void Migrator::migration_v2() const {
   LOG_INFO << "Starting database migration v1->v2";
   auto sql = drogon::app().getDbClient();
   assert(sql);
@@ -203,7 +203,7 @@ void Migrator::migration_v2() {
   }
 }
 
-void Migrator::migration_v3() {
+void Migrator::migration_v3() const {
   LOG_INFO << "Starting database migration v2->v3";
   auto sql = drogon::app().getDbClient();
   assert(sql);
