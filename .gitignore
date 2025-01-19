@@ -12,3 +12,19 @@ subprojects/*
 codeql_db
 _codeql_build_dir
 _codeql_detected_source_root
+
+### CMake template
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+
+cmake-build*

@@ -1,12 +1,18 @@
 #include "utils/config.hpp"
-#include "yaml-cpp/node/impl.h"
 #include "yaml-cpp/node/node.h"
-#include "yaml-cpp/node/parse.h"
-#include <cstddef>
-#include <filesystem>
-#include <iostream>
 #include <stdexcept>
 
+/**
+ * @brief Loads the database configuration from a YAML node.
+ *
+ * This function takes a YAML node as input and extracts the database configuration from it.
+ * The database configuration includes the host, port, database name, user, and password.
+ * The port defaults to 5432 if not provided in the YAML node.
+ * If the password, host, database name, or user is not defined in the YAML node, it throws a runtime error.
+ *
+ * @param config The YAML node from which to load the database configuration.
+ * @throws std::runtime_error If the password, host, database name, or user is not defined in the YAML node.
+ */
 void Config::load_db(const YAML::Node &config) {
   db_config.host = config["database"]["host"].as<std::string>();
   // Default to 5432 if not provided
@@ -39,6 +45,16 @@ void Config::load_db(const YAML::Node &config) {
   }
 }
 
+/**
+ * @brief Loads the Matrix configuration from a YAML node.
+ *
+ * This function takes a YAML node as input and extracts the Matrix configuration from it.
+ * The Matrix configuration includes the server name and the server key location.
+ * If the server name or server key location is not defined in the YAML node, it throws a runtime error.
+ *
+ * @param config The YAML node from which to load the Matrix configuration.
+ * @throws std::runtime_error If the server name or server key location is not defined in the YAML node.
+ */
 void Config::load_matrix(const YAML::Node &config) {
   matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
   matrix_config.server_key_location =
@@ -59,6 +75,16 @@ void Config::load_matrix(const YAML::Node &config) {
   }
 }
 
+/**
+ * @brief Loads the webserver configuration from a YAML node.
+ *
+ * This function takes a YAML node as input and extracts the webserver configuration from it.
+ * The webserver configuration includes the SSL setting.
+ * If the SSL setting is defined in the YAML node, it is set to the provided value.
+ * If the SSL setting is not defined in the YAML node, it defaults to false.
+ *
+ * @param config The YAML node from which to load the webserver configuration.
+ */
 void Config::load_webserver(const YAML::Node &config) {
   if (config["webserver"]["ssl"]) {
     this->webserver_config.ssl = config["webserver"]["ssl"].as<bool>();

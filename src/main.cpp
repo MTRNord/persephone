@@ -6,24 +6,10 @@
 #include "webserver/client_server_api/ClientServerCtrl.hpp"
 #include "webserver/server_server_api/ServerServerCtrl.hpp"
 #include "yaml-cpp/exceptions.h"
-#include <ares.h>
-#include <iostream>
 #include <sodium/core.h>
 #include <stdexcept>
 
 int main() {
-#ifdef CARES_HAVE_ARES_LIBRARY_INIT
-  // C-Ares (DNS resolver) init
-  auto ares_result = ares_library_init(ARES_LIB_INIT_ALL);
-  if (ares_result != 0) {
-    auto ares_error = ares_strerror(ares_result);
-    LOG_ERROR << "Failed to init c-ares dns resolver library: " << ares_error
-              << '\n';
-
-    return 1;
-  }
-#endif
-
   // Libsodium init
   if (sodium_init() < 0) {
     LOG_ERROR << "Failed to init libsodium";
@@ -47,9 +33,13 @@ int main() {
         .addListener("0.0.0.0", 8008)
         .setThreadNum(0)
         .setLogLevel(trantor::Logger::LogLevel::kDebug)
-        .createDbClient("postgresql", config.db_config.host,
-                        config.db_config.port, config.db_config.database_name,
-                        config.db_config.user, config.db_config.password, 10)
+        .addDbClient(orm::PostgresConfig{
+          config.db_config.host,
+          config.db_config.port,
+          config.db_config.database_name,
+          config.db_config.user,
+          config.db_config.password, 10
+        })
         .enableGzip(true)
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
                                        const drogon::HttpResponsePtr &resp) {
@@ -78,7 +68,7 @@ int main() {
     drogon::app().run();
   } catch (const YAML::BadFile &error) {
     LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "
-                 "prior to running persephone";
+        "prior to running persephone";
     return 1;
   } catch (std::runtime_error &error) {
     LOG_ERROR << error.what();

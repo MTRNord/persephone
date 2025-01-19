@@ -7,18 +7,18 @@ on:
     paths:
       - '**.cpp'                # only execute on changes to cpp files
       - '**.hpp'                # only execute on changes to hpp files
-      - 'meson.build'           # or dependency updates
+      - 'CMakeLists.txt'        # or dependency updates
       - '.github/workflows/**'  # or workflow changes
       - 'complement/**'         # or complement changes
   pull_request:
     paths:
       - '**.cpp'                # only execute on changes to cpp files
       - '**.hpp'                # only execute on changes to hpp files
-      - 'meson.build'           # or dependency updates
+      - '.github/workflows/**'  # or dependency updates
       - '.github/workflows/**'  # or workflow changes
       - 'complement/**'         # or complement changes
   release:
-    types: [published]
+    types: [ published ]
   workflow_dispatch:
 
 concurrency:
@@ -34,69 +34,37 @@ jobs:
         if: toJSON(github.event.pull_request) != '{}'
         uses: actions/checkout@v4
         with:
-            ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Checkout repository
         if: toJSON(github.event.pull_request) == '{}'
         uses: actions/checkout@v4
-      - name: Install Python
-        uses: actions/setup-python@v4
-      - name: Restore cached Drogon
-        id: cache-drogon-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            /tmp/drogon
-          key: ${{ runner.os }}-drogon
       - name: Install dependencies
         shell: bash
         run: |
           sudo ./.github/llvm.sh 17 all
           which clang-17
           which clang++-17
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov
-          sudo pip3 install meson
-          pushd /tmp
-          [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
-          pushd drogon
-          git pull
-          git submodule update --init
-          [ ! -d /tmp/drogon/build ] && mkdir build
-          pushd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
-          make && sudo make install
-          sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-          sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
-          popd
-          popd
-      - name: Save Drogon
-        id: cache-drogon-save
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            /tmp/drogon
-          key: ${{ steps.cache-drogon-restore.outputs.cache-primary-key }}
+          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake
       - name: Test
         run: |
           /usr/bin/clang++-17 --version
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false -Db_coverage=true builddir
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -fprofile-arcs -ftest-coverage"
           cp ./.lcovrc ~/.lcovrc
-          pushd builddir
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson compile
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson test
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 ninja coverage-html
-          popd
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake --build cmake-build-debug --config Debug
+          pushd cmake-build-debug
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 ctest -T Test -T Coverage
       - name: Report results to DeepSource
         run: |
-            # Tests have finished and a test coverage report is available
-
-            # Install deepsource CLI
-            curl https://deepsource.io/cli | sh
-
-            # From the root directory, run the report coverage command
-            ./bin/deepsource report --analyzer test-coverage --key cxx --value-file ./builddir/meson-logs/coverage.info
+          # Tests have finished and a test coverage report is available
+          
+          # Install deepsource CLI
+          curl https://deepsource.io/cli | sh
+          
+          # From the root directory, run the report coverage command
+          ./bin/deepsource report --analyzer test-coverage --key cxx --value-file ./builddir/meson-logs/coverage.info
 
         env:
-            DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
+          DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
 
   # run Complement
   complement:

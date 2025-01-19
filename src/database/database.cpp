@@ -5,7 +5,6 @@
 #include <drogon/utils/coroutine.h>
 #include <format>
 #include <stdexcept>
-#include <zlib.h>
 
 void Database::migrate() const {
   Migrator migrator;

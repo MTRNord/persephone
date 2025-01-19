@@ -10,7 +10,15 @@ using EventID = std::string;
 using EventType = std::string;
 using StateKey = std::string;
 
-// Custom struct to hold conflicted and unconflicted state sets
+/**
+ * @brief A structure to hold sets of conflicted and unconflicted state events.
+ *
+ * This structure contains two vectors of StateEvent objects.
+ * The conflictedEvents vector holds the state events that have conflicts, i.e., events that have the same state key but different event IDs.
+ * The unconflictedEvents vector holds the state events that do not have any conflicts, i.e., events that have unique state keys.
+ *
+ * @details The StateEventSets structure is used in the state resolution algorithm to separate the events into conflicted and unconflicted sets before processing them.
+ */
 struct [[nodiscard]] StateEventSets {
   std::vector<StateEvent> conflictedEvents;
   std::vector<StateEvent> unconflictedEvents;
@@ -24,6 +32,17 @@ struct [[nodiscard]] StateEventSets {
 [[nodiscard]] std::string event_id(const json &event,
                                    const std::string &room_version);
 
+/**
+ * @brief Compares the domain parts of two strings.
+ *
+ * This function takes two strings as input, each expected to contain a domain part after a ':' character.
+ * It finds the position of ':' in each string and extracts the domain part after ':'.
+ * It then compares the domain parts of the two strings and returns true if they are equal, false otherwise.
+ *
+ * @param str1 The first string to be compared.
+ * @param str2 The second string to be compared.
+ * @return A boolean value indicating whether the domain parts of the two strings are equal.
+ */
 [[nodiscard]] constexpr bool matchDomain(const std::string &str1,
                                          const std::string &str2) {
   // Find the position of ':' in the strings
@@ -38,6 +57,18 @@ struct [[nodiscard]] StateEventSets {
   return domain1 == domain2;
 }
 
+/**
+ * @brief Finds the difference between the conflicted events and the authorization events of the forks.
+ *
+ * This function takes a vector of conflicted StateEvent objects and a vector of vectors of StateEvent objects representing the forks as input.
+ * It iterates over each conflicted event and checks if it is present in all the forks.
+ * If a conflicted event is not found in any of the forks, it is considered as part of the difference and is added to the authDifference vector.
+ * Finally, the function returns the authDifference vector.
+ *
+ * @param conflictedEvents A vector of conflicted StateEvent objects.
+ * @param forks A vector of vectors of StateEvent objects representing the forks.
+ * @return A vector of StateEvent objects representing the difference between the conflicted events and the authorization events of the forks.
+ */
 [[nodiscard]] constexpr std::vector<StateEvent>
 findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
                    const std::vector<std::vector<StateEvent>> &forks) {

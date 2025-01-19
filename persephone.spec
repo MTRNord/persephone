@@ -7,7 +7,7 @@ License:        AGPL-3.0-or-later
 URL:            https://github.com/MTRNord/persephone
 Source0:        %{name}-%{version}.tar.gz
 
-BuildRequires:  meson
+BuildRequires:  cmake
 BuildRequires:  clang
 BuildRequires:  json-devel
 BuildRequires:  c-ares-devel
@@ -23,14 +23,14 @@ Requires:       yaml-cpp
 %autosetup -c
 
 %build
-%meson
-%meson_build
+%cmake
+%cmake_build
 
 %install
-%meson_install
+%cmake_install
 
 %check
-%meson_test
+%ctest
 
 %files
 %{_bindir}/%{name}

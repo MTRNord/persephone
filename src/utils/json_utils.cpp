@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
-#include <iterator>
 #include <map>
 #include <nlohmann/detail/value_t.hpp>
 #include <nlohmann/json.hpp>
@@ -13,6 +12,18 @@
 #include <stdexcept>
 
 namespace json_utils {
+/**
+ * @brief Decodes a base64 string to a binary string.
+ *
+ * This function takes a base64 string as input and decodes it to a binary string.
+ * The binary string is represented as a vector of unsigned characters.
+ * The function uses the sodium_base642bin function from the Sodium library to perform the decoding.
+ * If the decoding fails, the function throws a runtime error.
+ *
+ * @param input The base64 string to decode.
+ * @return The decoded binary string as a vector of unsigned characters.
+ * @throw std::runtime_error If the decoding fails.
+ */
 [[nodiscard]] std::vector<unsigned char>
 unbase64_key(const std::string &input) {
   size_t b64_str_len = input.size();
@@ -30,6 +41,18 @@ unbase64_key(const std::string &input) {
   return bin_str;
 }
 
+/**
+ * @brief Encodes a binary string to a base64 string.
+ *
+ * This function takes a binary string as input and encodes it to a base64 string.
+ * The binary string is represented as a vector of unsigned characters.
+ * The function uses the sodium_bin2base64 function from the Sodium library to perform the encoding.
+ * If the encoding fails, the function throws a runtime error.
+ *
+ * @param input The binary string to encode.
+ * @return The encoded base64 string.
+ * @throw std::runtime_error If the encoding fails.
+ */
 [[nodiscard]] std::string base64_key(const std::vector<unsigned char> &input) {
   unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
@@ -46,6 +69,23 @@ unbase64_key(const std::string &input) {
   return base64_str;
 }
 
+/**
+ * @brief Signs a JSON object with a server's secret key.
+ *
+ * This function takes a server name, a key ID, a secret key, and a JSON object as input.
+ * It first extracts any existing signatures and unsigned fields from the JSON object.
+ * Then, it signs the canonical form of the JSON object using the secret key.
+ * The signature is encoded as an unpadded base64 string and added to the JSON object.
+ * If the signing fails, the function throws a runtime error.
+ * Finally, it adds back any unsigned fields and returns the signed JSON object.
+ *
+ * @param server_name The name of the server.
+ * @param key_id The ID of the key.
+ * @param secret_key The secret key as a vector of unsigned characters.
+ * @param json_data The JSON object to sign.
+ * @return The signed JSON object.
+ * @throw std::runtime_error If the signing fails.
+ */
 [[nodiscard]] json sign_json(const std::string &server_name,
                              const std::string &key_id,
                              const std::vector<unsigned char> &secret_key,
@@ -84,6 +124,17 @@ unbase64_key(const std::string &input) {
   return json_data;
 }
 
+/**
+ * @brief Generates a new server key pair.
+ *
+ * This function generates a new server key pair using the Sodium library's crypto_sign_keypair function.
+ * The key pair consists of a public key and a secret key.
+ * The public key is an array of unsigned characters of size crypto_sign_PUBLICKEYBYTES.
+ * The secret key is an array of unsigned characters of size crypto_sign_SECRETKEYBYTES.
+ * The function returns the key pair as a tuple.
+ *
+ * @return A tuple containing the public key and the secret key.
+ */
 [[nodiscard]] std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
                          std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key() {
@@ -94,6 +145,20 @@ generate_server_key() {
   return {pk, sk};
 }
 
+/**
+ * @brief Writes the server's private key to a file.
+ *
+ * This function takes a Config object and a private key as input.
+ * The Config object contains the location where the server's private key should be written.
+ * The private key is represented as a vector of unsigned characters.
+ * The function first encodes the private key to a base64 string.
+ * Then, it generates a version string in the format "a_<random_string>".
+ * Finally, it writes the algorithm name, the version string, and the base64 string to the file.
+ * If the file cannot be opened, the function does nothing.
+ *
+ * @param config The Config object containing the server key location.
+ * @param private_key The private key as a vector of unsigned characters.
+ */
 void write_server_key(const Config &config,
                       const std::vector<unsigned char> &private_key) {
   const std::string algo = "ed25519";
@@ -108,6 +173,18 @@ void write_server_key(const Config &config,
   }
 }
 
+/**
+ * @brief Ensures the server keys exist.
+ *
+ * This function takes a Config object as input.
+ * The Config object contains the location where the server's private key should be stored.
+ * The function first checks if the server's private key already exists at the specified location.
+ * If the private key does not exist, the function generates a new server key pair.
+ * The private key from the key pair is then written to the specified location.
+ * If the private key already exists, the function does nothing.
+ *
+ * @param config The Config object containing the server key location.
+ */
 void ensure_server_keys(const Config &config) {
   if (!std::filesystem::exists(config.matrix_config.server_key_location)) {
     auto server_key = json_utils::generate_server_key();

@@ -1,7 +1,6 @@
 #include "state_res.hpp"
 #include "drogon/drogon.h"
 #include "utils/errors.hpp"
-#include <format>
 #include <ranges>
 #include <sodium/crypto_hash_sha256.h>
 #include <sodium/utils.h>
@@ -94,6 +93,18 @@
   return event_copy;
 }
 
+/**
+ * @brief Redacts the provided JSON event object based on the room version.
+ *
+ * This function takes a JSON object representing an event and a room version as input.
+ * If the room version is "11", it calls the v11_redact function to redact the event according to Matrix Protocol version 11 rules.
+ * If the room version is not "11", it throws a MatrixRoomVersionError.
+ *
+ * @param event The JSON object representing the event to be redacted.
+ * @param room_version The version of the room.
+ * @return A JSON object redacted according to the specified room version rules.
+ * @throw MatrixRoomVersionError If the room version is not "11".
+ */
 [[nodiscard]] json redact(const json &event, const std::string &room_version) {
   if (room_version == "11") {
     return v11_redact(event);
@@ -101,6 +112,19 @@
   throw MatrixRoomVersionError(room_version);
 }
 
+/**
+ * @brief Computes the reference hash for a JSON event object according to Matrix Room version 11 rules.
+ *
+ * This function takes a JSON object representing an event as input.
+ * It first creates a copy of the JSON object and removes the "signatures" and "unsigned" fields from the copy.
+ * Then, it converts the modified JSON object to a string.
+ * The function computes the SHA-256 hash of the string using the Sodium library's crypto_hash_sha256 function.
+ * The hash is represented as a vector of unsigned characters.
+ * Finally, the function converts the hash to a string and returns it.
+ *
+ * @param event The JSON object representing the event.
+ * @return The SHA-256 hash of the event as a string.
+ */
 [[nodiscard]] std::string reference_hash_v11(const json &event) {
   //  We copy here to (if needed) have the original still intact
   json event_copy(event);
@@ -119,6 +143,18 @@
   return sha256_hash_string;
 }
 
+/**
+ * @brief Computes the reference hash for a JSON event object based on the room version.
+ *
+ * This function takes a JSON object representing an event and a room version as input.
+ * If the room version is "11", it calls the reference_hash_v11 function to compute the reference hash of the event according to Matrix Protocol version 11 rules.
+ * If the room version is not "11", it throws a MatrixRoomVersionError.
+ *
+ * @param event The JSON object representing the event.
+ * @param room_version The version of the room.
+ * @return The reference hash of the event as a string.
+ * @throw MatrixRoomVersionError If the room version is not "11".
+ */
 [[nodiscard]] std::string reference_hash(const json &event,
                                          const std::string &room_version) {
   if (room_version == "11") {
@@ -128,6 +164,24 @@
   throw MatrixRoomVersionError(room_version);
 }
 
+/**
+ * @brief Computes the event ID for a JSON event object based on the room version.
+ *
+ * This function takes a JSON object representing an event and a room version as input.
+ * It first calls the reference_hash function to compute the reference hash of the event.
+ * The hash is represented as a string.
+ * The function then computes the length of the hash and the maximum length of the base64-encoded string.
+ * It creates a string of the maximum length and fills it with zeros.
+ * The function then converts the hash to a base64 string using the Sodium library's sodium_bin2base64 function.
+ * The base64 string is represented as a URL-safe string with no padding.
+ * If the base64 encoding fails, the function throws a runtime error.
+ * Finally, the function returns the base64 string, which is the event ID.
+ *
+ * @param event The JSON object representing the event.
+ * @param room_version The version of the room.
+ * @return The event ID as a base64 string.
+ * @throw std::runtime_error If the base64 encoding fails.
+ */
 [[nodiscard]] std::string event_id(const json &event,
                                    const std::string &room_version) {
   auto hash = reference_hash(event, room_version);
@@ -148,8 +202,18 @@
   return base64_str;
 }
 
-// Function to create the partial state map from unconflicted events while
-// preserving ordering
+/**
+ * @brief Creates a partial state map from a list of unconflicted events.
+ *
+ * This function takes a vector of unconflicted StateEvent objects as input.
+ * It iterates over each StateEvent in the vector and extracts the event type and state key.
+ * The function then adds the StateEvent to the partial state map under the corresponding event type and state key.
+ * The partial state map is a map of event types to maps of state keys to StateEvents.
+ * The function preserves the ordering of the unconflicted events in the partial state map.
+ *
+ * @param unconflictedEvents A vector of unconflicted StateEvent objects.
+ * @return A map of event types to maps of state keys to StateEvents representing the partial state.
+ */
 [[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
   std::map<EventType, std::map<StateKey, StateEvent>> partialState;
@@ -165,6 +229,19 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
   return partialState;
 }
 
+/**
+ * @brief Splits the given events into conflicted and unconflicted sets.
+ *
+ * This function takes a vector of vectors of StateEvent objects, where each inner vector represents a fork of events.
+ * It counts the occurrences of each state tuple (event type and state key pair) in each fork.
+ * Then, it iterates over each event in each fork.
+ * If the state tuple of an event exists in another fork only once, or if it is conflicted in its own fork, the event is added to the conflicted set.
+ * Otherwise, the event is added to the unconflicted set.
+ * The function returns a StateEventSets object containing the conflicted and unconflicted sets of events.
+ *
+ * @param forks A vector of vectors of StateEvent objects representing the forks of events.
+ * @return A StateEventSets object containing the conflicted and unconflicted sets of events.
+ */
 [[nodiscard]] StateEventSets
 splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   StateEventSets result;
@@ -216,6 +293,20 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   return result;
 }
 
+/**
+ * @brief Sorts the incoming edges of events based on certain criteria.
+ *
+ * This function takes a map of incoming edges and a map of events as input.
+ * It first defines a comparator function that compares two events based on their power level, origin server timestamp, and event ID.
+ * The function then creates a vector of keys from the incoming edges map.
+ * It sorts the keys using the comparator function.
+ * The function then creates a new map of sorted edges by iterating over the sorted keys and adding the corresponding values from the incoming edges map.
+ * The function returns the map of sorted edges.
+ *
+ * @param incoming_edges A map of incoming edges, where the key is the event ID and the value is the number of incoming edges.
+ * @param event_map A map of events, where the key is the event ID and the value is the event object.
+ * @return A map of sorted edges.
+ */
 [[nodiscard]] std::map<EventID, int>
 sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
                       const std::map<EventID, StateEvent> &event_map) {
@@ -253,6 +344,19 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
   return sorted_edges;
 }
 
+/**
+ * @brief Implements Kahn's algorithm to sort the given events based on their dependencies.
+ *
+ * This function takes a vector of StateEvent objects, which represent the full set of conflicted events.
+ * It creates a map of events and a map of incoming edges, where the key is the event ID and the value is the number of incoming edges.
+ * The function then sorts the incoming edges based on certain criteria.
+ * It iterates over the sorted edges and for each edge with zero incoming edges, it adds the corresponding event to the output events and decreases the count of incoming edges for all its dependent events.
+ * The function continues this process until all edges are processed.
+ * Finally, it returns the vector of output events, which is a topological ordering of the given events.
+ *
+ * @param full_conflicted_set A vector of StateEvent objects representing the full set of conflicted events.
+ * @return A vector of StateEvent objects representing the topological ordering of the given events.
+ */
 [[nodiscard]] std::vector<StateEvent>
 kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::vector<StateEvent> output_events;
@@ -289,6 +393,22 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return output_events;
 }
 
+/**
+ * @brief Performs authorization checks against a partial state for a given event based on Matrix Protocol version 11 rules.
+ *
+ * This function takes a map of the current partial state and a StateEvent object as input.
+ * It performs various checks to determine if the event is authorized according to the rules of Matrix Protocol version 11.
+ * The function returns true if the event is authorized, and false otherwise.
+ *
+ * @param current_partial_state A map of the current partial state, where the key is the event type and the value is a map of state keys to StateEvents.
+ * @param e The StateEvent object to be checked.
+ * @return A boolean value indicating whether the event is authorized.
+ *
+ * @details The function performs the following checks:
+ * - If the event type is "m.room.create", it checks if the event has any previous events, if the domain of the room ID matches the domain of the sender, and if the room version is recognized. If any of these checks fail, the function returns false.
+ * - The function then considers the event's authorization events. It checks for duplicate entries for a given type and state key pair, and for entries whose type and state key don’t match those specified by the authorization events selection algorithm described in the server specification. If any of these checks fail, the function returns false.
+ * - Finally, the function checks if the authorization events are also correct according to the server specification. This check is currently marked as a TODO.
+ */
 [[nodiscard]] bool auth_against_partial_state_version_11(
     const std::map<EventType, std::map<StateKey, StateEvent>>
         &current_partial_state,
@@ -366,9 +486,20 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return true;
 }
 
-// This checks if the event is allowed by the auth checks
-// These are defined in
-// https://spec.matrix.org/v1.9/rooms/v11/#authorization-rules
+/**
+ * @brief Checks if the event is allowed by the authorization rules defined in Matrix Protocol version 11.
+ *
+ * This function takes a map of the current partial state and a StateEvent object as input.
+ * It checks if the event type is "m.room.create". If it is, the function checks if the event content contains the "room_version" field.
+ * If the "room_version" field is not present or if its value is not "11", the function returns false.
+ * If the "room_version" field is present and its value is "11", the function calls the auth_against_partial_state_version_11 function to perform further authorization checks.
+ * If the event type is not "m.room.create", the function retrieves the "m.room.create" event from the current partial state and performs the same checks as above.
+ * If none of the checks pass, the function returns false.
+ *
+ * @param current_partial_state A map of the current partial state, where the key is the event type and the value is a map of state keys to StateEvents.
+ * @param e The StateEvent object to be checked.
+ * @return A boolean value indicating whether the event is authorized.
+ */
 [[nodiscard]] bool auth_against_partial_state(
     std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
     StateEvent &e) {
@@ -392,6 +523,18 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   return false;
 }
 
+/**
+ * @brief Iteratively builds the power level mainline for a given event.
+ *
+ * This function takes a reference to a vector of StateEvent objects, which represents the power level mainline, and a StateEvent object as input.
+ * It adds the given event to the power level mainline.
+ * Then, it iterates over each authorization event of the given event.
+ * If the event type of an authorization event is "m.room.powerlevel", the function recursively calls itself with the power level mainline and the authorization event.
+ * This process continues until all authorization events have been processed, resulting in a power level mainline that includes all power level events that are authorization events of the given event or its authorization events.
+ *
+ * @param power_level_mainline A reference to a vector of StateEvent objects representing the power level mainline.
+ * @param event The StateEvent object to be processed.
+ */
 void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
                       StateEvent &event) {
   power_level_mainline.push_back(event);
@@ -403,6 +546,22 @@ void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
   }
 }
 
+/**
+ * @brief Finds the closest event on the power level mainline for a given event.
+ *
+ * This function takes a reference to a vector of StateEvent objects, which represents the power level mainline, and a StateEvent object as input.
+ * It uses a stack to keep track of the events to be processed, starting with the given event.
+ * The function then enters a loop that continues until the stack is empty.
+ * In each iteration of the loop, the function pops an event from the stack and checks if it is in the power level mainline.
+ * If the event is in the mainline, the function calculates its position on the mainline and sets it as the closest mainline event.
+ * If the event is not in the mainline, the function pushes all of its "m.room.powerlevel" authorization events onto the stack.
+ * The function continues this process until it finds an event that is in the mainline or until the stack is empty.
+ * Finally, the function returns the closest mainline event.
+ *
+ * @param power_level_mainline A reference to a vector of StateEvent objects representing the power level mainline.
+ * @param event The StateEvent object to be processed.
+ * @return The closest mainline event to the given event.
+ */
 [[nodiscard]] StateEvent
 get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
                            StateEvent &event) {
@@ -434,6 +593,23 @@ get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
   return closest_mainline_event;
 }
 
+/**
+ * @brief Sorts the given normal state events based on their position on the mainline, origin server timestamp, and event ID.
+ *
+ * This function takes a vector of normal StateEvent objects as input.
+ * It defines a comparator function that compares two events based on their position on the mainline, origin server timestamp, and event ID.
+ * The function then sorts the normal events using the comparator function.
+ * Finally, it returns the sorted normal events.
+ *
+ * @param normal_events A vector of normal StateEvent objects to be sorted.
+ * @return A vector of sorted normal StateEvent objects.
+ *
+ * @details The comparator function works as follows:
+ * - If the position on the mainline of the first event is not equal to that of the second event, it returns true if the position of the first event is less than that of the second event.
+ * - If the positions on the mainline are equal, it checks the origin server timestamps. If they are not equal, it returns true if the timestamp of the first event is less than that of the second event.
+ * - If the timestamps are also equal, it returns true if the event ID of the first event is less than that of the second event.
+ * - If all these conditions are false, it returns false.
+ */
 [[nodiscard]] std::vector<StateEvent>
 sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   auto compare_events = [](StateEvent &x, StateEvent &y) {
@@ -455,6 +631,25 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   return normal_events;
 }
 
+/**
+ * @brief Implements the state resolution algorithm version 2 (state_res_v2) as per Matrix protocol.
+ *
+ * This function takes a vector of vectors of StateEvent objects, where each inner vector represents a fork of events.
+ * It first splits the events into conflicted and unconflicted sets.
+ * Then, it creates a partial state from the unconflicted events.
+ * It also finds the difference between the conflicted events and the authorization events of the forks.
+ * The function then classifies the conflicted events into control events and other events.
+ * Control events are those that affect the power level, join rules, or membership of the room.
+ * The function sorts the control events using Kahn's algorithm, which is a topological sorting algorithm.
+ * It then authorizes each control event against the partial state and adds it to the partial state if it is authorized.
+ * The function also builds the power level mainline, which is a sequence of power level events that are authorization events of each other.
+ * It then sorts the other events based on their position on the mainline, origin server timestamp, and event ID.
+ * It authorizes each of these events against the partial state and adds it to the partial state if it is authorized.
+ * Finally, it adds the unconflicted events to the partial state and returns the partial state.
+ *
+ * @param forks A vector of vectors of StateEvent objects representing the forks of events.
+ * @return A map of event types to maps of state keys to StateEvents representing the resolved state.
+ */
 [[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto state_event_sets = splitEvents(forks);

@@ -27,44 +27,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Install Python
-        uses: actions/setup-python@v4
-      - name: Restore cached Drogon
-        id: cache-drogon-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            /tmp/drogon
-          key: ${{ runner.os }}-drogon
       - name: Install dependencies
         run: |
           sudo ./.github/llvm.sh 17 all
           which clang-17
           which clang++-17
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev
-          sudo pip3 install meson
-          pushd /tmp
-          [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
-          pushd drogon
-          git pull
-          git submodule update --init
-          [ ! -d /tmp/drogon/build ] && mkdir build
-          pushd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
-          make && sudo make install
-          sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-          sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
-          popd
-          popd
-          popd
-
-      - name: Save Drogon
-        id: cache-drogon-save
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            /tmp/drogon
-          key: ${{ steps.cache-drogon-restore.outputs.cache-primary-key }}
+          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev cmake
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v2
@@ -74,10 +42,8 @@ jobs:
       - name: Build
         run: |
           /usr/bin/clang++-17 --version
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson setup --reconfigure --buildtype=release -Db_lto=false -Db_thinlto_cache=false builddir
-          pushd builddir
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 meson dist
-          popd
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake --build cmake-build-release --config Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2

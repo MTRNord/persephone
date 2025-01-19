@@ -7,6 +7,17 @@
 using namespace server_server_api;
 using json = nlohmann::json;
 
+/**
+ * @brief Handles the version request of the server-server API.
+ *
+ * This function is a part of the ServerServerCtrl class and is used to handle the version request of the server-server API.
+ * It creates a version object with the server name and version number.
+ * It then creates a new HTTP response, sets the body of the response to the JSON representation of the version object, sets the expired time to 0, and sets the content type to application/json.
+ * Finally, it calls the callback function with the response.
+ *
+ * @param req The HTTP request pointer. This parameter is not used in the function.
+ * @param callback A callback function that takes an HTTP response pointer as input. This function is called with the response.
+ */
 void ServerServerCtrl::version(
     const HttpRequestPtr &,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
