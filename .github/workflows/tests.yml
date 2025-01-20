@@ -51,7 +51,9 @@ jobs:
           sudo ./.github/llvm.sh 19 all
           which clang-19
           which clang++-19
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev
+          sudo apt update
+          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev libstdc++-11-dev
+          sudo apt upgrade -y
           # jsoncpp is a bit weird on ubuntu vs fedora
           sudo ln -s /usr/include/jsoncpp/json/ /usr/include/json
           pushd /tmp
