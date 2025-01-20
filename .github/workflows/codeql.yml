@@ -36,9 +36,9 @@ jobs:
           key: ${{ runner.os }}-drogon
       - name: Install dependencies
         run: |
-          sudo ./.github/llvm.sh 17 all
-          which clang-17
-          which clang++-17
+          sudo ./.github/llvm.sh 19 all
+          which clang-19
+          which clang++-19
           sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev cmake libyaml-cpp-dev libldns-dev
           # jsoncpp is a bit weird on ubuntu vs fedora
           sudo ln -s /usr/include/jsoncpp/json/ /usr/include/json
@@ -71,9 +71,9 @@ jobs:
 
       - name: Build
         run: |
-          /usr/bin/clang++-17 --version
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
-          CC=/usr/bin/clang-17 CXX=/usr/bin/clang++-17 cmake --build cmake-build-release --config Release
+          /usr/bin/clang++-19 --version
+          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake --build cmake-build-release --config Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
