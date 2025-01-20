@@ -32,6 +32,8 @@ COPY .github/llvm.sh .
 # For some reason the tooling doesnt work here properly otherwise
 RUN echo "deb http://apt.llvm.org/unstable/ llvm-toolchain-17 main" >> /etc/apt/sources.list
 RUN ./llvm.sh 17 all && which clang-17 && which clang++-17
+# Install drogon
+RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon && git submodule update --init && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && make install && ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
 RUN pip3 install --break-system-packages ninja
 
 # Build and install persephone

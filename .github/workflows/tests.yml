@@ -38,6 +38,13 @@ jobs:
       - name: Checkout repository
         if: toJSON(github.event.pull_request) == '{}'
         uses: actions/checkout@v4
+      - name: Restore cached Drogon
+        id: cache-drogon-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            /tmp/drogon
+          key: ${{ runner.os }}-drogon
       - name: Install dependencies
         shell: bash
         run: |
@@ -45,6 +52,26 @@ jobs:
           which clang-17
           which clang++-17
           sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake
+          pushd /tmp
+          [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
+          pushd drogon
+          git pull
+          git submodule update --init
+          [ ! -d /tmp/drogon/build ] && mkdir build
+          pushd build
+          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+          make && sudo make install
+          sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
+          sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+          popd
+          popd
+      - name: Save Drogon
+        id: cache-drogon-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            /tmp/drogon
+          key: ${{ steps.cache-drogon-restore.outputs.cache-primary-key }}
       - name: Test
         run: |
           /usr/bin/clang++-17 --version
