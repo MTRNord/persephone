@@ -39,7 +39,7 @@ jobs:
           sudo ./.github/llvm.sh 17 all
           which clang-17
           which clang++-17
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev cmake
+          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev cmake libyaml-cpp-dev
           pushd /tmp
           [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
           pushd drogon
