@@ -63,7 +63,7 @@ jobs:
           git submodule update --init
           [ ! -d /tmp/drogon/build ] && mkdir build
           pushd build
-          cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
           make && sudo make install
           sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
           sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
@@ -87,12 +87,16 @@ jobs:
       - name: Report results to DeepSource
         run: |
           # Tests have finished and a test coverage report is available
+          sudo apt install -y lcov
+          lcov --directory ./CMakeFiles --capture --output-file coverage.info
+          # Remove dependencies from the coverage report
+          lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
           
           # Install deepsource CLI
           curl https://deepsource.io/cli | sh
           
           # From the root directory, run the report coverage command
-          ./bin/deepsource report --analyzer test-coverage --key cxx --value-file ./builddir/meson-logs/coverage.info
+          ./bin/deepsource report --analyzer test-coverage --key cxx --value-file ./cmake-build-debug/coverage_filtered.info
 
         env:
           DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
