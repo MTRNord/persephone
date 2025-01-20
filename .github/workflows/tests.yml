@@ -52,6 +52,8 @@ jobs:
           which clang-17
           which clang++-17
           sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev
+          # jsoncpp is a bit weird on ubuntu vs fedora
+          sudo ln -s /usr/include/jsoncpp/json/ /usr/include/json
           pushd /tmp
           [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
           pushd drogon

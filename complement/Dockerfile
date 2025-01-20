@@ -1,5 +1,7 @@
 FROM debian:trixie
 RUN apt-get update && apt-get install -y python3 python3-pip postgresql pkg-config cmake nlohmann-json3-dev libpq-dev libsodium23 libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget software-properties-common gnupg libyaml-cpp-dev libldns-dev
+# jsoncpp is a bit weird on ubuntu vs fedora
+RUN ln -s /usr/include/jsoncpp/json/ /usr/include/json
 WORKDIR /build
 
 # No password when connecting over localhost
