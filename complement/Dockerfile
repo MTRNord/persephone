@@ -35,7 +35,7 @@ RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon 
 RUN pip3 install --break-system-packages ninja
 
 # Build and install persephone
-RUN CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -B builddir -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=/usr/bin/clang++-19 -DCMAKE_C_COMPILER=/usr/bin/clang-19 -DCMAKE_INSTALL_PREFIX=/persephone && cmake --build builddir --target install
+RUN CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -B builddir -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=/usr/bin/clang++-19 -DCMAKE_C_COMPILER=/usr/bin/clang-19 -DCMAKE_INSTALL_PREFIX=/persephone && cmake --build builddir --config Release && cmake --install builddir --config Release
 
 WORKDIR /build/builddir
 
