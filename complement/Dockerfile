@@ -1,5 +1,5 @@
 FROM debian:trixie
-RUN apt-get update && apt-get install -y python3 python3-pip postgresql pkg-config cmake nlohmann-json3-dev libpq-dev libsodium23 libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget gnupg libyaml-cpp-dev libldns-dev && apt-get upgrade -y
+RUN apt-get update && apt-get install -y clang-19 python3 python3-pip postgresql pkg-config cmake nlohmann-json3-dev libpq-dev libsodium23 libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget gnupg libyaml-cpp-dev libldns-dev && apt-get upgrade -y
 # jsoncpp is a bit weird on ubuntu vs fedora
 RUN ln -s /usr/include/jsoncpp/json/ /usr/include/json
 WORKDIR /build
@@ -30,10 +30,6 @@ done \n\
 RUN mkdir /persephone
 
 COPY . .
-COPY .github/llvm.sh .
-# For some reason the tooling doesnt work here properly otherwise
-RUN echo "deb http://apt.llvm.org/unstable/ llvm-toolchain-19 main" >> /etc/apt/sources.list
-RUN ./llvm.sh 19 all && which clang-19 && which clang++-19
 # Install drogon
 RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon && git submodule update --init && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && make install && ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
 RUN pip3 install --break-system-packages ninja
