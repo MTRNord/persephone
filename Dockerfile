@@ -13,7 +13,7 @@ RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon 
 COPY . .
 
 # Build and install persephone
-RUN cmake -B builddir -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/persephone && cmake --build builddir --config Releae && cmake --install builddir --config Releae
+RUN cmake -B builddir -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/persephone && cmake --build builddir --config Release && cmake --install builddir --config Release
 
 WORKDIR /build/builddir
 EXPOSE 8008 8448
