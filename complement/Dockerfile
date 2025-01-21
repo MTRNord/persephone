@@ -5,11 +5,11 @@ RUN ln -s /usr/include/jsoncpp/json/ /usr/include/json
 WORKDIR /build
 
 # No password when connecting over localhost
-RUN cat /etc/postgresql/16/main/pg_hba.conf && \
-    sed -i "s%127.0.0.1/32            scram-sha-256%127.0.0.1/32            trust%g" /etc/postgresql/16/main/pg_hba.conf && \
-    sed -i "s%::1/128                 scram-sha-256%::1/128                 trust%g" /etc/postgresql/16/main/pg_hba.conf && \
+RUN cat /etc/postgresql/17/main/pg_hba.conf && \
+    sed -i "s%127.0.0.1/32            scram-sha-256%127.0.0.1/32            trust%g" /etc/postgresql/17/main/pg_hba.conf && \
+    sed -i "s%::1/128                 scram-sha-256%::1/128                 trust%g" /etc/postgresql/17/main/pg_hba.conf && \
     # Bump up max conns for moar concurrency
-    sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/16/main/postgresql.conf
+    sed -i 's/max_connections = 100/max_connections = 2000/g' /etc/postgresql/17/main/postgresql.conf
 
 # This entry script starts postgres, waits for it to be up then starts persephone
 # psql -U postgres -h localhost --no-password -c \"ALTER USER postgres PASSWORD 'testing';\" \n\
