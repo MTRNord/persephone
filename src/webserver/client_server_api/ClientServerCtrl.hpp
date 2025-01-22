@@ -18,9 +18,9 @@ namespace client_server_api {
             : public drogon::HttpController<ClientServerCtrl, false> {
     public:
         METHOD_LIST_BEGIN
-            ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get);
+            ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get, Options);
             ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
-                          Get, "client_server_api::AccessTokenFilter");
+                          Get, Options, "client_server_api::AccessTokenFilter");
             ADD_METHOD_TO(ClientServerCtrl::user_available,
                           "/_matrix/client/v3/register/available?username={1}", Get);
             ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get);

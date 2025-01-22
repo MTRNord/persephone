@@ -14,6 +14,12 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
                                  FilterChainCallback &&ccb) {
   drogon::async_run([req, ccb = std::move(ccb),
       cb = std::move(cb)]() -> drogon::Task<> {
+      // If this is an OPTIONS request, we can skip the filter
+      if (req->method() == drogon::Options) {
+        ccb();
+        co_return;
+      }
+
       // Get the access token from the Authorization header
       const auto auth_header = req->getHeader("Authorization");
       if (auth_header.empty()) {
@@ -536,4 +542,7 @@ void ClientServerCtrl::createRoom(
         }
       }
     });
+
+  // TODO: create room in db
+  // TODO: return values to client
 }
