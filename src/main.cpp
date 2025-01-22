@@ -34,11 +34,13 @@ int main() {
         .setThreadNum(0)
         .setLogLevel(trantor::Logger::LogLevel::kDebug)
         .addDbClient(orm::PostgresConfig{
-          config.db_config.host,
-          config.db_config.port,
-          config.db_config.database_name,
-          config.db_config.user,
-          config.db_config.password, 10
+          .host = config.db_config.host,
+          .port = config.db_config.port,
+          .databaseName = config.db_config.database_name,
+          .username = config.db_config.user,
+          .password = config.db_config.password,
+          .connectionNumber = 10,
+          .name = "default",
         })
         .enableGzip(true)
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
@@ -46,15 +48,15 @@ int main() {
           resp->addHeader("Access-Control-Allow-Origin", "*");
         })
         .registerBeginningAdvice([]() {
-          Database db{};
+          constexpr Database db{};
           db.migrate();
         });
 
-    auto srv_srv_ctrlPtr =
+    const auto srv_srv_ctrlPtr =
         std::make_shared<server_server_api::ServerServerCtrl>(config,
                                                               verify_key_data);
     Database db{};
-    auto client_srv_ctrlPtr =
+    const auto client_srv_ctrlPtr =
         std::make_shared<client_server_api::ClientServerCtrl>(config, db);
     drogon::app()
         .registerController(client_srv_ctrlPtr)
@@ -69,6 +71,7 @@ int main() {
   } catch (const YAML::BadFile &error) {
     LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "
         "prior to running persephone";
+    LOG_ERROR << error.what();
     return 1;
   } catch (std::runtime_error &error) {
     LOG_ERROR << error.what();

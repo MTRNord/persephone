@@ -140,17 +140,16 @@ migrate_localpart(const std::string &localpart) {
  * @return The server name with the brackets removed.
  */
 [[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
-  server_name.erase(std::remove_if(server_name.begin(), server_name.end(),
-                                   [](char c) {
-                                     switch (c) {
-                                       case '[':
-                                       case ']':
-                                         return true;
-                                       default:
-                                         return false;
-                                     }
-                                   }),
-                    server_name.end());
+  std::erase_if(server_name,
+                [](char c) {
+                  switch (c) {
+                    case '[':
+                    case ']':
+                      return true;
+                    default:
+                      return false;
+                  }
+                });
   return server_name;
 }
 

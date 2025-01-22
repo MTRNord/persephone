@@ -71,14 +71,14 @@ struct [[nodiscard]] StateEventSets {
  */
 [[nodiscard]] constexpr std::vector<StateEvent>
 findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
-                   const std::vector<std::vector<StateEvent>> &forks) {
+                   const std::vector<std::vector<StateEvent> > &forks) {
   std::vector<StateEvent> authDifference;
 
-  for (const auto &e : conflictedEvents) {
+  for (const auto &e: conflictedEvents) {
     bool found = true;
 
-    for (const auto &authSet : forks) {
-      if (std::find(authSet.begin(), authSet.end(), e) == authSet.end()) {
+    for (const auto &authSet: forks) {
+      if (std::ranges::find(authSet, e) == authSet.end()) {
         found = false;
         break;
       }

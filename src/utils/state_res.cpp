@@ -31,9 +31,10 @@
   json event_copy(event);
 
   const std::unordered_set<std::string> preserved_keys{
-      "event_id",    "type",        "room_id",    "sender",
-      "state_key",   "hashes",      "signatures", "depth",
-      "prev_events", "auth_events", "content",    "origin_server_ts"};
+    "event_id", "type", "room_id", "sender",
+    "state_key", "hashes", "signatures", "depth",
+    "prev_events", "auth_events", "content", "origin_server_ts"
+  };
 
   for (auto it = event_copy.begin(); it != event_copy.end();) {
     const auto &key = it.key();
@@ -46,7 +47,7 @@
 
   // Special events have special allow rules for things in content
   if (event["type"] == "m.room.member") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (auto &[key, val]: event["content"].items()) {
       if (key != "membership" && key != "join_authorised_via_users_server" &&
           key != "third_party_invite") {
         event_copy["content"].erase(key);
@@ -54,20 +55,20 @@
     }
 
     if (event["content"].contains("third_party_invite")) {
-      for (auto &[key, val] : event["content"]["third_party_invite"].items()) {
+      for (auto &[key, val]: event["content"]["third_party_invite"].items()) {
         if (key != "signed") {
           event_copy["content"]["third_party_invite"].erase(key);
         }
       }
     }
   } else if (event["type"] == "m.room.join_rules") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (auto &[key, val]: event["content"].items()) {
       if (key != "join_rule" && key != "allow") {
         event_copy["content"].erase(key);
       }
     }
   } else if (event["type"] == "m.room.power_levels") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (auto &[key, val]: event["content"].items()) {
       if (key != "ban" && key != "events" && key != "events_default" &&
           key != "invite" && key != "kick" && key != "redact" &&
           key != "state_default" && key != "users" && key != "users_default") {
@@ -75,13 +76,13 @@
       }
     }
   } else if (event["type"] == "m.room.history_visibility") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (auto &[key, val]: event["content"].items()) {
       if (key != "history_visibility") {
         event_copy["content"].erase(key);
       }
     }
   } else if (event["type"] == "m.room.redaction") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (auto &[key, val]: event["content"].items()) {
       if (key != "redacts") {
         event_copy["content"].erase(key);
       }
@@ -188,7 +189,7 @@
 
   unsigned long long hash_len = hash.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
-      hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+    hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
   auto encoded_str_char =
@@ -214,12 +215,12 @@
  * @param unconflictedEvents A vector of unconflicted StateEvent objects.
  * @return A map of event types to maps of state keys to StateEvents representing the partial state.
  */
-[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
+[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent> >
 createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
-  std::map<EventType, std::map<StateKey, StateEvent>> partialState;
+  std::map<EventType, std::map<StateKey, StateEvent> > partialState;
 
   // Populate partial state with unconflicted events while preserving ordering
-  for (const auto &event : unconflictedEvents) {
+  for (const auto &event: unconflictedEvents) {
     std::string event_type = event.at("type").get<EventType>();
     std::string state_key = event.at("state_key").get<StateKey>();
     partialState[event_type][state_key] =
@@ -243,14 +244,14 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
  * @return A StateEventSets object containing the conflicted and unconflicted sets of events.
  */
 [[nodiscard]] StateEventSets
-splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
+splitEvents(const std::vector<std::vector<StateEvent> > &forks) {
   StateEventSets result;
-  std::vector<std::map<std::pair<EventType, StateKey>, int>> stateTuples(
-      forks.size());
+  std::vector<std::map<std::pair<EventType, StateKey>, int> > stateTuples(
+    forks.size());
 
   // Count occurrences of state tuples for each fork
   for (size_t i = 0; i < forks.size(); ++i) {
-    for (const auto &event : forks[i]) {
+    for (const auto &event: forks[i]) {
       std::string event_type = event.at("type").get<EventType>();
       std::string state_key = event.at("state_key").get<StateKey>();
       stateTuples[i][{event_type, state_key}]++;
@@ -259,7 +260,7 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
 
   // Iterate through events in each fork
   for (size_t i = 0; i < forks.size(); ++i) {
-    for (const auto &event : forks[i]) {
+    for (const auto &event: forks[i]) {
       std::string event_type = event.at("type").get<EventType>();
       std::string state_key = event.at("state_key").get<StateKey>();
 
@@ -278,7 +279,7 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
           (stateTuples[i][{event_type, state_key}] == 1 &&
            appearingInOtherForks == 0)) {
         isConflicted = true; // State tuple is conflicted in either fork or
-                             // State tuple exists in only one other fork
+        // State tuple exists in only one other fork
       }
 
       // Add events to conflicted or unconflicted sets
@@ -313,16 +314,16 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
   auto comparator = [&](const EventID &x, const EventID &y) {
     const StateEvent &state_event_x = event_map.at(x);
     const StateEvent &state_event_y = event_map.at(y);
-    int power_level_x = state_event_x.at("power_level").get<int>();
-    int power_level_y = state_event_y.at("power_level").get<int>();
+    const int power_level_x = state_event_x.at("power_level").get<int>();
+    const int power_level_y = state_event_y.at("power_level").get<int>();
 
-    time_t origin_server_ts_x =
+    const time_t origin_server_ts_x =
         state_event_x.at("origin_server_ts").get<time_t>();
-    time_t origin_server_ts_y =
+    const time_t origin_server_ts_y =
         state_event_y.at("origin_server_ts").get<time_t>();
 
-    std::string event_id_x = state_event_x.at("event_id").get<std::string>();
-    std::string event_id_y = state_event_y.at("event_id").get<std::string>();
+    const auto event_id_x = state_event_x.at("event_id").get<std::string>();
+    const auto event_id_y = state_event_y.at("event_id").get<std::string>();
 
     return (power_level_x > power_level_y) ||
            (origin_server_ts_x < origin_server_ts_y) ||
@@ -331,13 +332,13 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
 
   std::map<EventID, int> sorted_edges;
   std::vector<EventID> keys(incoming_edges.size());
-  for (const auto &[id, _] : incoming_edges) {
+  for (const auto &id: incoming_edges | std::views::keys) {
     keys.push_back(id);
   }
 
-  std::sort(keys.begin(), keys.end(), comparator);
+  std::ranges::sort(keys, comparator);
 
-  for (const auto &key : keys) {
+  for (const auto &key: keys) {
     sorted_edges[key] = incoming_edges.at(key);
   }
 
@@ -363,7 +364,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::map<EventID, StateEvent> event_map;
   std::map<EventID, int> incoming_edges;
 
-  for (const auto &e : full_conflicted_set) {
+  for (const auto &e: full_conflicted_set) {
     auto event_id = e.at("event_id").get<std::string>();
     event_map[event_id] = e;
     incoming_edges[event_id] = 0;
@@ -372,15 +373,14 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   auto incoming_edges_sorted = sorted_incoming_edges(incoming_edges, event_map);
 
   while (!incoming_edges.empty()) {
-    for (const auto &[event_id, count] : incoming_edges_sorted) {
+    for (const auto &[event_id, count]: incoming_edges_sorted) {
       if (count == 0) {
-
         output_events.insert(output_events.begin(), event_map[event_id]);
         auto auth_events = event_map[event_id]
-                               .at("auth_events")
-                               .get<std::vector<json::object_t>>();
+            .at("auth_events")
+            .get<std::vector<json::object_t> >();
 
-        for (const auto &auth_event : auth_events) {
+        for (const auto &auth_event: auth_events) {
           auto auth_event_id = auth_event.at("event_id").get<std::string>();
           incoming_edges[auth_event_id] -= 1;
         }
@@ -410,9 +410,9 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  * - Finally, the function checks if the authorization events are also correct according to the server specification. This check is currently marked as a TODO.
  */
 [[nodiscard]] bool auth_against_partial_state_version_11(
-    const std::map<EventType, std::map<StateKey, StateEvent>>
-        &current_partial_state,
-    StateEvent &e) {
+  const std::map<EventType, std::map<StateKey, StateEvent> >
+  &current_partial_state,
+  StateEvent &e) {
   // If type is m.room.create
   if (e["type"].get<std::string>() == "m.room.create") {
     // If it has any prev_events, reject.
@@ -440,11 +440,11 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   // Considering the event's auth_events:
 
   // If there are duplicate entries for a given type and state_key pair, reject.
-  auto auth_events_ids = e["auth_events"].get<std::vector<std::string>>();
+  auto auth_events_ids = e["auth_events"].get<std::vector<std::string> >();
 
-  std::map<EventType, std::map<StateKey, StateEvent>> auth_events_map;
-  for (const auto &[event_type, inner_map] : current_partial_state) {
-    for (const auto &[state_key, state_event] : inner_map) {
+  std::map<EventType, std::map<StateKey, StateEvent> > auth_events_map;
+  for (const auto &[event_type, inner_map]: current_partial_state) {
+    for (const auto &[state_key, state_event]: inner_map) {
       auto state_event_pure = state_event;
       if (std::find(auth_events_ids.begin(), auth_events_ids.end(),
                     state_event_pure["event_id"].get<std::string>()) !=
@@ -468,14 +468,15 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 
   // Set of allowed EventType values
   std::set<std::string> allowedEventTypes = {
-      "m.room.create", "m.room.power_levels", "m.room.member"};
+    "m.room.create", "m.room.power_levels", "m.room.member"
+  };
 
   // Find invalid EventTypes using std::find_if
   auto invalidEventType = std::find_if(
-      auth_events_map.begin(), auth_events_map.end(),
-      [&allowedEventTypes](const auto &pair) {
-        return allowedEventTypes.find(pair.first) == allowedEventTypes.end();
-      });
+    auth_events_map.begin(), auth_events_map.end(),
+    [&allowedEventTypes](const auto &pair) {
+      return allowedEventTypes.find(pair.first) == allowedEventTypes.end();
+    });
 
   // Check if any invalid EventTypes were found
   if (invalidEventType != auth_events_map.end()) {
@@ -501,8 +502,8 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  * @return A boolean value indicating whether the event is authorized.
  */
 [[nodiscard]] bool auth_against_partial_state(
-    std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
-    StateEvent &e) {
+  std::map<EventType, std::map<StateKey, StateEvent> > &current_partial_state,
+  StateEvent &e) {
   if (e["type"].get<std::string>() == "m.room.create") {
     if (!e["content"].contains("room_version")) {
       return false;
@@ -538,7 +539,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
                       StateEvent &event) {
   power_level_mainline.push_back(event);
-  for (auto &auth_event : event["auth_events"]) {
+  for (auto &auth_event: event["auth_events"]) {
     StateEvent auth_event_obj = auth_event.get<StateEvent>();
     if (auth_event_obj["event_type"] == "m.room.powerlevel") {
       mainline_iterate(power_level_mainline, auth_event_obj);
@@ -581,7 +582,7 @@ get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
       closest_mainline_event = current_event;
       break;
     } else {
-      for (const auto &auth_event : current_event["auth_events"]) {
+      for (const auto &auth_event: current_event["auth_events"]) {
         StateEvent auth_event_obj = auth_event.get<StateEvent>();
         if (auth_event_obj["event_type"] == "m.room.powerlevel") {
           event_stack.push(auth_event_obj);
@@ -650,8 +651,8 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
  * @param forks A vector of vectors of StateEvent objects representing the forks of events.
  * @return A map of event types to maps of state keys to StateEvents representing the resolved state.
  */
-[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
-stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
+[[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent> >
+stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
   auto state_event_sets = splitEvents(forks);
   auto partial_state = createPartialState(state_event_sets.unconflictedEvents);
 
@@ -708,19 +709,19 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   // Partition the vector based on the boolean condition
   auto partition_point = std::partition(
-      full_conflicted_set.begin(), full_conflicted_set.end(), is_control_event);
+    full_conflicted_set.begin(), full_conflicted_set.end(), is_control_event);
   // Copy elements based on the partition point
   conflicted_control_events = std::vector<StateEvent>(
-      std::make_move_iterator(full_conflicted_set.begin()),
-      std::make_move_iterator(partition_point));
+    std::make_move_iterator(full_conflicted_set.begin()),
+    std::make_move_iterator(partition_point));
   conflicted_others = std::vector<StateEvent>(
-      std::make_move_iterator(partition_point),
-      std::make_move_iterator(full_conflicted_set.end()));
+    std::make_move_iterator(partition_point),
+    std::make_move_iterator(full_conflicted_set.end()));
 
   auto conflicted_control_events_sorted =
       kahns_algorithm(conflicted_control_events);
 
-  for (auto &e : conflicted_control_events_sorted) {
+  for (auto &e: conflicted_control_events_sorted) {
     if (auth_against_partial_state(partial_state, e)) {
       auto event_type = e["event_type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
@@ -734,7 +735,7 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   mainline_iterate(power_level_mainline, resolved_power_level_event);
 
   auto sorted_others = sorted_normal_state_events(conflicted_others);
-  for (auto &e : sorted_others) {
+  for (auto &e: sorted_others) {
     if (auth_against_partial_state(partial_state, e)) {
       auto event_type = e["event_type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
@@ -742,7 +743,7 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
     }
   }
 
-  for (auto &e : state_event_sets.unconflictedEvents) {
+  for (auto &e: state_event_sets.unconflictedEvents) {
     auto event_type = e["event_type"].get<EventType>();
     auto state_key = e["state_key"].get<StateKey>();
     partial_state[event_type][state_key] = e;

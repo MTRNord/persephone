@@ -234,7 +234,7 @@ get_srv_record(const std::string &address) {
     if (const HttpResponsePtr resp = co_await client->sendRequestCoro(req, 10); resp->statusCode() != 200) {
       failure = true;
     }
-  } catch (const std::exception &err) {
+  } catch ([[maybe_unused]] const std::exception &err) {
     failure = true;
   }
   co_return !failure;
@@ -338,7 +338,7 @@ discover_server(const std::string &server_name) {
     }
     co_return ResolvedServer{
       .address = address,
-      .port = integer_port,
+      .port = std::move(integer_port),
       .server_name = server_name,
     };
   }
@@ -373,7 +373,7 @@ discover_server(const std::string &server_name) {
     if (resp->statusCode() != 200) {
       failure = true;
     }
-  } catch (const std::exception &err) {
+  } catch ([[maybe_unused]] const std::exception &err) {
     failure = true;
   }
 
@@ -400,7 +400,7 @@ discover_server(const std::string &server_name) {
         }
         co_return ResolvedServer{
           .address = delegated_address,
-          .port = integer_port,
+          .port = std::move(integer_port),
           .server_name = delegated_server_name,
         };
       }

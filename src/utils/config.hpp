@@ -77,14 +77,29 @@ struct [[nodiscard]] Config {
    */
   [[nodiscard]] explicit Config() {
     LOG_INFO << "Loading config file";
-    YAML::Node config = YAML::LoadFile("config.yaml");
+    auto constexpr path = "./config.yaml";
+    if (!std::filesystem::exists(path)) {
+      throw std::runtime_error(
+        "Missing or invalid config.yaml file. Make sure to create it prior to running persephone");
+    }
+
+    const YAML::Node config = YAML::LoadFile(path);
+    LOG_DEBUG << "Config file loaded";
+    LOG_DEBUG << "Loading database configuration";
     this->load_db(config);
+    LOG_DEBUG << "Database configuration loaded";
+    LOG_DEBUG << "Loading Matrix configuration";
     this->load_matrix(config);
+    LOG_DEBUG << "Matrix configuration loaded";
+    LOG_DEBUG << "Loading webserver configuration";
     this->load_webserver(config);
+    LOG_DEBUG << "Webserver configuration loaded";
   }
 
 private:
   void load_db(const YAML::Node &config);
+
   void load_matrix(const YAML::Node &config);
+
   void load_webserver(const YAML::Node &config);
 };
