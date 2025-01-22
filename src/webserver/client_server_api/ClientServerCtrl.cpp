@@ -46,7 +46,6 @@ void ClientServerCtrl::versions(
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(j.dump());
-  resp->setExpiredTime(0);
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
   callback(resp);
 }
@@ -128,7 +127,6 @@ void ClientServerCtrl::user_available(
       }();
 
       resp->setBody(json_data);
-      resp->setExpiredTime(0);
       resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
       callback(resp);
     });
@@ -146,7 +144,6 @@ void ClientServerCtrl::login(
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(login_flow);
-  resp->setExpiredTime(0);
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
   callback(resp);
 }

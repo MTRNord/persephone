@@ -70,6 +70,15 @@ target_compile_options(persephone PRIVATE
         -Wpedantic
         -Wuninitialized
         -Werror
+        # sanitizer options
+        -fsanitize=address
+        -fsanitize=undefined
+        -fsanitize=leak
+)
+target_link_options(persephone PRIVATE
+        -fsanitize=address
+        -fsanitize=undefined
+        -fsanitize=leak
 )
 
 # Tests
