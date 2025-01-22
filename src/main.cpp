@@ -46,6 +46,8 @@ int main() {
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
                                        const drogon::HttpResponsePtr &resp) {
           resp->addHeader("Access-Control-Allow-Origin", "*");
+          resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+          resp->addHeader("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization");
         })
         .registerBeginningAdvice([]() {
           constexpr Database db{};
