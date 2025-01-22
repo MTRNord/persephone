@@ -404,7 +404,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
                        500);
         }
 
-        auto param_server_name = server_names.value();
+        const auto &param_server_name = server_names.value();
         // TODO: Try all possible servers
         auto param_server_address =
             co_await discover_server(param_server_name[0]);
@@ -447,8 +447,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       }
       if (make_join_resp->statusCode() == 403) {
         json resp_body = json::parse(make_join_resp->body());
-        auto json_error = resp_body.get<generic_json::generic_json_error>();
-        return_error(callback, json_error.errcode, json_error.error, 403);
+        auto [errcode, error] = resp_body.get<generic_json::generic_json_error>();
+        return_error(callback, errcode, error, 403);
       }
       if (make_join_resp->statusCode() == 400) {
         json resp_body = json::parse(make_join_resp->body());
@@ -484,18 +484,17 @@ void ClientServerCtrl::createRoom(
   drogon::async_run([req, callback = std::move(callback),
       this]() -> drogon::Task<> {
       // Get the access token from the Authorization header
-      auto req_auth_header = req->getHeader("Authorization");
+      const auto req_auth_header = req->getHeader("Authorization");
       if (req_auth_header.empty()) {
         return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
                      401);
         co_return;
       }
       // Remove the "Bearer " prefix
-      auto access_token = req_auth_header.substr(7);
+      const auto access_token = req_auth_header.substr(7);
       // Check if we have the access token in the database
-      auto user_info = co_await _db.get_user_info(access_token);
 
-      if (!user_info) {
+      if (const auto user_info = co_await _db.get_user_info(access_token); !user_info) {
         return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
         co_return;
       }
@@ -515,7 +514,7 @@ void ClientServerCtrl::createRoom(
       try {
         createRoom_body = body.get<client_server_json::CreateRoomBody>();
       } catch (...) {
-        std::exception_ptr ex_re = std::current_exception();
+        const std::exception_ptr ex_re = std::current_exception();
         try {
           std::rethrow_exception(ex_re);
         } catch (std::bad_exception const &ex) {
