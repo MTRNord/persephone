@@ -6,6 +6,7 @@
 #include "webserver/json.hpp"
 #include <fstream>
 #include <iostream>
+#include <utils/state_res.hpp>
 
 using namespace client_server_api;
 using json = nlohmann::json;
@@ -325,6 +326,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
         co_return;
       }
 
+      // TODO: We got this but do we use it somehow?
       client_server_json::JoinBody join_body;
       try {
         join_body = body.get<client_server_json::JoinBody>();
@@ -361,11 +363,11 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       std::string server_key((std::istreambuf_iterator<char>(t)),
                              std::istreambuf_iterator<char>());
       std::istringstream buffer(server_key);
-      std::vector<std::string> splitted_data{
+      std::vector<std::string> split_data{
         std::istream_iterator<std::string>(buffer),
         std::istream_iterator<std::string>()
       };
-      auto private_key = json_utils::unbase64_key(splitted_data[2]);
+      auto private_key = json_utils::unbase64_key(split_data[2]);
 
       if (roomIdOrAlias.starts_with("#")) {
         //  We first need to lookup the room alias
@@ -376,7 +378,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
             .path = std::format(
               "/_matrix/federation/v1/query/directory?room_alias={}",
               roomIdOrAlias),
-            .key_id = splitted_data[1],
+            .key_id = split_data[1],
             .secret_key = private_key,
             .origin = _config.matrix_config.server_name,
             .target = server_address.server_name,
@@ -436,7 +438,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
           .client = client,
           .method = drogon::Get,
           .path = path,
-          .key_id = splitted_data[1],
+          .key_id = split_data[1],
           .secret_key = private_key,
           .origin = _config.matrix_config.server_name,
           .target = server_address.server_name,
@@ -447,11 +449,13 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       if (make_join_resp->statusCode() == 404) {
         return_error(callback, "M_NOT_FOUND",
                      "The remote server doesn't know the room.", 404);
+        co_return;
       }
       if (make_join_resp->statusCode() == 403) {
         json resp_body = json::parse(make_join_resp->body());
         auto [errcode, error] = resp_body.get<generic_json::generic_json_error>();
         return_error(callback, errcode, error, 403);
+        co_return;
       }
       if (make_join_resp->statusCode() == 400) {
         json resp_body = json::parse(make_join_resp->body());
@@ -463,19 +467,76 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
                                  "Homeserver does not support that version yet.",
                                  incompatible_room_version_error.room_version),
                      400);
+        co_return;
       }
 
       if (make_join_resp->statusCode() != 200) {
         return_error(callback, "M_UNKNOWN",
                      "The remote server returned an error thats not known to us.",
                      500);
+        co_return;
       }
       json resp_body = json::parse(make_join_resp->body());
-      auto make_join_resp_json = resp_body.get<server_server_json::MakeJoinResp>();
+      auto [event, room_version] = resp_body.get<server_server_json::MakeJoinResp>();
 
-      //  TODO: Update origin, origin_server_ts and event_id
-      //  TODO: Sign
-      //  TODO: Sendjoin
+      // If we dont get a room_version we assume its either version 1 or 2 which means we do NOT support this and break
+      if (!room_version) {
+        return_error(callback, "M_UNKNOWN",
+                     "The remote server did not return a room version which means we don't support it.", 500);
+        co_return;
+      }
+
+      //  Update origin, origin_server_ts and event_id
+      event["origin"] = _config.matrix_config.server_name;
+      event["origin_server_ts"] = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+      event["event_id"] = event_id(event, room_version.value());
+      // Sign the make_join response as this is now the event
+      auto signed_event = json_utils::sign_json(
+        _config.matrix_config.server_name, split_data[1], private_key,
+        event);
+
+      // Send the signed event to the remote server on the v2/send_join endpoint
+      auto send_join_resp = co_await federation_request(
+        {
+          .client = client,
+          .method = drogon::Put,
+          .path = std::format("/_matrix/federation/v2/send_join/{}/{}?omit_members=false", room_id,
+                              event["event_id"].get<std::string>()),
+          .key_id = split_data[1],
+          .secret_key = private_key,
+          .origin = _config.matrix_config.server_name,
+          .target = server_address.server_name,
+          .content = signed_event,
+          .timeout = 30
+        });
+
+      if (send_join_resp->statusCode() == 400) {
+        // Event was invalid in some way
+        return_error(callback, "M_UNKNOWN",
+                     "The remote server considers the join event invalid.",
+                     500);
+        co_return;
+      }
+
+      if (send_join_resp->statusCode() == 403) {
+        json error_resp_body = json::parse(send_join_resp->body());
+        auto [errcode, error] = error_resp_body.get<generic_json::generic_json_error>();
+        return_error(callback, errcode, error, 403);
+        co_return;
+      }
+
+      if (send_join_resp->statusCode() != 200) {
+        return_error(callback, "M_UNKNOWN",
+                     "The remote server returned an error thats not known to us.",
+                     500);
+        co_return;
+      }
+
+      // TODO: Walk the auth_chain, get our signed membership event, use the resolved current room state prior to join
+      // TODO: In the future consider faster room joins here
+
 
       co_return;
     });

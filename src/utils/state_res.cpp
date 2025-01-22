@@ -185,14 +185,14 @@
  */
 [[nodiscard]] std::string event_id(const json &event,
                                    const std::string &room_version) {
-  auto hash = reference_hash(event, room_version);
+  const auto hash = reference_hash(event, room_version);
 
-  unsigned long long hash_len = hash.size();
+  const unsigned long long hash_len = hash.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
     hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
-  auto encoded_str_char =
+  const auto encoded_str_char =
       sodium_bin2base64(base64_str.data(), base64_max_len,
                         reinterpret_cast<const unsigned char *>(hash.c_str()),
                         hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
@@ -221,8 +221,8 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
 
   // Populate partial state with unconflicted events while preserving ordering
   for (const auto &event: unconflictedEvents) {
-    std::string event_type = event.at("type").get<EventType>();
-    std::string state_key = event.at("state_key").get<StateKey>();
+    auto event_type = event.at("type").get<EventType>();
+    auto state_key = event.at("state_key").get<StateKey>();
     partialState[event_type][state_key] =
         event; // Add the event to partial state
   }
@@ -252,8 +252,8 @@ splitEvents(const std::vector<std::vector<StateEvent> > &forks) {
   // Count occurrences of state tuples for each fork
   for (size_t i = 0; i < forks.size(); ++i) {
     for (const auto &event: forks[i]) {
-      std::string event_type = event.at("type").get<EventType>();
-      std::string state_key = event.at("state_key").get<StateKey>();
+      auto event_type = event.at("type").get<EventType>();
+      auto state_key = event.at("state_key").get<StateKey>();
       stateTuples[i][{event_type, state_key}]++;
     }
   }
@@ -261,8 +261,8 @@ splitEvents(const std::vector<std::vector<StateEvent> > &forks) {
   // Iterate through events in each fork
   for (size_t i = 0; i < forks.size(); ++i) {
     for (const auto &event: forks[i]) {
-      std::string event_type = event.at("type").get<EventType>();
-      std::string state_key = event.at("state_key").get<StateKey>();
+      auto event_type = event.at("type").get<EventType>();
+      auto state_key = event.at("state_key").get<StateKey>();
 
       bool isConflicted = false;
 
@@ -421,8 +421,8 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
     }
     // If the domain of the room_id does not match the domain of the sender,
     // reject.
-    auto room_id = e["room_id"].get<std::string>();
-    auto sender = e["sender"].get<std::string>();
+    const auto room_id = e["room_id"].get<std::string>();
+    const auto sender = e["sender"].get<std::string>();
     if (matchDomain(room_id, sender)) {
       return false;
     }
@@ -445,13 +445,12 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::map<EventType, std::map<StateKey, StateEvent> > auth_events_map;
   for (const auto &[event_type, inner_map]: current_partial_state) {
     for (const auto &[state_key, state_event]: inner_map) {
-      auto state_event_pure = state_event;
-      if (std::find(auth_events_ids.begin(), auth_events_ids.end(),
-                    state_event_pure["event_id"].get<std::string>()) !=
-          auth_events_ids.end()) {
+      if (auto state_event_pure = state_event; std::ranges::find(auth_events_ids,
+                                                                 state_event_pure["event_id"].get<std::string>()) !=
+                                               auth_events_ids.end()) {
         // Check if the (event_type, state_key) pair already exists
-        if (auth_events_map[event_type].find(state_key) ==
-            auth_events_map[event_type].end()) {
+        if (!auth_events_map[event_type].contains(state_key)
+        ) {
           // Add the matching state_event to auth_events_map
           auth_events_map[event_type][state_key] = state_event;
         } else {
@@ -472,11 +471,10 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   };
 
   // Find invalid EventTypes using std::find_if
-  auto invalidEventType = std::find_if(
-    auth_events_map.begin(), auth_events_map.end(),
-    [&allowedEventTypes](const auto &pair) {
-      return allowedEventTypes.find(pair.first) == allowedEventTypes.end();
-    });
+  const auto invalidEventType = std::ranges::find_if(auth_events_map,
+                                                     [&allowedEventTypes](const auto &pair) {
+                                                       return !allowedEventTypes.contains(pair.first);
+                                                     });
 
   // Check if any invalid EventTypes were found
   if (invalidEventType != auth_events_map.end()) {
@@ -540,8 +538,7 @@ void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
                       StateEvent &event) {
   power_level_mainline.push_back(event);
   for (auto &auth_event: event["auth_events"]) {
-    StateEvent auth_event_obj = auth_event.get<StateEvent>();
-    if (auth_event_obj["event_type"] == "m.room.powerlevel") {
+    if (auto auth_event_obj = auth_event.get<StateEvent>(); auth_event_obj["event_type"] == "m.room.powerlevel") {
       mainline_iterate(power_level_mainline, auth_event_obj);
     }
   }
@@ -565,7 +562,7 @@ void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
  */
 [[nodiscard]] StateEvent
 get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
-                           StateEvent &event) {
+                           const StateEvent &event) {
   StateEvent closest_mainline_event;
   std::stack<StateEvent> event_stack;
   event_stack.push(event);
@@ -574,17 +571,15 @@ get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
     StateEvent current_event = event_stack.top();
     event_stack.pop();
 
-    auto search_iter = std::find(power_level_mainline.begin(),
-                                 power_level_mainline.end(), current_event);
-    if (search_iter != power_level_mainline.end()) {
+    if (auto search_iter = std::ranges::find(power_level_mainline, current_event);
+      search_iter != power_level_mainline.end()) {
       current_event["position_on_mainline"] =
           std::distance(power_level_mainline.begin(), search_iter);
       closest_mainline_event = current_event;
       break;
     } else {
       for (const auto &auth_event: current_event["auth_events"]) {
-        StateEvent auth_event_obj = auth_event.get<StateEvent>();
-        if (auth_event_obj["event_type"] == "m.room.powerlevel") {
+        if (auto auth_event_obj = auth_event.get<StateEvent>(); auth_event_obj["event_type"] == "m.room.powerlevel") {
           event_stack.push(auth_event_obj);
         }
       }
@@ -627,7 +622,7 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
     return x["event_id"].get<std::string>() < y["event_id"].get<std::string>();
   };
 
-  std::sort(normal_events.begin(), normal_events.end(), compare_events);
+  std::ranges::sort(normal_events, compare_events);
 
   return normal_events;
 }
@@ -653,19 +648,19 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
  */
 [[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent> >
 stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
-  auto state_event_sets = splitEvents(forks);
-  auto partial_state = createPartialState(state_event_sets.unconflictedEvents);
+  auto [conflictedEvents, unconflictedEvents] = splitEvents(forks);
+  auto partial_state = createPartialState(unconflictedEvents);
 
   auto auth_difference =
-      findAuthDifference(state_event_sets.conflictedEvents, forks);
+      findAuthDifference(conflictedEvents, forks);
 
   std::vector<StateEvent> full_conflicted_set, conflicted_control_events,
       conflicted_others;
-  full_conflicted_set.reserve(state_event_sets.conflictedEvents.size() +
+  full_conflicted_set.reserve(conflictedEvents.size() +
                               auth_difference.size());
   full_conflicted_set.insert(full_conflicted_set.end(),
-                             state_event_sets.conflictedEvents.begin(),
-                             state_event_sets.conflictedEvents.end());
+                             conflictedEvents.begin(),
+                             conflictedEvents.end());
   full_conflicted_set.insert(full_conflicted_set.end(), auth_difference.begin(),
                              auth_difference.end());
 
@@ -734,8 +729,7 @@ stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
 
   mainline_iterate(power_level_mainline, resolved_power_level_event);
 
-  auto sorted_others = sorted_normal_state_events(conflicted_others);
-  for (auto &e: sorted_others) {
+  for (auto sorted_others = sorted_normal_state_events(conflicted_others); auto &e: sorted_others) {
     if (auth_against_partial_state(partial_state, e)) {
       auto event_type = e["event_type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
@@ -743,7 +737,7 @@ stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
     }
   }
 
-  for (auto &e: state_event_sets.unconflictedEvents) {
+  for (auto &e: unconflictedEvents) {
     auto event_type = e["event_type"].get<EventType>();
     auto state_key = e["state_key"].get<StateKey>();
     partial_state[event_type][state_key] = e;

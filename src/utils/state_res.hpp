@@ -46,12 +46,12 @@ struct [[nodiscard]] StateEventSets {
 [[nodiscard]] constexpr bool matchDomain(const std::string &str1,
                                          const std::string &str2) {
   // Find the position of ':' in the strings
-  size_t pos1 = str1.find(':');
-  size_t pos2 = str2.find(':');
+  const size_t pos1 = str1.find(':');
+  const size_t pos2 = str2.find(':');
 
   // Extract the domain parts after ':'
-  std::string domain1 = str1.substr(pos1 + 1);
-  std::string domain2 = str2.substr(pos2 + 1);
+  const std::string domain1 = str1.substr(pos1 + 1);
+  const std::string domain2 = str2.substr(pos2 + 1);
 
   // Compare the domain parts
   return domain1 == domain2;
