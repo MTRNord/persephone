@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   docker:
+    timeout-minutes: 360
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
