@@ -11,6 +11,10 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <nlohmann/json.hpp>
+#include <webserver/json.hpp>
+
+using json = nlohmann::json;
 
 void prepare_statements();
 
@@ -28,10 +32,12 @@ public:
     std::optional<std::string> device_name;
     std::string password;
   };
+
   struct [[nodiscard]] UserCreationResp {
     std::string access_token;
     std::string device_id;
   };
+
   struct [[nodiscard]] UserInfo {
     // Optional for appservices
     std::optional<std::string> device_id;
@@ -41,9 +47,20 @@ public:
 
   [[nodiscard]] drogon::Task<Database::UserCreationResp>
   create_user(UserCreationData const &data) const;
+
   [[nodiscard]] drogon::Task<bool> user_exists(std::string matrix_id) const;
-  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
+
+  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo> >
   get_user_info(std::string auth_token) const;
+
   [[nodiscard]] drogon::Task<bool>
   validate_access_token(std::string auth_token) const;
+
+  [[nodiscard]] drogon::Task<void> add_room(std::vector<json> events,
+                                            const std::string &room_id) const;
+
+  [[nodiscard]] drogon::Task<void> add_event(json event, const std::string &room_id) const;
+
+  [[nodiscard]] drogon::Task<void> add_state_events(std::vector<client_server_json::StateEvent> events,
+                                                    const std::string &room_id) const;
 };

@@ -126,22 +126,31 @@
  * @param event The JSON object representing the event.
  * @return The SHA-256 hash of the event as a string.
  */
-[[nodiscard]] std::string reference_hash_v11(const json &event) {
+[[nodiscard]] std::vector<unsigned char> reference_hash_v11(const json &event) {
+  if (event == nullptr) {
+    throw std::invalid_argument("Event cannot be null");
+  }
   //  We copy here to (if needed) have the original still intact
   json event_copy(event);
+  if (event_copy == nullptr) {
+    throw std::invalid_argument("event_copy cannot be null");
+  }
 
   event_copy.erase("signatures");
   event_copy.erase("unsigned");
+  if (event_copy == nullptr) {
+    throw std::invalid_argument("event_copy1 cannot be null");
+  }
 
-  std::string input = event_copy.dump();
+  const auto input = event_copy.dump();
 
-  std::vector<unsigned char> sha256_hash;
-  crypto_hash_sha256(sha256_hash.data(),
+  unsigned char sha256_hash[crypto_hash_sha256_BYTES];
+  crypto_hash_sha256(sha256_hash,
                      reinterpret_cast<const unsigned char *>(input.c_str()),
                      input.size());
 
-  std::string sha256_hash_string{sha256_hash.begin(), sha256_hash.end()};
-  return sha256_hash_string;
+  return std::vector<unsigned char>(sha256_hash,
+                                    sha256_hash + crypto_hash_sha256_BYTES);
 }
 
 /**
@@ -156,8 +165,8 @@
  * @return The reference hash of the event as a string.
  * @throw MatrixRoomVersionError If the room version is not "11".
  */
-[[nodiscard]] std::string reference_hash(const json &event,
-                                         const std::string &room_version) {
+[[nodiscard]] std::vector<unsigned char> reference_hash(const json &event,
+                                                        const std::string &room_version) {
   if (room_version == "11") {
     return reference_hash_v11(event);
   }
@@ -185,6 +194,9 @@
  */
 [[nodiscard]] std::string event_id(const json &event,
                                    const std::string &room_version) {
+  if (event == nullptr) {
+    throw std::invalid_argument("Event cannot be null");
+  }
   const auto hash = reference_hash(event, room_version);
 
   const unsigned long long hash_len = hash.size();
@@ -194,13 +206,13 @@
   std::string base64_str(base64_max_len - 1, 0);
   const auto encoded_str_char =
       sodium_bin2base64(base64_str.data(), base64_max_len,
-                        reinterpret_cast<const unsigned char *>(hash.c_str()),
+                        hash.data(),
                         hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
     throw std::runtime_error("Base64 Error: Failed to encode string");
   }
 
-  return base64_str;
+  return std::format("${}", base64_str);
 }
 
 /**

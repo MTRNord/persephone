@@ -38,6 +38,20 @@ namespace server_server_json {
 
   void to_json(json &obj, const MakeJoinResp &p);
 
+  struct [[nodiscard]] SendJoinResp {
+    // TODO: Have a type for the basic PDU structure
+    std::vector<json::object_t> auth_chain;
+    json event;
+    bool members_omitted;
+    std::string origin;
+    std::vector<std::string> servers_in_room;
+    std::vector<json> state;
+  };
+
+  NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SendJoinResp, auth_chain, event,
+                                     members_omitted, origin, servers_in_room,
+                                     state);
+
   struct incompatible_room_version_error
       : public generic_json::generic_json_error {
     std::string room_version;
@@ -134,6 +148,9 @@ namespace client_server_json {
   struct [[nodiscard]] StateEvent {
     json::object_t content;
 
+    // Optional as it might be not yet created
+    std::optional<std::string> event_id;
+
     // Optional but at parsing defaults to an empty string as per spec
     // This is different from "normal" staste events
     std::string state_key;
@@ -173,7 +190,7 @@ namespace client_server_json {
                                      id_server, medium)
 
   struct [[nodiscard]] CreateRoomBody {
-    std::optional<json::object_t> creation_ontent;
+    std::optional<json::object_t> creation_content;
     std::optional<std::vector<StateEvent> > initial_state;
     std::optional<std::vector<std::string> > invite;
     std::optional<std::vector<Invite3pid> > invite_3pid;

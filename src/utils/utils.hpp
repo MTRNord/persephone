@@ -331,3 +331,20 @@ drogon_to_string_method(const drogon::HttpMethod &method) {
   }
   return "INVALID";
 }
+
+[[nodiscard]] constexpr std::string
+generate_room_id(const std::string &server_name) {
+  // Generate a room id which including the server name and the `!` prefix does not exceed 255 bytes in length.
+  // The opaque_id between the `!` and the `:` must be random, and should only contain ASCII characters.
+  // It is case-sensitive.
+
+  // Generate a random opaque_id
+  auto opaque_id = random_string(16);
+
+  // Check if the combined length of the server name, `!`, opaque_id, and `:` exceeds 255 bytes and if it does truncate the opaque_id until it fits
+  while (std::format("!{}:{}", opaque_id, server_name).length() > 255) {
+    opaque_id.pop_back();
+  }
+
+  return std::format("!{}:{}", opaque_id, server_name);
+}

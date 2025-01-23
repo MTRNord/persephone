@@ -533,10 +533,25 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
                      500);
         co_return;
       }
+      json send_join_resp_body = json::parse(send_join_resp->body());
+      auto [auth_chain,membership_event,members_omitted,origin,servers_in_room,state] =
+          send_join_resp_body.get<server_server_json::SendJoinResp>();
+
+      // TODO: We probably should do state res here first but for now lets just dumb the state with the membership event appended into the db
+      std::vector<json> state_with_membership = state;
+      state_with_membership.push_back(membership_event);
+      co_await _db.add_room(state_with_membership, room_id);
+
 
       // TODO: Walk the auth_chain, get our signed membership event, use the resolved current room state prior to join
       // TODO: In the future consider faster room joins here
 
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setStatusCode(k200OK);
+      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      // TODO: Generate the response body
+      callback(resp);
 
       co_return;
     });
@@ -557,12 +572,13 @@ void ClientServerCtrl::createRoom(
       // Remove the "Bearer " prefix
       const auto access_token = req_auth_header.substr(7);
       // Check if we have the access token in the database
-
-      if (const auto user_info = co_await _db.get_user_info(access_token); !user_info) {
+      const auto user_info = co_await _db.get_user_info(access_token);
+      if (!user_info) {
         return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
         co_return;
       }
 
+      LOG_DEBUG << "User " << user_info->user_id << " is creating a room";
       // Get the request body as json
       json body;
       try {
@@ -591,7 +607,9 @@ void ClientServerCtrl::createRoom(
         co_return;
       }
 
-      if (createRoom_body.room_version) {
+      LOG_DEBUG << "Checking if room version is supported";
+
+      if (createRoom_body.room_version.has_value()) {
         if (createRoom_body.room_version == "11") {
           return_error(
             callback, "M_UNSUPPORTED_ROOM_VERSION",
@@ -602,8 +620,87 @@ void ClientServerCtrl::createRoom(
             400);
         }
       }
-    });
 
-  // TODO: create room in db
-  // TODO: return values to client
+      LOG_DEBUG << "Creating room";
+
+
+      // Generate room_id
+      auto room_id = generate_room_id(_config.matrix_config.server_name);
+
+
+      // Create the actual PDU from the supplied data
+      json pdu = {
+        {"type", "m.room.create"},
+        {
+          "content", createRoom_body.creation_content.value_or(json::object({
+            {"creator", user_info->user_id},
+            {"room_version", createRoom_body.room_version.value_or("11")},
+          }))
+        },
+        {
+          "origin_server_ts", std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count()
+        },
+        {"sender", user_info->user_id},
+        {"state_key", ""},
+        {"room_id", room_id},
+      };
+
+      // TODO: Properly apply the preset rules and all the powerlevel events and friends
+
+      // Calculate and add event_id
+      try {
+        pdu["event_id"] = event_id(pdu, createRoom_body.room_version.value_or("11"));
+      } catch (const std::exception &e) {
+        LOG_ERROR << "Failed to calculate event_id: " << e.what();
+        return_error(callback, "M_UNKNOWN", "Failed to calculate event_id", 500);
+        co_return;
+      }
+
+      LOG_DEBUG << "Created PDU: " << pdu.dump();
+
+      // Sign the pdu
+      std::ifstream t(_config.matrix_config.server_key_location);
+      std::string server_key((std::istreambuf_iterator<char>(t)),
+                             std::istreambuf_iterator<char>());
+      std::istringstream buffer(server_key);
+      std::vector<std::string> split_data{
+        std::istream_iterator<std::string>(buffer),
+        std::istream_iterator<std::string>()
+      };
+      auto private_key = json_utils::unbase64_key(split_data[2]);
+      auto signed_event = json_utils::sign_json(
+        _config.matrix_config.server_name, split_data[1], private_key,
+        pdu);
+      // create room in db
+      co_await _db.add_room({signed_event}, room_id);
+
+      // TODO: state res?!
+
+      // Add initial state to db
+      if (createRoom_body.initial_state.has_value()) {
+        // Generate event_ids for all state events
+        for (auto &state_event: createRoom_body.initial_state.value()) {
+          state_event.event_id = event_id(state_event, createRoom_body.room_version.value_or("11"));
+        }
+
+        co_await _db.add_state_events(createRoom_body.initial_state.value(),
+                                      room_id);
+      }
+
+      // TODO: Invites
+
+      // Return the room_id as a json response
+      json resp_body = {
+        {"room_id", room_id},
+      };
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(resp_body.dump());
+      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setStatusCode(k200OK);
+      callback(resp);
+      co_return;
+    }
+  );
 }

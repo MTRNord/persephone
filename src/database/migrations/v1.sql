@@ -4,7 +4,8 @@
    This is meant to be accompanied with various views for per-room data */
 CREATE TABLE IF NOT EXISTS events (
     event_id TEXT NOT NULL CONSTRAINT event_id_unique UNIQUE,
-    room_id TEXT NOT NULL, depth BIGINT NOT NULL,
+    room_id TEXT NOT NULL,
+    depth BIGINT NOT NULL,
     auth_events TEXT[] NOT NULL,
     rejected BOOLEAN NOT NULL DEFAULT FALSE,
     state_key TEXT,

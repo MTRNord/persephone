@@ -26,7 +26,7 @@ struct [[nodiscard]] StateEventSets {
 
 [[nodiscard]] json redact(const json &event, const std::string &room_version);
 
-[[nodiscard]] std::string reference_hash(const json &event,
+[[nodiscard]] std::vector<unsigned char> reference_hash(const json &event,
                                          const std::string &room_version);
 
 [[nodiscard]] std::string event_id(const json &event,
