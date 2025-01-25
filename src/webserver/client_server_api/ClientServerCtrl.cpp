@@ -540,7 +540,10 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       // TODO: We probably should do state res here first but for now lets just dumb the state with the membership event appended into the db
       std::vector<json> state_with_membership = state;
       state_with_membership.push_back(membership_event);
-      co_await _db.add_room(state_with_membership, room_id);
+
+      const auto sql = drogon::app().getDbClient();
+      const auto transaction = sql->newTransaction();
+      co_await _db.add_room(transaction, state_with_membership, room_id);
 
 
       // TODO: Walk the auth_chain, get our signed membership event, use the resolved current room state prior to join
@@ -673,7 +676,15 @@ void ClientServerCtrl::createRoom(
         _config.matrix_config.server_name, split_data[1], private_key,
         pdu);
       // create room in db
-      co_await _db.add_room({signed_event}, room_id);
+      const auto sql = drogon::app().getDbClient();
+      const auto transaction = sql->newTransaction();
+      try {
+        co_await _db.add_room(transaction, {signed_event}, room_id);
+      } catch (const std::exception &e) {
+        LOG_ERROR << "Failed to add room to db: " << e.what();
+        return_error(callback, "M_UNKNOWN", "Failed to add room to db", 500);
+        co_return;
+      }
 
       // TODO: state res?!
 
@@ -684,8 +695,14 @@ void ClientServerCtrl::createRoom(
           state_event.event_id = event_id(state_event, createRoom_body.room_version.value_or("11"));
         }
 
-        co_await _db.add_state_events(createRoom_body.initial_state.value(),
-                                      room_id);
+        try {
+          co_await _db.add_state_events(transaction, createRoom_body.initial_state.value(),
+                                        room_id);
+        } catch (const std::exception &e) {
+          LOG_ERROR << "Failed to add initial state to db: " << e.what();
+          return_error(callback, "M_UNKNOWN", "Failed to add initial state to db", 500);
+          co_return;
+        }
       }
 
       // TODO: Invites

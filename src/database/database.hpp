@@ -56,11 +56,14 @@ public:
   [[nodiscard]] drogon::Task<bool>
   validate_access_token(std::string auth_token) const;
 
-  [[nodiscard]] drogon::Task<void> add_room(std::vector<json> events,
+  [[nodiscard]] drogon::Task<void> add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                                            std::vector<json> events,
                                             const std::string &room_id) const;
 
-  [[nodiscard]] drogon::Task<void> add_event(json event, const std::string &room_id) const;
+  [[nodiscard]] drogon::Task<void> add_event(const std::shared_ptr<drogon::orm::Transaction> transaction, json event,
+                                             const std::string &room_id) const;
 
-  [[nodiscard]] drogon::Task<void> add_state_events(std::vector<client_server_json::StateEvent> events,
+  [[nodiscard]] drogon::Task<void> add_state_events(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                                                    std::vector<client_server_json::StateEvent> events,
                                                     const std::string &room_id) const;
 };

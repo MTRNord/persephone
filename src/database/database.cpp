@@ -128,11 +128,11 @@ Database::validate_access_token(std::string auth_token) const {
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_room(std::vector<json> events, const std::string &room_id) const {
-  const auto sql = drogon::app().getDbClient();
+Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction, std::vector<json> events,
+                   const std::string &room_id) const {
   try {
     for (const auto &event: events) {
-      co_await this->add_event(event, room_id);
+      co_await this->add_event(transaction, event, room_id);
     }
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
@@ -141,8 +141,8 @@ Database::add_room(std::vector<json> events, const std::string &room_id) const {
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_event(json event, const std::string &room_id) const {
-  const auto sql = drogon::app().getDbClient();
+Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction, json event,
+                    const std::string &room_id) const {
   std::string auth_events_str = "{}";
   if (event.contains("auth_events")) {
     // We need the auth_events as TEXT[] so we need to map the json array to a string array
@@ -164,7 +164,7 @@ Database::add_event(json event, const std::string &room_id) const {
   }
 
   try {
-    co_await sql->execSqlCoro(
+    co_await transaction->execSqlCoro(
       "INSERT INTO events(event_id, room_id, depth, auth_events, "
       "rejected, state_key, type, json) VALUES($1, $2, 0, $3::text[], $4, $5, $6, $7)",
       event.at("event_id").get<std::string>(), room_id,
@@ -177,9 +177,9 @@ Database::add_event(json event, const std::string &room_id) const {
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_state_events(std::vector<client_server_json::StateEvent> events, const std::string &room_id) const {
-  const auto sql = drogon::app().getDbClient();
-
+Database::add_state_events(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                           std::vector<client_server_json::StateEvent> events,
+                           const std::string &room_id) const {
   for (const auto &event: events) {
     const auto event_string = to_string(static_cast<json>(event));
 
@@ -188,7 +188,7 @@ Database::add_state_events(std::vector<client_server_json::StateEvent> events, c
     }
 
     try {
-      co_await sql->execSqlCoro(
+      co_await transaction->execSqlCoro(
         "INSERT INTO events(event_id, room_id, depth, auth_events, "
         "rejected, state_key, type, json) VALUES($1, $2, 0, $3::text[], $4, $5, $6, $7)",
         event.event_id.value(), room_id, "{}", false, event.state_key, event.type, event_string);

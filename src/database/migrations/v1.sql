@@ -66,6 +66,7 @@ RETURNS void
 LANGUAGE plpgsql AS $$
 DECLARE state_key_cleared text;
 BEGIN
+    -- TODO: Fix that this does not work for most things. We need to only do this on membership changes
     state_key_cleared := REPLACE(REPLACE(REPLACE(state_key, '.', '_'), ':', '_'), '@', '');
     EXECUTE 'REFRESH MATERIALIZED VIEW CONCURRENTLY ' ||  quote_ident('user_' || state_key_cleared);
 END;
