@@ -624,7 +624,8 @@ void ClientServerCtrl::createRoom(
         }
       }
 
-      LOG_DEBUG << "Creating room";
+      LOG_DEBUG << "Creating room with room version: "
+          << createRoom_body.room_version.value_or("11");
 
 
       // Generate room_id
