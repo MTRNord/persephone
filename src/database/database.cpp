@@ -267,3 +267,36 @@ Database::add_state_events(const std::shared_ptr<drogon::orm::Transaction> &tran
     }
   }
 }
+
+
+/**
+ * @brief Get a state event from the database
+ *
+ * @param room_id The room ID to get the state event from
+ * @param event_type The event type to get
+ * @param state_key The state key to get (this might be an empty string. This is NOT the same as NULL)
+ * @return The state event as a json object in it's client-server representation and not as a full PDU
+ */
+[[nodiscard]] drogon::Task<json> Database::get_state_event(const std::string &room_id, const std::string &event_type,
+                                                           const std::string &state_key) const {
+  const auto sql = drogon::app().getDbClient();
+  try {
+    // TODO: We do not respect state res ordering yet. We should do that in the future
+    // TODO: Use the materialized view for this
+    const auto f = co_await sql->execSqlCoro(
+      "SELECT json FROM events WHERE room_id = $1 AND type = $2 AND state_key = $3",
+      room_id, event_type, state_key);
+
+    if (f.size() == 0) {
+      throw std::runtime_error("State event not found");
+    }
+
+    auto json_data = json::parse(f.at(0)["json"].as<std::string>());
+    // Remove the signatures from the state event
+    json_data.erase("signatures");
+    co_return json_data;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to get state event due to database error");
+  }
+}

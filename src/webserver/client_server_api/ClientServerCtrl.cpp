@@ -788,6 +788,12 @@ void ClientServerCtrl::createRoom(
       if (createRoom_body.initial_state.has_value()) {
         // Generate event_ids for all state events
         for (auto &state_event: createRoom_body.initial_state.value()) {
+          // Add the origin_server_ts, sender and room_id to the state event
+          state_event.origin_server_ts = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+          state_event.sender = user_info->user_id;
+          state_event.room_id = room_id;
+
           state_event.event_id = event_id(state_event, createRoom_body.room_version.value_or("11"));
 
           // Sign the state event
@@ -823,4 +829,28 @@ void ClientServerCtrl::createRoom(
       co_return;
     }
   );
+}
+
+void ClientServerCtrl::state(const HttpRequestPtr &req,
+                             std::function<void(const HttpResponsePtr &)> &&callback,
+                             const std::string &roomId, const std::string &eventType,
+                             const std::string &stateKey) const {
+  drogon::async_run([req, callback = std::move(callback), this, roomId, eventType, stateKey]() -> drogon::Task<> {
+    // TODO: Look up the latest state in the db
+
+    try {
+      const json json_data = co_await _db.get_state_event(roomId, eventType, stateKey);
+
+      // Return the state event as json
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(json_data.dump());
+      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setStatusCode(k200OK);
+      callback(resp);
+      co_return;
+    } catch (const std::exception &e) {
+      return_error(callback, "M_UNKNOWN", "Failed to get state event", 404);
+      co_return;
+    }
+  });
 }

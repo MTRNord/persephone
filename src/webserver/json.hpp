@@ -151,6 +151,15 @@ namespace client_server_json {
     // Optional as it might be not yet created
     std::optional<std::string> event_id;
 
+    // Optional as it might not be yet created
+    std::optional<int> origin_server_ts;
+
+    // Optional as it might not be yet created
+    std::optional<std::string> room_id;
+
+    // Optional as it might not be yet created
+    std::optional<std::string> sender;
+
     // Optional but at parsing defaults to an empty string as per spec
     // This is different from "normal" staste events
     std::string state_key;
