@@ -88,7 +88,9 @@ jobs:
         run: |
           # Tests have finished and a test coverage report is available
           pushd cmake-build-debug
-          sudo apt install -y lcov
+          # Print the gcov version
+          gcov --version
+          lcov --version
           lcov --directory ./CMakeFiles --capture --output-file coverage.info
           # Remove dependencies from the coverage report
           lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
