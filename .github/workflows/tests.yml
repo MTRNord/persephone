@@ -92,7 +92,13 @@ jobs:
           popd
           
           # show .git directory for debugging
-          ls -la .git
+          echo "Own user id:"
+          id
+          echo "Repo:"
+          ls -lah
+          echo "Git:"
+          ls -lah .git
+          echo "Starting DeepSource report"
           
           # Install deepsource CLI
           curl https://deepsource.io/cli | sh
