@@ -206,9 +206,9 @@ void ClientServerCtrl::login(
         try {
           const auto supplied_user_id = login_body.identifier->user.value();
           // Convert the user id to a icu compatible char16_t/UChar string
-          icu_74::UnicodeString user_id_icu(supplied_user_id.c_str());
+          icu::UnicodeString user_id_icu(supplied_user_id.c_str());
           // Get the english locale
-          const auto locale = icu_74::Locale::getEnglish();
+          const auto locale = icu::Locale::getEnglish();
 
           // Ensure the user id is lowercase using icu library's u_strToLower
           const auto user_id_lower_uci = user_id_icu.toLower(locale);
