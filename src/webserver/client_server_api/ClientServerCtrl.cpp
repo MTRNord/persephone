@@ -224,7 +224,8 @@ void ClientServerCtrl::login(
 
           const auto login_resp = co_await _db.login(
             user_id, login_body.password.value(),
-            login_body.initial_device_display_name);
+            login_body.initial_device_display_name,
+            login_body.device_id);
 
           // If the login was successful, return the response as json
           const auto resp = HttpResponse::newHttpResponse();

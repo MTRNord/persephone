@@ -130,7 +130,9 @@ Database::validate_access_token(std::string auth_token) const {
 [[nodiscard]] drogon::Task<client_server_json::login_resp> Database::login(const std::string &matrix_id,
                                                                            const std::string &password,
                                                                            const std::optional<std::string> &
-                                                                           initial_device_name) const {
+                                                                           initial_device_name,
+                                                                           const std::optional<std::string> &device_id)
+const {
   const auto sql = drogon::app().getDbClient();
   const auto transaction = sql->newTransaction();
   try {
@@ -165,17 +167,17 @@ Database::validate_access_token(std::string auth_token) const {
                     base62_encode(crc32_helper(
                       std::format("{}_{}", matrix_id, random_component))));
 
-    const auto device_id = random_string(7);
+    const auto safe_device_id = device_id.value_or(random_string(7));
     // Insert the device into the database
     co_await transaction->execSqlCoro(
       "INSERT INTO devices(matrix_id, device_id, device_name, access_token) "
       "VALUES($1, $2, $3, $4)",
-      matrix_id, device_id, device_name, access_token);
+      matrix_id, safe_device_id, device_name, access_token);
 
     // Return the access token
     co_return {
       .access_token = access_token,
-      .device_id = device_id,
+      .device_id = safe_device_id,
       .expires_in_ms = std::nullopt,
       .home_server = std::nullopt,
       .refresh_token = std::nullopt,

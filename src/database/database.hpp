@@ -59,7 +59,8 @@ public:
   [[nodiscard]] drogon::Task<client_server_json::login_resp> login(const std::string &matrix_id,
                                                                    const std::string &password,
                                                                    const std::optional<std::string> &
-                                                                   initial_device_name)
+                                                                   initial_device_name,
+                                                                   const std::optional<std::string> &device_id)
   const;
 
   [[nodiscard]] drogon::Task<void> add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
