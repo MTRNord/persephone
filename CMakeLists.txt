@@ -29,6 +29,8 @@ find_package(yaml-cpp REQUIRED)
 #  ldns
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
+# icu for unicode support
+find_package(ICU COMPONENTS uc REQUIRED)
 
 # Include directories
 include_directories(
@@ -62,6 +64,7 @@ target_link_libraries(persephone PRIVATE
         PkgConfig::LDNS
         trantor
         jsoncpp
+        ICU::uc
 )
 # Set warning levels and other compiler options
 target_compile_options(persephone PRIVATE

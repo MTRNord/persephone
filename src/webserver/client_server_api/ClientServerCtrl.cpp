@@ -7,6 +7,8 @@
 #include <fstream>
 #include <iostream>
 #include <utils/state_res.hpp>
+#include <unicode/locid.h>
+#include <unicode/unistr.h>
 
 using namespace client_server_api;
 using json = nlohmann::json;
@@ -202,11 +204,23 @@ void ClientServerCtrl::login(
 
         // Use the database login function to check if the user exists and create an access token
         try {
-          const auto full_user_id = login_body.identifier->user.value();
+          const auto supplied_user_id = login_body.identifier->user.value();
+          // Convert the user id to a icu compatible char16_t/UChar string
+          icu_74::UnicodeString user_id_icu(supplied_user_id.c_str());
+          // Get the english locale
+          const auto locale = icu_74::Locale::getEnglish();
+
+          // Ensure the user id is lowercase using icu library's u_strToLower
+          const auto user_id_lower_uci = user_id_icu.toLower(locale);
+
+          // Convert the user id to a std::string again
+          std::string user_id_lower;
+          user_id_lower_uci.toUTF8String(user_id_lower);
           // If the user id does not start with @, we assume it is a localpart and append the server name
-          const auto user_id = full_user_id[0] == '@'
-                                 ? full_user_id
-                                 : std::format("@{}:{}", full_user_id, _config.matrix_config.server_name);
+          const std::string user_id = user_id_lower[0] == '@'
+                                        ? user_id_lower
+                                        : std::format("@{}:{}", user_id_lower,
+                                                      _config.matrix_config.server_name);
 
           const auto login_resp = co_await _db.login(
             user_id, login_body.password.value(),
