@@ -789,6 +789,13 @@ void ClientServerCtrl::createRoom(
         // Generate event_ids for all state events
         for (auto &state_event: createRoom_body.initial_state.value()) {
           state_event.event_id = event_id(state_event, createRoom_body.room_version.value_or("11"));
+
+          // Sign the state event
+          auto signed_state_event = json_utils::sign_json(
+            _config.matrix_config.server_name, split_data[1], private_key,
+            state_event);
+
+          state_event = signed_state_event;
         }
 
         try {
