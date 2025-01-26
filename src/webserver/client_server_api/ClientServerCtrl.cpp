@@ -691,14 +691,9 @@ void ClientServerCtrl::createRoom(
       client_server_json::CreateRoomBody createRoom_body;
       try {
         createRoom_body = body.get<client_server_json::CreateRoomBody>();
-      } catch (...) {
-        const std::exception_ptr ex_re = std::current_exception();
-        try {
-          std::rethrow_exception(ex_re);
-        } catch (std::bad_exception const &ex) {
-          LOG_WARN << "Failed to parse json as CreateRoomBody in createRoom: "
-              << ex.what() << '\n';
-        }
+      } catch (const json::type_error &ex) {
+        LOG_WARN << "Failed to parse json as CreateRoomBody in createRoom: "
+            << ex.what() << '\n';
         return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?", 400);
