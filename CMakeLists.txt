@@ -102,6 +102,7 @@ if (NOT DISABLE_TESTS)
             PkgConfig::LDNS
             trantor
             jsoncpp
+            ICU::uc
             snitch::snitch
     )
 
@@ -115,6 +116,7 @@ if (NOT DISABLE_TESTS)
             PkgConfig::LDNS
             trantor
             jsoncpp
+            ICU::uc
             snitch::snitch
     )
 
@@ -147,6 +149,7 @@ if (BUILD_FUZZ_TARGETS)
             PkgConfig::LDNS
             trantor
             jsoncpp
+            ICU::uc
     )
     add_custom_target(fuzz_targets
             COMMAND fuzz_json_sign
