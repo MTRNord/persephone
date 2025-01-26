@@ -29,7 +29,7 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
-    container: ubuntu:24.10
+    container: fedora:41
     steps:
       - name: Checkout repository
         if: toJSON(github.event.pull_request) != '{}'
@@ -49,16 +49,11 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          apt update
-          apt-get install -y lsb-release wget software-properties-common gpg
-          ./.github/llvm.sh 19 all
-          which clang-19
-          which clang++-19
-          apt update
-          apt install -y pkg-config git ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev libstdc++-11-dev
-          apt upgrade -y
-          # jsoncpp is a bit weird on ubuntu vs fedora
-          ln -s /usr/include/jsoncpp/json/ /usr/include/json
+          dnf install -y libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
+          
+          # Due to https://bugzilla.redhat.com/show_bug.cgi?id=2338878 in /usr/lib/pkgconfig/ldns.pc we need to replace `includedir=/usr/include/ldns/ldns` with `includedir=/usr/include/ldns`.
+          sed -i 's%includedir=/usr/include/ldns/ldns%includedir=/usr/include/ldns%g' /usr/lib64/pkgconfig/ldns.pc
+          
           cd /tmp
           [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
           cd drogon
@@ -66,11 +61,11 @@ jobs:
           git submodule update --init
           [ ! -d /tmp/drogon/build ] && mkdir build
           cd build
-          /usr/bin/clang++-19 --version
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
-          make && make install
-          ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-          ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+          make
+          make install
+          #ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
+          #ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
           cd /__w/persephone/persephone
       - name: Save Drogon
         id: cache-drogon-save
@@ -81,12 +76,11 @@ jobs:
           key: ${{ steps.cache-drogon-restore.outputs.cache-primary-key }}
       - name: Test
         run: |
-          /usr/bin/clang++-19 --version
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -fprofile-arcs -ftest-coverage"
+          cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
           cp ./.lcovrc ~/.lcovrc
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake --build cmake-build-debug --config Debug
+          cmake --build cmake-build-debug --config Debug
           cd cmake-build-debug
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 ctest -T Test -T Coverage
+          ctest -T Test -T Coverage
       - name: Report results to DeepSource
         run: |
           # Tests have finished and a test coverage report is available
