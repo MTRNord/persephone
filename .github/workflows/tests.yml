@@ -50,7 +50,7 @@ jobs:
         shell: bash
         run: |
           apt update
-          apt-get install -y lsb_release wget add-apt-repository gpg
+          apt-get install -y lsb-release wget software-properties-common gpg
           ./.github/llvm.sh 19 all
           which clang-19
           which clang++-19
