@@ -37,7 +37,8 @@ namespace client_server_api {
                           Post, Options, "client_server_api::AccessTokenFilter");
 
             // Room state
-            ADD_METHOD_TO(ClientServerCtrl::state, "_matrix/client/v3/rooms/{1:roomId}/state{2:eventType}/{3:stateKey}",
+            ADD_METHOD_TO(ClientServerCtrl::state,
+                          "_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
                           Get, Options, "client_server_api::AccessTokenFilter");
         METHOD_LIST_END
 
