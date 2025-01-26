@@ -72,7 +72,6 @@ jobs:
           pushd cmake-build-debug
           ctest -T Test -T Coverage --rerun-failed --output-on-failure
           popd
-          popd
       - name: Report results to DeepSource
         shell: bash
         run: |
