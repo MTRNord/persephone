@@ -711,6 +711,7 @@ void ClientServerCtrl::createRoom(
               "Homeserver does not support that version yet.",
               createRoom_body.room_version.value()),
             400);
+          co_return;
         }
       }
 
