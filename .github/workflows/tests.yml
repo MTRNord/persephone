@@ -49,14 +49,14 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          sudo ./.github/llvm.sh 19 all
+          ./.github/llvm.sh 19 all
           which clang-19
           which clang++-19
-          sudo apt update
-          sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev libstdc++-11-dev
-          sudo apt upgrade -y
+          apt update
+          apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev lcov cmake libyaml-cpp-dev libldns-dev libstdc++-11-dev
+          apt upgrade -y
           # jsoncpp is a bit weird on ubuntu vs fedora
-          sudo ln -s /usr/include/jsoncpp/json/ /usr/include/json
+          ln -s /usr/include/jsoncpp/json/ /usr/include/json
           pushd /tmp
           [ ! -d /tmp/drogon ] && git clone https://github.com/drogonframework/drogon
           pushd drogon
@@ -65,9 +65,9 @@ jobs:
           [ ! -d /tmp/drogon/build ] && mkdir build
           pushd build
           cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
-          make && sudo make install
-          sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-          sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+          make && make install
+          ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
+          ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
           popd
           popd
       - name: Save Drogon
