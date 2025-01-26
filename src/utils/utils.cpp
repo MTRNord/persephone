@@ -80,7 +80,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
  * @throws std::runtime_error if the password hashing fails.
  */
 [[nodiscard]] std::string hash_password(const std::string &password) {
-  std::array<char, crypto_pwhash_STRBYTES> hashed_password_array;
+  std::string hashed_password_array(crypto_pwhash_STRBYTES, '\0');
   if (crypto_pwhash_str(hashed_password_array.data(), password.c_str(),
                         password.length(), crypto_pwhash_OPSLIMIT_SENSITIVE,
                         crypto_pwhash_MEMLIMIT_SENSITIVE) != 0) {
@@ -104,11 +104,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
 [[nodiscard]] bool verify_hashed_password(const std::string &hash,
                                           const std::string &password) {
   // Convert the hash to an array
-  std::array<char, crypto_pwhash_STRBYTES> hashed_password_array;
-  std::ranges::copy(hash, hashed_password_array.begin());
-
-  return crypto_pwhash_str_verify(hashed_password_array.data(), password.c_str(),
-                                  password.length()) == 0;
+  return crypto_pwhash_str_verify(hash.c_str(), password.c_str(), password.length()) == 0;
 }
 
 /**

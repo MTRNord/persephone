@@ -143,7 +143,7 @@ Database::validate_access_token(std::string auth_token) const {
     }
 
     // Check if the password matches
-    if (const auto password_hash = f.at(0)["password_hash"].as<std::string>(); verify_hashed_password(
+    if (const auto password_hash = f.at(0)["password_hash"].as<std::string>(); !verify_hashed_password(
       password_hash, password)) {
       throw std::runtime_error("Password does not match");
     }
