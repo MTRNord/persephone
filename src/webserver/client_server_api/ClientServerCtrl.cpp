@@ -830,12 +830,12 @@ void ClientServerCtrl::createRoom(
 void ClientServerCtrl::state(const HttpRequestPtr &req,
                              std::function<void(const HttpResponsePtr &)> &&callback,
                              const std::string &roomId, const std::string &eventType,
-                             const std::string &stateKey) const {
+                             const std::optional<std::string> &stateKey) const {
   drogon::async_run([req, callback = std::move(callback), this, roomId, eventType, stateKey]() -> drogon::Task<> {
     // TODO: Look up the latest state in the db
 
     try {
-      const json json_data = co_await _db.get_state_event(roomId, eventType, stateKey);
+      const json json_data = co_await _db.get_state_event(roomId, eventType, stateKey.value_or(""));
 
       // Return the state event as json
       const auto resp = HttpResponse::newHttpResponse();

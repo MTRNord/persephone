@@ -37,7 +37,7 @@ namespace client_server_api {
                           Post, Options, "client_server_api::AccessTokenFilter");
 
             // Room state
-            ADD_METHOD_TO(ClientServerCtrl::state, "_matrix/client/v3/{1:roomId}/state{2:eventType}/{3:stateKey}",
+            ADD_METHOD_TO(ClientServerCtrl::state, "_matrix/client/v3/rooms/{1:roomId}/state{2:eventType}/{3:stateKey}",
                           Get, Options, "client_server_api::AccessTokenFilter");
         METHOD_LIST_END
 
@@ -75,7 +75,7 @@ namespace client_server_api {
         void state(const HttpRequestPtr &req,
                    std::function<void(const HttpResponsePtr &)> &&callback,
                    const std::string &roomId, const std::string &eventType,
-                   const std::string &stateKey) const;
+                   const std::optional<std::string> &state_key) const;
 
     private:
         Config _config;
