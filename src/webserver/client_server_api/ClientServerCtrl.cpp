@@ -701,7 +701,7 @@ void ClientServerCtrl::createRoom(
         }
         return_error(
           callback, "M_BAD_JSON",
-          "Unable to parse json. Ensure all required fields are present?", 500);
+          "Unable to parse json. Ensure all required fields are present?", 400);
         co_return;
       }
 
