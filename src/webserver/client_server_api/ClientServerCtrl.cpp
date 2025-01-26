@@ -708,7 +708,7 @@ void ClientServerCtrl::createRoom(
       LOG_DEBUG << "Checking if room version is supported";
 
       if (createRoom_body.room_version.has_value()) {
-        if (createRoom_body.room_version.value() == "11") {
+        if (createRoom_body.room_version.value() != "11") {
           return_error(
             callback, "M_UNSUPPORTED_ROOM_VERSION",
             std::format(
