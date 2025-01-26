@@ -49,6 +49,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
+          apt update
           apt-get install -y lsb_release wget add-apt-repository gpg
           ./.github/llvm.sh 19 all
           which clang-19
