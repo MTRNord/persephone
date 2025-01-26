@@ -30,8 +30,10 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
         co_return;
       }
       constexpr Database db{};
-      // Remove the "Bearer " prefix
+      // TMP loging for complement debugging
+      LOG_DEBUG << "Access token: " << auth_header;
 
+      // Remove the "Bearer " prefix and check if the token is valid;
       if (const auto access_token = auth_header.substr(7); co_await db.validate_access_token(access_token)) {
         ccb();
         co_return;
@@ -77,7 +79,7 @@ void ClientServerCtrl::whoami(
       const auto resp = HttpResponse::newHttpResponse();
 
       // Check if we have the access token in the database
-      const auto user_info = co_await _db.get_user_info(access_token);
+      const auto user_info = co_await _db.get_user_info(std::move(access_token));
 
       if (!user_info) {
         return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);

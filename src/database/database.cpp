@@ -103,7 +103,7 @@ Database::get_user_info(std::string auth_token) const {
       device_id = std::nullopt;
     }
     const auto matrix_id = first_row["matrix_id"].as<std::string>();
-    UserInfo user_info{device_id, is_guest, matrix_id};
+    UserInfo user_info{.device_id = device_id, .is_guest = is_guest, .user_id = matrix_id};
 
     co_return user_info;
   } catch (const drogon::orm::DrogonDbException &e) {
@@ -119,6 +119,9 @@ Database::validate_access_token(std::string auth_token) const {
     const auto f = co_await sql->execSqlCoro("select exists(select 1 from devices "
                                              "where access_token = $1) as exists",
                                              auth_token);
+    // TMP loging for complement debugging
+    LOG_DEBUG << "Access token: " << auth_token;
+    LOG_DEBUG << "Exists: " << f.at(0)["exists"].as<bool>();
 
     co_return f.at(0)["exists"].as<bool>();
   } catch (const drogon::orm::DrogonDbException &e) {
@@ -194,7 +197,7 @@ const {
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction, std::vector<json> events,
+Database::add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction, std::vector<json> events,
                    const std::string &room_id) const {
   try {
     for (const auto &event: events) {
@@ -207,7 +210,7 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction, 
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction, json event,
+Database::add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction, json event,
                     const std::string &room_id) const {
   std::string auth_events_str = "{}";
   if (event.contains("auth_events")) {
@@ -243,7 +246,7 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_state_events(const std::shared_ptr<drogon::orm::Transaction> transaction,
+Database::add_state_events(const std::shared_ptr<drogon::orm::Transaction> &transaction,
                            std::vector<client_server_json::StateEvent> events,
                            const std::string &room_id) const {
   for (const auto &event: events) {

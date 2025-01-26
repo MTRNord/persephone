@@ -120,7 +120,7 @@ migrate_localpart(const std::string &localpart) {
  * @return The base62-encoded string.
  */
 [[nodiscard]] constexpr std::string base62_encode(unsigned long input) {
-  std::string alphabet =
+  const std::string alphabet =
       "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   std::string output;
 
@@ -144,7 +144,7 @@ migrate_localpart(const std::string &localpart) {
  */
 [[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
   std::erase_if(server_name,
-                [](char c) {
+                [](const char c) {
                   switch (c) {
                     case '[':
                     case ']':
@@ -171,6 +171,7 @@ migrate_localpart(const std::string &localpart) {
  * colon and the domain.
  *
  * @param localpart The localpart to check
+ * @param server_name The server name to check against
  * @return true if the localpart is valid, false otherwise
  */
 [[nodiscard]] constexpr bool
@@ -202,8 +203,7 @@ is_valid_localpart(const std::string &localpart,
  * @throws std::runtime_error If no colon is found in the input string.
  */
 [[nodiscard]] constexpr std::string get_serverpart(const std::string &input) {
-  size_t pos = input.find(':');
-  if (pos != std::string::npos) {
+  if (const size_t pos = input.find(':'); pos != std::string::npos) {
     // Case: Colon found in input string
     return input.substr(pos + 1);
   }
@@ -282,8 +282,8 @@ struct debug {
    * @param args The arguments to be formatted into the string.
    * @param loc The source location where the debug struct is instantiated. Defaults to the current location.
    */
-  debug(std::string_view format_string, Args &&... args,
-        const std::source_location &loc = std::source_location::current()) {
+  explicit debug(const std::string_view format_string, Args &&... args,
+                 const std::source_location &loc = std::source_location::current()) {
     auto str = std::format(
       "{}({}): {}\n", loc.file_name(), loc.line(),
       std::vformat(format_string, std::make_format_args(args...)));
