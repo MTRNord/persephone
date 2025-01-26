@@ -23,7 +23,7 @@ namespace client_server_api {
                           Get, Options, "client_server_api::AccessTokenFilter");
             ADD_METHOD_TO(ClientServerCtrl::user_available,
                           "/_matrix/client/v3/register/available?username={1}", Get, Options);
-            ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get, Options);
+            ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get, Post, Options);
             ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
                           Post, Options);
 

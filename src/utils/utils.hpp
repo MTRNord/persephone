@@ -55,6 +55,9 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
 
 [[nodiscard]] std::string hash_password(const std::string &password);
 
+[[nodiscard]] bool verify_hashed_password(const std::string &hash,
+                                          const std::string &password);
+
 // Get the localpart of a user's matrix id.
 [[nodiscard]] constexpr std::string localpart(const std::string &matrix_id) {
   return matrix_id.substr(1, matrix_id.find(':') - 1);

@@ -58,7 +58,7 @@ Database::create_user(Database::UserCreationData const &data) const {
     throw std::runtime_error("Failed to create user due to database error");
   }
 
-  Database::UserCreationResp resp_data{access_token, device_id};
+  Database::UserCreationResp resp_data{.access_token = access_token, .device_id = device_id};
   co_return resp_data;
 }
 
@@ -124,6 +124,70 @@ Database::validate_access_token(std::string auth_token) const {
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     co_return false;
+  }
+}
+
+[[nodiscard]] drogon::Task<client_server_json::login_resp> Database::login(const std::string &matrix_id,
+                                                                           const std::string &password,
+                                                                           const std::optional<std::string> &
+                                                                           initial_device_name) const {
+  const auto sql = drogon::app().getDbClient();
+  const auto transaction = sql->newTransaction();
+  try {
+    // Check if user exists, check if password matches the hash we got and return the access token if it does
+    const auto f = co_await transaction->execSqlCoro(
+      "select password_hash from users where matrix_id = $1", matrix_id);
+
+    if (f.size() == 0) {
+      throw std::runtime_error("User does not exist");
+    }
+
+    // Check if the password matches
+    if (const auto password_hash = f.at(0)["password_hash"].as<std::string>(); verify_hashed_password(
+      password_hash, password)) {
+      throw std::runtime_error("Password does not match");
+    }
+
+    // Create a new access token with initial_device_name if it is set
+    auto device_name = initial_device_name.value_or(random_string(7));
+
+    // This token should have this pattern:
+    // `persephone_<unpadded base64 local part of the matrix
+    // id>_<random string (20 chars)>_<base62 crc32 check>`
+    auto localpart_str = localpart(matrix_id);
+    const std::vector<unsigned char> localpart_vec(localpart_str.begin(),
+                                                   localpart_str.end());
+
+    auto random_component = random_string(20);
+    auto access_token =
+        std::format("persephone_{}_{}_{}", json_utils::base64_key(localpart_vec),
+                    random_component,
+                    base62_encode(crc32_helper(
+                      std::format("{}_{}", matrix_id, random_component))));
+
+    const auto device_id = random_string(7);
+    // Insert the device into the database
+    co_await transaction->execSqlCoro(
+      "INSERT INTO devices(matrix_id, device_id, device_name, access_token) "
+      "VALUES($1, $2, $3, $4)",
+      matrix_id, device_id, device_name, access_token);
+
+    // Return the access token
+    co_return {
+      .access_token = access_token,
+      .device_id = device_id,
+      .expires_in_ms = std::nullopt,
+      .home_server = std::nullopt,
+      .refresh_token = std::nullopt,
+      .user_id = matrix_id,
+      .well_known = std::nullopt
+    };
+  } catch
+  (const drogon::orm::DrogonDbException &
+    e
+  ) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to login due to database error");
   }
 }
 

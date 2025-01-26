@@ -56,6 +56,12 @@ public:
   [[nodiscard]] drogon::Task<bool>
   validate_access_token(std::string auth_token) const;
 
+  [[nodiscard]] drogon::Task<client_server_json::login_resp> login(const std::string &matrix_id,
+                                                                   const std::string &password,
+                                                                   const std::optional<std::string> &
+                                                                   initial_device_name)
+  const;
+
   [[nodiscard]] drogon::Task<void> add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
                                             std::vector<json> events,
                                             const std::string &room_id) const;

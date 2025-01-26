@@ -140,19 +140,97 @@ void ClientServerCtrl::user_available(
 }
 
 void ClientServerCtrl::login(
-  const HttpRequestPtr &,
+  const HttpRequestPtr &req,
   std::function<void(const HttpResponsePtr &)> &&callback) const {
-  const auto login_flow = []() {
-    const client_server_json::LoginFlow password_flow = {.type = "m.login.password"};
-    client_server_json::GetLogin login{.flows = {password_flow}};
-    const json j = login;
-    return j.dump();
-  }();
+  drogon::async_run([req, callback = std::move(callback),
+      this]() -> drogon::Task<> {
+      if (req->method() == drogon::Get) {
+        const auto login_flow = []() {
+          const client_server_json::LoginFlow password_flow = {.type = "m.login.password"};
+          client_server_json::GetLogin login{.flows = {password_flow}};
+          const json j = login;
+          return j.dump();
+        }();
 
-  const auto resp = HttpResponse::newHttpResponse();
-  resp->setBody(login_flow);
-  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-  callback(resp);
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody(login_flow);
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        callback(resp);
+      } else if (req->method() == drogon::Post) {
+        // Print body for debugging
+        LOG_DEBUG << "Body: " << req->body();
+        LOG_DEBUG << "Content type: " << req->getHeader("Content-Type");
+        // Parse body as login_body json
+        json body;
+        try {
+          body = json::parse(req->body());
+        } catch (json::parse_error &ex) {
+          LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
+          return_error(callback, "M_NOT_JSON",
+                       "Unable to parse json. Is this valid json?", 500);
+          co_return;
+        }
+
+        client_server_json::login_body login_body;
+        try {
+          login_body = body.get<client_server_json::login_body>();
+        } catch (...) {
+          const auto ex_re = std::current_exception();
+          try {
+            std::rethrow_exception(ex_re);
+          } catch (std::bad_exception const &ex) {
+            LOG_WARN << "Failed to parse json as login_body in login: " << ex.what()
+                << '\n';
+          }
+          return_error(callback, "M_BAD_JSON",
+                       "Unable to parse json. Ensure all required fields are present?",
+                       500);
+          co_return;
+        }
+
+        // We for now only support type "m.login.password"
+        if (login_body.type != "m.login.password") {
+          return_error(callback, "M_UNKNOWN", "Unknown login type", 400);
+          co_return;
+        }
+
+        // If identifier is not set, we return 400
+        if (!login_body.identifier.has_value()) {
+          return_error(callback, "M_UNKNOWN", "Missing identifier", 400);
+          co_return;
+        }
+
+        // Use the database login function to check if the user exists and create an access token
+        try {
+          const auto full_user_id = login_body.identifier->user.value();
+          // If the user id does not start with @, we assume it is a localpart and append the server name
+          const auto user_id = full_user_id[0] == '@'
+                                 ? full_user_id
+                                 : std::format("@{}:{}", full_user_id, _config.matrix_config.server_name);
+
+          const auto login_resp = co_await _db.login(
+            user_id, login_body.password.value(),
+            login_body.initial_device_display_name);
+
+          // If the login was successful, return the response as json
+          const auto resp = HttpResponse::newHttpResponse();
+          resp->setBody(json(login_resp).dump());
+          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+          resp->setStatusCode(k200OK);
+          callback(resp);
+        } catch (const std::exception &e) {
+          // Return 403 M_FORBIDDEN if the login failed
+          return_error(callback, "M_FORBIDDEN", e.what(), 403);
+          co_return;
+        }
+      } else {
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody("{}");
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+      }
+    });
 }
 
 void ClientServerCtrl::register_user(
@@ -266,9 +344,9 @@ void ClientServerCtrl::register_user(
 
       // Try to register the user
       Database::UserCreationData data{
-        user_id, device_id,
-        initial_device_display_name,
-        reg_body.password.value()
+        .matrix_id = user_id, .device_id = device_id,
+        .device_name = initial_device_display_name,
+        .password = reg_body.password.value()
       };
       auto device_data = co_await _db.create_user(data);
 

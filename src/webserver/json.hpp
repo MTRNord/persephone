@@ -231,6 +231,74 @@ namespace client_server_json {
 
   void to_json(json &obj, const registration_body &p);
 
+  struct [[nodiscard]] login_identifier {
+    std::string type;
+    // Union depending on the type for different keys
+    // Either m.id.user with a value of "user" or m.id.thirdparty with a value of "medium" and "address"
+    // or m.id.phone with a value of "country" and "phone"
+    std::optional<std::string> user;
+    std::optional<std::string> medium;
+    std::optional<std::string> address;
+    std::optional<std::string> country;
+    std::optional<std::string> phone;
+  };
+
+  void from_json(const json &obj, login_identifier &p);
+
+  void to_json(json &obj, const login_identifier &p);
+
+  struct [[nodiscard]] login_body {
+    std::optional<std::string> address;
+    std::optional<std::string> device_id;
+    std::optional<login_identifier> identifier;
+    std::optional<std::string> initial_device_display_name;
+    std::optional<std::string> medium;
+    std::optional<std::string> password;
+    std::optional<bool> refresh_token;
+    std::optional<std::string> token;
+    std::string type;
+    std::optional<std::string> user;
+  };
+
+  void from_json(const json &obj, login_body &p);
+
+  void to_json(json &obj, const login_body &p);
+
+  struct [[nodiscard]] well_known_m_homeserver {
+    std::string base_url;
+  };
+
+  NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_m_homeserver, base_url)
+
+  struct [[nodiscard]] well_known_identity_server {
+    std::string base_url;
+  };
+
+  NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_identity_server, base_url)
+
+  struct [[nodiscard]] well_known {
+    std::optional<well_known_m_homeserver> m_homeserver;
+    std::optional<well_known_identity_server> m_identity_server;
+  };
+
+  void from_json(const json &obj, well_known &p);
+
+  void to_json(json &obj, const well_known &p);
+
+  struct [[nodiscard]] login_resp {
+    std::string access_token;
+    std::string device_id;
+    std::optional<int> expires_in_ms;
+    std::optional<std::string> home_server;
+    std::optional<std::string> refresh_token;
+    std::string user_id;
+    std::optional<client_server_json::well_known> well_known;
+  };
+
+  void from_json(const json &obj, login_resp &p);
+
+  void to_json(json &obj, const login_resp &p);
+
   /**
    * @brief JSON Object for the 200 response of the /register endpoint
    * See:

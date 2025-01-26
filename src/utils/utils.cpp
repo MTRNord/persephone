@@ -92,6 +92,26 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
 }
 
 /**
+ * @brief Verifies a hashed password using the Sodium library.
+ *
+ * This function verifies a given password against a hashed password using the Sodium library's password hashing verification function.
+ * It compares the provided password with the hashed password and returns true if they match, false otherwise.
+ *
+ * @param hash The hashed password to verify against.
+ * @param password The password to be verified.
+ * @return true if the password matches the hashed password, false otherwise.
+ */
+[[nodiscard]] bool verify_hashed_password(const std::string &hash,
+                                          const std::string &password) {
+  // Convert the hash to an array
+  std::array<char, crypto_pwhash_STRBYTES> hashed_password_array;
+  std::ranges::copy(hash, hashed_password_array.begin());
+
+  return crypto_pwhash_str_verify(hashed_password_array.data(), password.c_str(),
+                                  password.length()) == 0;
+}
+
+/**
  * @brief Computes the CRC32 checksum of the input string.
  *
  * This function computes the CRC32 checksum of a given input string. The CRC32

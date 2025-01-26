@@ -283,6 +283,152 @@ namespace client_server_json {
     }
   }
 
+  void from_json(const json &obj, login_identifier &p) {
+    p.type = obj["type"].get<std::string>();
+    if (obj.contains("user")) {
+      p.user = obj["user"].get<std::string>();
+    }
+    if (obj.contains("medium")) {
+      p.medium = obj["medium"].get<std::string>();
+    }
+    if (obj.contains("address")) {
+      p.address = obj["address"].get<std::string>();
+    }
+    if (obj.contains("country")) {
+      p.country = obj["country"].get<std::string>();
+    }
+    if (obj.contains("phone")) {
+      p.phone = obj["phone"].get<std::string>();
+    }
+  }
+
+  void to_json(json &obj, const login_identifier &p) {
+    obj = nlohmann::json::object();
+    obj["type"] = p.type;
+    if (p.user) {
+      obj["user"] = p.user.value();
+    }
+    if (p.medium) {
+      obj["medium"] = p.medium.value();
+    }
+    if (p.address) {
+      obj["address"] = p.address.value();
+    }
+    if (p.country) {
+      obj["country"] = p.country.value();
+    }
+    if (p.phone) {
+      obj["phone"] = p.phone.value();
+    }
+  }
+
+  void from_json(const json &obj, login_body &p) {
+    if (obj.contains("address")) {
+      p.address = obj["address"].get<std::string>();
+    }
+    if (obj.contains("device_id")) {
+      p.device_id = obj["device_id"].get<std::string>();
+    }
+    if (obj.contains("identifier")) {
+      p.identifier = obj["identifier"].get<login_identifier>();
+    }
+    if (obj.contains("initial_device_display_name")) {
+      p.initial_device_display_name = obj["initial_device_display_name"].get<std::string>();
+    }
+    if (obj.contains("medium")) {
+      p.medium = obj["medium"].get<std::string>();
+    }
+    if (obj.contains("password")) {
+      p.password = obj["password"].get<std::string>();
+    }
+    if (obj.contains("refresh_token")) {
+      p.refresh_token = obj["refresh_token"].get<bool>();
+    }
+    if (obj.contains("token")) {
+      p.token = obj["token"].get<std::string>();
+    }
+    p.type = obj["type"].get<std::string>();
+    if (obj.contains("user")) {
+      p.user = obj["user"].get<std::string>();
+    }
+  }
+
+  void to_json(json &obj, const login_body &p) {
+    obj = nlohmann::json::object();
+    if (p.address) {
+      obj["address"] = p.address.value();
+    }
+    if (p.device_id) {
+      obj["device_id"] = p.device_id.value();
+    }
+    if (p.identifier) {
+      obj["identifier"] = p.identifier.value();
+    }
+    if (p.initial_device_display_name) {
+      obj["initial_device_display_name"] = p.initial_device_display_name.value();
+    }
+    if (p.medium) {
+      obj["medium"] = p.medium.value();
+    }
+    if (p.password) {
+      obj["password"] = p.password.value();
+    }
+    if (p.refresh_token) {
+      obj["refresh_token"] = p.refresh_token.value();
+    }
+    if (p.token) {
+      obj["token"] = p.token.value();
+    }
+    obj["type"] = p.type;
+    if (p.user) {
+      obj["user"] = p.user.value();
+    }
+  }
+
+  void from_json(const json &obj, well_known &p) {
+    p.m_homeserver = obj["m.homeserver"].get<well_known_m_homeserver>();
+    p.m_identity_server = obj["m.identity_server"].get<well_known_identity_server>();
+  }
+
+  void to_json(json &obj, const well_known &p) {
+    obj = nlohmann::json::object();
+    if (p.m_homeserver) {
+      obj["m.homeserver"] = p.m_homeserver.value();
+    }
+    if (p.m_identity_server) {
+      obj["m.identity_server"] = p.m_identity_server.value();
+    }
+  }
+
+  void from_json(const json &obj, login_resp &p) {
+    p.access_token = obj["access_token"].get<std::string>();
+    p.device_id = obj["device_id"].get<std::string>();
+    p.expires_in_ms = obj["expires_in_ms"].get<long>();
+    p.home_server = obj["home_server"].get<std::string>();
+    p.refresh_token = obj["refresh_token"].get<std::string>();
+    p.user_id = obj["user_id"].get<std::string>();
+    p.well_known = obj["well_known"].get<well_known>();
+  }
+
+  void to_json(json &obj, const login_resp &p) {
+    obj = nlohmann::json::object();
+    obj["access_token"] = p.access_token;
+    obj["device_id"] = p.device_id;
+    if (p.expires_in_ms) {
+      obj["expires_in_ms"] = p.expires_in_ms.value();
+    }
+    if (p.home_server) {
+      obj["home_server"] = p.home_server.value();
+    }
+    if (p.refresh_token) {
+      obj["refresh_token"] = p.refresh_token.value();
+    }
+    obj["user_id"] = p.user_id;
+    if (p.well_known) {
+      obj["well_known"] = p.well_known.value();
+    }
+  }
+
   void from_json(const json &obj, registration_resp &p) {
     if (obj.contains("access_token")) {
       p.access_token = obj["access_token"].get<std::string>();
