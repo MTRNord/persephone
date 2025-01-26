@@ -70,7 +70,7 @@ jobs:
           cp ./.lcovrc ~/.lcovrc
           cmake --build cmake-build-debug --config Debug
           pushd cmake-build-debug
-          ctest -T Test -T Coverage
+          ctest -T Test -T Coverage --rerun-failed --output-on-failure
           popd
           popd
       - name: Report results to DeepSource
