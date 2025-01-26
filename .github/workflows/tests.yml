@@ -58,8 +58,8 @@ jobs:
           cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
           make
           make install
-          #ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-          #ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+          ln -s /usr/lib64/libdrogon.so.1 /usr/lib/libdrogon.so.1
+          ln -s /usr/lib64/libtrantor.so.1 /usr/lib/libtrantor.so.1
           popd
           popd
           popd
