@@ -23,7 +23,7 @@ The technology used will be:
 
 - C++20
 - Postgresql
-- [drogon](https://drogonframework.github.io)
+- [drogon](https://drogon.org/)
 - snitch2
 - ldns
 
