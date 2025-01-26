@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
-          pushd ./.lcovrc ~/.lcovrc
+          cp ./.lcovrc ~/.lcovrc
           cmake --build cmake-build-debug --config Debug
           pushd cmake-build-debug
           ctest -T Test -T Coverage
