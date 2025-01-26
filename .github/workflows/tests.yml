@@ -35,10 +35,13 @@ jobs:
         if: toJSON(github.event.pull_request) != '{}'
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Checkout repository
         if: toJSON(github.event.pull_request) == '{}'
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install dependencies
         shell: bash
         run: |
@@ -84,6 +87,9 @@ jobs:
           # Remove dependencies from the coverage report
           lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
           popd
+          
+          # show .git directory for debugging
+          ls -la .git
           
           # Install deepsource CLI
           curl https://deepsource.io/cli | sh
