@@ -100,6 +100,7 @@ jobs:
           ls -lah .git
           
           # Set GIT_COMMIT_SHA to the current commit as the DeepSource CLI requires it
+          git config --global --add safe.directory /__w/persephone/persephone
           export GIT_COMMIT_SHA=$(git --no-pager rev-parse HEAD | tr -d '\n')
           
           echo "Starting DeepSource report"
