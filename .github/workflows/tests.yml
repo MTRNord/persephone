@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     container: fedora:41
     steps:
+      - name: Install git
+        run: dnf install -y git
       - name: Checkout repository
         if: toJSON(github.event.pull_request) != '{}'
         uses: actions/checkout@v4
