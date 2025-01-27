@@ -56,14 +56,12 @@ set(SOURCES
 # Executable
 add_executable(persephone ${SOURCES} src/main.cpp)
 target_link_libraries(persephone PRIVATE
-        drogon
+        Drogon::Drogon
         nlohmann_json::nlohmann_json
         yaml-cpp
         sodium
         ZLIB::ZLIB
         PkgConfig::LDNS
-        trantor
-        jsoncpp
         ICU::uc
 )
 # Set warning levels and other compiler options
@@ -94,28 +92,24 @@ if (NOT DISABLE_TESTS)
 
     add_executable(utils_test tests/utils_test.cpp ${SOURCES})
     target_link_libraries(utils_test PRIVATE
-            drogon
+            Drogon::Drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium
             ZLIB::ZLIB
             PkgConfig::LDNS
-            trantor
-            jsoncpp
             ICU::uc
             snitch::snitch
     )
 
     add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
     target_link_libraries(state_res_test PRIVATE
-            drogon
+            Drogon::Drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium
             ZLIB::ZLIB
             PkgConfig::LDNS
-            trantor
-            jsoncpp
             ICU::uc
             snitch::snitch
     )
