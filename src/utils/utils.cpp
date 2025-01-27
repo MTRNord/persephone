@@ -7,7 +7,6 @@
 #include <coroutine>
 #include <format>
 #include <fstream>
-#include <iostream>
 #include <map>
 #include <random>
 #include <utility>
@@ -120,7 +119,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
  * @return The CRC32 checksum of the input string.
  */
 [[nodiscard]] unsigned long crc32_helper(const std::string &input) {
-  unsigned long crc = crc32(0L, Z_NULL, 0);
+  unsigned long crc = crc32(0L, nullptr, 0);
 
   crc = crc32(crc, reinterpret_cast<const Bytef *>(input.data()),
               static_cast<unsigned int>(input.size()));
@@ -569,11 +568,11 @@ parseQueryParamString(const std::string &queryString) {
  */
 [[nodiscard]] Task<drogon::HttpResponsePtr>
 federation_request(const HTTPRequest &request) {
-  auto auth_header = generate_ss_authheader(
+  const auto auth_header = generate_ss_authheader(
     request.origin, request.key_id, request.secret_key,
     drogon_to_string_method(request.method), request.path, request.origin,
     request.target, request.content);
-  auto req = HttpRequest::newHttpRequest();
+  const auto req = HttpRequest::newHttpRequest();
   req->setMethod(request.method);
   req->setPath(request.path);
   req->addHeader("Authorization", auth_header);
