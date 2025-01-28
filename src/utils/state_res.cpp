@@ -37,8 +37,7 @@
   };
 
   for (auto it = event_copy.begin(); it != event_copy.end();) {
-    const auto &key = it.key();
-    if (preserved_keys.find(key) == preserved_keys.end()) {
+    if (const auto &key = it.key(); !preserved_keys.contains(key)) {
       it = event_copy.erase(it);
     } else {
       ++it;
@@ -324,10 +323,88 @@ splitEvents(const std::vector<std::vector<StateEvent> > &forks) {
 sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
                       const std::map<EventID, StateEvent> &event_map) {
   auto comparator = [&](const EventID &x, const EventID &y) {
+    // Same event's are equal and not having a second event is always less
+    if (x == y) {
+      return false;
+    }
+    if (y == "") {
+      return false;
+    }
+
     const StateEvent &state_event_x = event_map.at(x);
     const StateEvent &state_event_y = event_map.at(y);
-    const int power_level_x = state_event_x.at("power_level").get<int>();
-    const int power_level_y = state_event_y.at("power_level").get<int>();
+
+    // Get the powerlevels of each sender in for each event so we then can compare them
+    std::optional<int> sender_x_power_level = std::nullopt;
+    std::optional<int> sender_y_power_level = std::nullopt;
+
+    const auto sender_x = state_event_x.at("sender").get<std::string>();
+    const auto sender_y = state_event_y.at("sender").get<std::string>();
+
+    // Find the given power level of the sender at this time with the current event_map sorting
+    // We do this in a loop to make sure we get the correct power level
+    for (const auto &event: event_map | std::views::values) {
+      if (event.at("type").get<std::string>() == "m.room.power_levels") {
+        const auto content = event.at("content").get<json::object_t>();
+        if (content.contains("users")) {
+          const auto users = content.at("users").get<json::object_t>();
+          if (users.contains(sender_x)) {
+            sender_x_power_level = users.at(sender_x).get<int>();
+          }
+          if (users.contains(sender_y)) {
+            sender_y_power_level = users.at(sender_y).get<int>();
+          }
+        }
+
+        // Check if we have event specific power levels otherwise use the state default.
+        if (content.contains("events")) {
+          if (content.at("events").contains("m.room.power_levels")) {
+            if (!sender_x_power_level.has_value()) {
+              sender_x_power_level = content.at("events").at("m.room.power_levels").get<int>();
+            }
+            if (!sender_y_power_level.has_value()) {
+              sender_y_power_level = content.at("events").at("m.room.power_levels").get<int>();
+            }
+          } else if (content.contains("state_default")) {
+            if (!sender_x_power_level.has_value()) {
+              sender_x_power_level = content.at("state_default").get<int>();
+            }
+            if (!sender_y_power_level.has_value()) {
+              sender_y_power_level = content.at("state_default").get<int>();
+            }
+          } else {
+            if (!sender_x_power_level.has_value()) {
+              sender_x_power_level = 50;
+            }
+            if (!sender_y_power_level.has_value()) {
+              sender_y_power_level = 50;
+            }
+          }
+        } else if (content.contains("state_default")) {
+          if (!sender_x_power_level.has_value()) {
+            sender_x_power_level = content.at("state_default").get<int>();
+          }
+          if (!sender_y_power_level.has_value()) {
+            sender_y_power_level = content.at("state_default").get<int>();
+          }
+        } else {
+          if (!sender_x_power_level.has_value()) {
+            sender_x_power_level = 50;
+          }
+          if (!sender_y_power_level.has_value()) {
+            sender_y_power_level = 50;
+          }
+        }
+      } else {
+        if (!sender_x_power_level.has_value()) {
+          sender_x_power_level = 50;
+        }
+        if (!sender_y_power_level.has_value()) {
+          sender_y_power_level = 50;
+        }
+      }
+    }
+
 
     const time_t origin_server_ts_x =
         state_event_x.at("origin_server_ts").get<time_t>();
@@ -337,18 +414,22 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
     const auto event_id_x = state_event_x.at("event_id").get<std::string>();
     const auto event_id_y = state_event_y.at("event_id").get<std::string>();
 
-    return (power_level_x > power_level_y) ||
-           (origin_server_ts_x < origin_server_ts_y) ||
-           (event_id_x < event_id_y);
+    return
+        (sender_x_power_level > sender_y_power_level) ||
+        (origin_server_ts_x < origin_server_ts_y) ||
+        (event_id_x < event_id_y);
   };
 
   std::map<EventID, int> sorted_edges;
-  std::vector<EventID> keys(incoming_edges.size());
+  std::vector<EventID> keys;
+  keys.reserve(incoming_edges.size());
   for (const auto &id: incoming_edges | std::views::keys) {
     keys.push_back(id);
   }
 
-  std::ranges::sort(keys, comparator);
+  if (!keys.empty() && keys.size() > 1) {
+    std::ranges::sort(keys, comparator);
+  }
 
   for (const auto &key: keys) {
     sorted_edges[key] = incoming_edges.at(key);
@@ -370,34 +451,43 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
  * @param full_conflicted_set A vector of StateEvent objects representing the full set of conflicted events.
  * @return A vector of StateEvent objects representing the topological ordering of the given events.
  */
-[[nodiscard]] std::vector<StateEvent>
-kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
+[[nodiscard]] std::vector<StateEvent> kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::vector<StateEvent> output_events;
-  std::map<EventID, StateEvent> event_map;
   std::map<EventID, int> incoming_edges;
+  std::map<EventID, StateEvent> event_map;
+
 
   for (const auto &e: full_conflicted_set) {
-    auto event_id = e.at("event_id").get<std::string>();
+    auto event_id = e["event_id"].get<std::string>();
     event_map[event_id] = e;
     incoming_edges[event_id] = 0;
   }
 
   auto incoming_edges_sorted = sorted_incoming_edges(incoming_edges, event_map);
 
-  while (!incoming_edges.empty()) {
-    for (const auto &[event_id, count]: incoming_edges_sorted) {
+
+  for (const auto &event: full_conflicted_set) {
+    for (const auto &auth_event_id: event.at("auth_events").get<std::vector<std::string> >()) {
+      incoming_edges_sorted[auth_event_id] += 1;
+    }
+  }
+
+  while (!incoming_edges_sorted.empty()) {
+    for (auto &[event_id, count]: incoming_edges_sorted) {
       if (count == 0) {
+        // Prepend (NOT append/push_back) the event with the given id to the output events
         output_events.insert(output_events.begin(), event_map[event_id]);
+
         auto auth_events = event_map[event_id]
             .at("auth_events")
-            .get<std::vector<json::object_t> >();
+            .get<std::vector<std::string> >();
 
-        for (const auto &auth_event: auth_events) {
-          auto auth_event_id = auth_event.at("event_id").get<std::string>();
-          incoming_edges[auth_event_id] -= 1;
+        for (const auto &auth_event_id: auth_events) {
+          // Reduce the count of the event with the given id by 1
+          incoming_edges_sorted[auth_event_id] -= 1;
         }
 
-        incoming_edges.erase(event_id);
+        incoming_edges_sorted.erase(event_id);
       }
     }
   }
@@ -435,14 +525,13 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
     // reject.
     const auto room_id = e["room_id"].get<std::string>();
     const auto sender = e["sender"].get<std::string>();
-    if (matchDomain(room_id, sender)) {
+    if (!matchDomain(room_id, sender)) {
       return false;
     }
 
     // If content.room_version is present and is not a recognised version,
     // reject.
-
-    if (e["content"]["room_version"].get<std::string>() == "11") {
+    if (e["content"]["room_version"].get<std::string>() != "11") {
       return false;
     }
 
@@ -545,13 +634,30 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  *
  * @param power_level_mainline A reference to a vector of StateEvent objects representing the power level mainline.
  * @param event The StateEvent object to be processed.
+ * @param auth_events A vector of StateEvent objects representing the authorization events.
  */
 void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
-                      StateEvent &event) {
+                      StateEvent &event, const std::map<EventType, std::map<StateKey, StateEvent> > &auth_events) {
+  if (event.is_null()) {
+    throw std::invalid_argument("Event cannot be null");
+  }
   power_level_mainline.push_back(event);
-  for (auto &auth_event: event["auth_events"]) {
-    if (auto auth_event_obj = auth_event.get<StateEvent>(); auth_event_obj["event_type"] == "m.room.powerlevel") {
-      mainline_iterate(power_level_mainline, auth_event_obj);
+  for (auto &auth_event_id: event["auth_events"]) {
+    const std::string actual_auth_event_id = auth_event_id.get<std::string>();
+
+    // Get the actual auth event object from the auth events map
+    StateEvent auth_event_obj;
+    for (const auto &inner_map: auth_events | std::views::values) {
+      for (const auto &state_event: inner_map | std::views::values) {
+        if (state_event["event_id"].get<std::string>() == actual_auth_event_id) {
+          auth_event_obj = state_event;
+          break;
+        }
+      }
+    }
+
+    if (auth_event_obj["type"] == "m.room.powerlevel") {
+      mainline_iterate(power_level_mainline, auth_event_obj, auth_events);
     }
   }
 }
@@ -559,45 +665,49 @@ void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
 /**
  * @brief Finds the closest event on the power level mainline for a given event.
  *
- * This function takes a reference to a vector of StateEvent objects, which represents the power level mainline, and a StateEvent object as input.
- * It uses a stack to keep track of the events to be processed, starting with the given event.
- * The function then enters a loop that continues until the stack is empty.
- * In each iteration of the loop, the function pops an event from the stack and checks if it is in the power level mainline.
- * If the event is in the mainline, the function calculates its position on the mainline and sets it as the closest mainline event.
- * If the event is not in the mainline, the function pushes all of its "m.room.powerlevel" authorization events onto the stack.
- * The function continues this process until it finds an event that is in the mainline or until the stack is empty.
- * Finally, the function returns the closest mainline event.
- *
  * @param power_level_mainline A reference to a vector of StateEvent objects representing the power level mainline.
  * @param event The StateEvent object to be processed.
+ * @param auth_events A map of event types to maps of state keys to StateEvents representing the authorization events. In this case use the partial state.
  * @return The closest mainline event to the given event.
  */
 [[nodiscard]] StateEvent
 get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
-                           const StateEvent &event) {
-  StateEvent closest_mainline_event;
-  std::stack<StateEvent> event_stack;
-  event_stack.push(event);
+                           const StateEvent &event,
+                           const std::map<EventType, std::map<StateKey, StateEvent> > &auth_events) {
+  auto closest_mainline_event = event;
 
-  while (!event_stack.empty()) {
-    StateEvent current_event = event_stack.top();
-    event_stack.pop();
+  std::function<void(const StateEvent &)> func_closest_iterate;
 
-    if (auto search_iter = std::ranges::find(power_level_mainline, current_event);
+  func_closest_iterate = [&](const StateEvent &inner_event) {
+    // Check if event is in power level mainline
+    if (const auto search_iter = std::ranges::find(power_level_mainline, inner_event);
       search_iter != power_level_mainline.end()) {
-      current_event["position_on_mainline"] =
-          std::distance(power_level_mainline.begin(), search_iter);
-      closest_mainline_event = current_event;
-      break;
+      closest_mainline_event = inner_event;
+      return;
     } else {
-      for (const auto &auth_event: current_event["auth_events"]) {
-        if (auto auth_event_obj = auth_event.get<StateEvent>(); auth_event_obj["event_type"] == "m.room.powerlevel") {
-          event_stack.push(auth_event_obj);
+      // For each auth event of the event if the auth event is of type m.room.powerlevel then call func_closest_iterate recursively
+      for (const auto &auth_event_id: inner_event["auth_events"]) {
+        const std::string actual_auth_event_id = auth_event_id.get<std::string>();
+
+        // Get the actual auth event object from the auth events map
+        StateEvent auth_event_obj;
+        for (const auto &inner_map: auth_events | std::views::values) {
+          for (const auto &state_event: inner_map | std::views::values) {
+            if (state_event["event_id"].get<std::string>() == actual_auth_event_id) {
+              auth_event_obj = state_event;
+              break;
+            }
+          }
+        }
+
+        if (auth_event_obj["type"] == "m.room.powerlevel") {
+          func_closest_iterate(auth_event_obj);
         }
       }
     }
-  }
+  };
 
+  func_closest_iterate(event);
   return closest_mainline_event;
 }
 
@@ -626,10 +736,10 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
       return x["position_on_mainline"].get<std::string>() <
              y["position_on_mainline"].get<std::string>();
     }
-    if (x["origin_server_ts"].get<std::string>() !=
-        y["origin_server_ts"].get<std::string>()) {
-      return x["origin_server_ts"].get<std::string>() <
-             y["origin_server_ts"].get<std::string>();
+    if (x["origin_server_ts"].get<time_t>() !=
+        y["origin_server_ts"].get<time_t>()) {
+      return x["origin_server_ts"].get<time_t>() <
+             y["origin_server_ts"].get<time_t>();
     }
     return x["event_id"].get<std::string>() < y["event_id"].get<std::string>();
   };
@@ -680,7 +790,7 @@ stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
   // classed as a "control" event for reverse topological sorting. If not then
   // the event will be mainline sorted.
   auto is_control_event = [](StateEvent event) {
-    if (event["type"].get<std::string>() == "m.room.power_level") {
+    if (event["type"].get<std::string>() == "m.room.power_levels") {
       // Power level events with an empty state key are control events.
       if (event["state_key"].get<std::string>() == "") {
         return true;
@@ -714,43 +824,70 @@ stateres_v2(const std::vector<std::vector<StateEvent> > &forks) {
     return false;
   };
 
+  // Copy the full_conflicted_set so we can partition it
+  std::vector<StateEvent> full_conflicted_set_copy = full_conflicted_set;
+
   // Partition the vector based on the boolean condition
   auto partition_point = std::partition(
-    full_conflicted_set.begin(), full_conflicted_set.end(), is_control_event);
+    full_conflicted_set_copy.begin(), full_conflicted_set_copy.end(), is_control_event);
   // Copy elements based on the partition point
   conflicted_control_events = std::vector<StateEvent>(
-    std::make_move_iterator(full_conflicted_set.begin()),
+    std::make_move_iterator(full_conflicted_set_copy.begin()),
     std::make_move_iterator(partition_point));
   conflicted_others = std::vector<StateEvent>(
     std::make_move_iterator(partition_point),
-    std::make_move_iterator(full_conflicted_set.end()));
+    std::make_move_iterator(full_conflicted_set_copy.end()));
 
-  auto conflicted_control_events_sorted =
-      kahns_algorithm(conflicted_control_events);
+
+  auto conflicted_control_events_sorted = kahns_algorithm(full_conflicted_set);
 
   for (auto &e: conflicted_control_events_sorted) {
     if (auth_against_partial_state(partial_state, e)) {
-      auto event_type = e["event_type"].get<EventType>();
+      auto event_type = e["type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = e;
     }
   }
 
-  auto resolved_power_level_event = partial_state["m.room.power_level"][""];
+  // We might end up with a new room so we need to harvest the power level event from the conflicted_control_events_sorted if resolved_power_level_event is null.
+  // TODO: Check if this is correct?
+  auto resolved_power_level_event = partial_state["m.room.power_levels"][""];
+  if (resolved_power_level_event.is_null()) {
+    for (auto &e: conflicted_control_events_sorted) {
+      if (e["type"].get<std::string>() == "m.room.power_levels") {
+        resolved_power_level_event = e;
+        break;
+      }
+    }
+    if (resolved_power_level_event.is_null()) {
+      throw std::runtime_error(
+        "No power level event found in conflicted_control_events_sorted. This should not happen I think as we artificially always inject one.");
+    }
+  }
   std::vector<StateEvent> power_level_mainline = {resolved_power_level_event};
 
-  mainline_iterate(power_level_mainline, resolved_power_level_event);
+  mainline_iterate(power_level_mainline, resolved_power_level_event, partial_state);
+
+  // Call get_closest_mainline_event for each event in conflicted_others so we have the data required for the next step.
+  for (auto &e: conflicted_others) {
+    auto closest_mainline_event = get_closest_mainline_event(power_level_mainline, e, partial_state);
+
+    // Get the position of the closest mainline event on the mainline (partial state) by using the distance to the create event from the closest mainline event based on the ordering in the partial state vector.
+    auto position_on_mainline = std::distance(power_level_mainline.begin(),
+                                              std::ranges::find(power_level_mainline, closest_mainline_event));
+    e["position_on_mainline"] = std::to_string(position_on_mainline);
+  }
 
   for (auto sorted_others = sorted_normal_state_events(conflicted_others); auto &e: sorted_others) {
     if (auth_against_partial_state(partial_state, e)) {
-      auto event_type = e["event_type"].get<EventType>();
+      auto event_type = e["type"].get<EventType>();
       auto state_key = e["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = e;
     }
   }
 
   for (auto &e: unconflictedEvents) {
-    auto event_type = e["event_type"].get<EventType>();
+    auto event_type = e["type"].get<EventType>();
     auto state_key = e["state_key"].get<StateKey>();
     partial_state[event_type][state_key] = e;
   }

@@ -78,6 +78,11 @@ namespace client_server_api {
                    const std::string &roomId, const std::string &eventType,
                    const std::optional<std::string> &state_key) const;
 
+        json get_powerlevels_pdu(const std::string &room_version, const std::string &sender,
+                                 const std::string &room_id,
+                                 const std::optional<client_server_json::PowerLevelEventContent> &power_level_override)
+        const;
+
     private:
         Config _config;
         Database _db;

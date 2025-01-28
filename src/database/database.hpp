@@ -2,7 +2,7 @@
 
 /// @file
 /// @brief A wrapper for the database operations to ensure they are uniform.
-
+#define JSON_DIAGNOSTICS 1
 #include "drogon/drogon.h"
 #include <coroutine>
 #include <cstddef>
@@ -70,9 +70,6 @@ public:
   [[nodiscard]] drogon::Task<void> add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction, json event,
                                              const std::string &room_id) const;
 
-  [[nodiscard]] drogon::Task<void> add_state_events(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-                                                    std::vector<client_server_json::StateEvent> events,
-                                                    const std::string &room_id) const;
 
   [[nodiscard]] drogon::Task<json> get_state_event(const std::string &room_id, const std::string &event_type,
                                                    const std::string &state_key) const;

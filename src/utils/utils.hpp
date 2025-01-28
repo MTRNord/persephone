@@ -1,5 +1,6 @@
 #pragma once
 
+#define JSON_DIAGNOSTICS 1
 #include "drogon/drogon.h"
 #include "drogon/utils/coroutine.h"
 #include "utils/config.hpp"

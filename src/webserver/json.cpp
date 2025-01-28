@@ -131,7 +131,7 @@ namespace client_server_json {
     }
 
     if (obj.contains("initial_state")) {
-      p.initial_state = obj["initial_state"].get<std::vector<StateEvent> >();
+      p.initial_state = obj["initial_state"].get<std::vector<json> >();
     }
 
     if (obj.contains("invite")) {

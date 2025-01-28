@@ -1,3 +1,4 @@
+#define JSON_DIAGNOSTICS 1
 #include "json_utils.hpp"
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
@@ -90,20 +91,25 @@ namespace json_utils {
                                const std::string &key_id,
                                const std::vector<unsigned char> &secret_key,
                                json json_data) {
+    if (json_data.is_null()) {
+      throw std::runtime_error("Json data is null which is impossible for an event");
+    }
+
     // Get existing (or not yet existing) signatures and unsigned fields
     auto signatures = json_data.value("signatures", json(json::value_t::object));
-    auto unsigned_value = json_data.value("unsigned", json{});
+    const auto unsigned_value = json_data.value("unsigned", json{});
 
     json_data.erase("signatures");
     json_data.erase("unsigned");
 
+
     // Sign canonical json
-    std::string canonical_json = json_data.dump();
+    const std::string canonical_json = json_data.dump();
     std::vector<unsigned char> signed_message(crypto_sign_BYTES +
                                               canonical_json.size());
     unsigned long long signed_message_len = 0;
 
-    auto result = crypto_sign(
+    const auto result = crypto_sign(
       signed_message.data(), &signed_message_len,
       reinterpret_cast<const unsigned char *>(canonical_json.c_str()),
       canonical_json.size(), secret_key.data());

@@ -221,10 +221,14 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction
     for (const auto &auth_event: auth_events) {
       auth_events_str += "\"" + auth_event + "\",";
     }
-    // Remove the trailing comma
-    auth_events_str.pop_back();
+    // Remove the trailing comma if present
+    if (auth_events.size() > 0) {
+      auth_events_str.pop_back();
+    }
     auth_events_str += "}";
   }
+
+  LOG_DEBUG << "Auth events: " << auth_events_str;
 
   // If we got a state_key set it in the db otherwise use NULL
   std::optional<std::string> state_key = std::nullopt;
@@ -244,30 +248,6 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction
     throw std::runtime_error("Failed to add event due to database error");
   }
 }
-
-[[nodiscard]] drogon::Task<void>
-Database::add_state_events(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-                           std::vector<client_server_json::StateEvent> events,
-                           const std::string &room_id) const {
-  for (const auto &event: events) {
-    const auto event_string = to_string(static_cast<json>(event));
-
-    if (event.event_id == std::nullopt) {
-      throw std::invalid_argument("Event ID cannot be null");
-    }
-
-    try {
-      co_await transaction->execSqlCoro(
-        "INSERT INTO events(event_id, room_id, depth, auth_events, "
-        "rejected, state_key, type, json) VALUES($1, $2, 0, $3::text[], $4, $5, $6, $7)",
-        event.event_id.value(), room_id, "{}", false, event.state_key, event.type, event_string);
-    } catch (const drogon::orm::DrogonDbException &e) {
-      LOG_ERROR << e.base().what();
-      throw std::runtime_error("Failed to add state event due to database error");
-    }
-  }
-}
-
 
 /**
  * @brief Get a state event from the database

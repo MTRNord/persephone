@@ -1,3 +1,4 @@
+#define JSON_DIAGNOSTICS 1
 #include "ServerServerCtrl.hpp"
 #include "nlohmann/json.hpp"
 #include "utils/config.hpp"

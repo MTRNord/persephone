@@ -4,6 +4,7 @@
 /// @brief This header contains all struct definitions of json response and
 /// request types
 
+#define JSON_DIAGNOSTICS 1
 #include "nlohmann/json.hpp"
 #include <map>
 #include <optional>
@@ -200,7 +201,7 @@ namespace client_server_json {
 
   struct [[nodiscard]] CreateRoomBody {
     std::optional<json::object_t> creation_content;
-    std::optional<std::vector<StateEvent> > initial_state;
+    std::optional<std::vector<json> > initial_state;
     std::optional<std::vector<std::string> > invite;
     std::optional<std::vector<Invite3pid> > invite_3pid;
     std::optional<std::string> name;
