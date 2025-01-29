@@ -34,20 +34,22 @@ int main() {
         .setThreadNum(0)
         .setLogLevel(trantor::Logger::LogLevel::kDebug)
         .addDbClient(orm::PostgresConfig{
-          .host = config.db_config.host,
-          .port = config.db_config.port,
-          .databaseName = config.db_config.database_name,
-          .username = config.db_config.user,
-          .password = config.db_config.password,
-          .connectionNumber = 10,
-          .name = "default",
+            .host = config.db_config.host,
+            .port = config.db_config.port,
+            .databaseName = config.db_config.database_name,
+            .username = config.db_config.user,
+            .password = config.db_config.password,
+            .connectionNumber = 10,
+            .name = "default",
         })
         .enableGzip(true)
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
                                        const drogon::HttpResponsePtr &resp) {
           resp->addHeader("Access-Control-Allow-Origin", "*");
-          resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-          resp->addHeader("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization");
+          resp->addHeader("Access-Control-Allow-Methods",
+                          "GET, POST, PUT, DELETE, OPTIONS");
+          resp->addHeader("Access-Control-Allow-Headers",
+                          "X-Requested-With, Content-Type, Authorization");
         })
         .registerBeginningAdvice([]() {
           constexpr Database db{};
@@ -72,7 +74,7 @@ int main() {
     drogon::app().run();
   } catch (const YAML::BadFile &error) {
     LOG_ERROR << "Missing or invalid config.yaml file. Make sure to create it "
-        "prior to running persephone";
+                 "prior to running persephone";
     LOG_ERROR << error.what();
     return 1;
   } catch (std::runtime_error &error) {

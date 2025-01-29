@@ -9,9 +9,9 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
-#include <nlohmann/json.hpp>
 #include <webserver/json.hpp>
 
 using json = nlohmann::json;
@@ -50,27 +50,26 @@ public:
 
   [[nodiscard]] drogon::Task<bool> user_exists(std::string matrix_id) const;
 
-  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo> >
+  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
   get_user_info(std::string auth_token) const;
 
   [[nodiscard]] drogon::Task<bool>
   validate_access_token(std::string auth_token) const;
 
-  [[nodiscard]] drogon::Task<client_server_json::login_resp> login(const std::string &matrix_id,
-                                                                   const std::string &password,
-                                                                   const std::optional<std::string> &
-                                                                   initial_device_name,
-                                                                   const std::optional<std::string> &device_id)
-  const;
+  [[nodiscard]] drogon::Task<client_server_json::login_resp>
+  login(const std::string &matrix_id, const std::string &password,
+        const std::optional<std::string> &initial_device_name,
+        const std::optional<std::string> &device_id) const;
 
-  [[nodiscard]] drogon::Task<void> add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-                                            std::vector<json> events,
-                                            const std::string &room_id) const;
+  [[nodiscard]] drogon::Task<void>
+  add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
+           std::vector<json> events, const std::string &room_id) const;
 
-  [[nodiscard]] drogon::Task<void> add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction, json event,
-                                             const std::string &room_id) const;
+  [[nodiscard]] drogon::Task<void>
+  add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction,
+            json event, const std::string &room_id) const;
 
-
-  [[nodiscard]] drogon::Task<json> get_state_event(const std::string &room_id, const std::string &event_type,
-                                                   const std::string &state_key) const;
+  [[nodiscard]] drogon::Task<json>
+  get_state_event(const std::string &room_id, const std::string &event_type,
+                  const std::string &state_key) const;
 };

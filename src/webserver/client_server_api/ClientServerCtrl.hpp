@@ -8,83 +8,87 @@
 using namespace drogon;
 
 namespace client_server_api {
-    class AccessTokenFilter final : public drogon::HttpFilter<AccessTokenFilter> {
-    public:
-        void doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
-                      FilterChainCallback &&ccb) override;
-    };
+class AccessTokenFilter final : public drogon::HttpFilter<AccessTokenFilter> {
+public:
+  void doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
+                FilterChainCallback &&ccb) override;
+};
 
-    class ClientServerCtrl final
-            : public drogon::HttpController<ClientServerCtrl, false> {
-    public:
-        METHOD_LIST_BEGIN
-            ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get, Options);
-            ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
-                          Get, Options, "client_server_api::AccessTokenFilter");
-            ADD_METHOD_TO(ClientServerCtrl::user_available,
-                          "/_matrix/client/v3/register/available?username={1}", Get, Options);
-            ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get, Post, Options);
-            ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
-                          Post, Options);
+class ClientServerCtrl final
+    : public drogon::HttpController<ClientServerCtrl, false> {
+public:
+  METHOD_LIST_BEGIN
+  ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get,
+                Options);
+  ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
+                Get, Options, "client_server_api::AccessTokenFilter");
+  ADD_METHOD_TO(ClientServerCtrl::user_available,
+                "/_matrix/client/v3/register/available?username={1}", Get,
+                Options);
+  ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get, Post,
+                Options);
+  ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
+                Post, Options);
 
-            // Room joining
-            ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
-                          "_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
-                          "client_server_api::AccessTokenFilter");
+  // Room joining
+  ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
+                "_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
+                "client_server_api::AccessTokenFilter");
 
-            // Room creation
-            ADD_METHOD_TO(ClientServerCtrl::createRoom, "_matrix/client/v3/createRoom",
-                          Post, Options, "client_server_api::AccessTokenFilter");
+  // Room creation
+  ADD_METHOD_TO(ClientServerCtrl::createRoom, "_matrix/client/v3/createRoom",
+                Post, Options, "client_server_api::AccessTokenFilter");
 
-            // Room state
-            ADD_METHOD_TO(ClientServerCtrl::state,
-                          "_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
-                          Get, Options, "client_server_api::AccessTokenFilter");
-        METHOD_LIST_END
+  // Room state
+  ADD_METHOD_TO(
+      ClientServerCtrl::state,
+      "_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
+      Get, Options, "client_server_api::AccessTokenFilter");
+  METHOD_LIST_END
 
-        explicit ClientServerCtrl(Config config, Database db)
-            : _config(std::move(config)), _db(db) {
-        }
+  explicit ClientServerCtrl(Config config, Database db)
+      : _config(std::move(config)), _db(db) {}
 
-    protected:
-        void versions(const HttpRequestPtr &,
-                      std::function<void(const HttpResponsePtr &)> &&callback) const;
+protected:
+  void versions(const HttpRequestPtr &,
+                std::function<void(const HttpResponsePtr &)> &&callback) const;
 
-        void whoami(const HttpRequestPtr &req,
-                    std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void whoami(const HttpRequestPtr &req,
+              std::function<void(const HttpResponsePtr &)> &&callback) const;
 
-        void user_available(const HttpRequestPtr &,
-                            std::function<void(const HttpResponsePtr &)> &&callback,
-                            const std::string &username) const;
+  void user_available(const HttpRequestPtr &,
+                      std::function<void(const HttpResponsePtr &)> &&callback,
+                      const std::string &username) const;
 
-        void login(const HttpRequestPtr &,
-                   std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void login(const HttpRequestPtr &,
+             std::function<void(const HttpResponsePtr &)> &&callback) const;
 
-        void
-        register_user(const HttpRequestPtr &req,
-                      std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void
+  register_user(const HttpRequestPtr &req,
+                std::function<void(const HttpResponsePtr &)> &&callback) const;
 
-        void
-        joinRoomIdOrAlias(const HttpRequestPtr &req,
-                          std::function<void(const HttpResponsePtr &)> &&callback,
-                          const std::string &roomIdOrAlias) const;
+  void
+  joinRoomIdOrAlias(const HttpRequestPtr &req,
+                    std::function<void(const HttpResponsePtr &)> &&callback,
+                    const std::string &roomIdOrAlias) const;
 
-        void
-        createRoom(const HttpRequestPtr &req,
-                   std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void
+  createRoom(const HttpRequestPtr &req,
+             std::function<void(const HttpResponsePtr &)> &&callback) const;
 
-        void state(const HttpRequestPtr &req,
-                   std::function<void(const HttpResponsePtr &)> &&callback,
-                   const std::string &roomId, const std::string &eventType,
-                   const std::optional<std::string> &state_key) const;
+  void state(const HttpRequestPtr &req,
+             std::function<void(const HttpResponsePtr &)> &&callback,
+             const std::string &roomId, const std::string &eventType,
+             const std::optional<std::string> &state_key) const;
 
-        json get_powerlevels_pdu(const std::string &room_version, const std::string &sender,
-                                 const std::string &room_id,
-                                 const std::optional<client_server_json::PowerLevelEventContent> &power_level_override)
-        const;
+  json get_powerlevels_pdu(
+      const std::string &room_version, const std::string &sender,
+      const std::string &room_id,
+      const std::optional<client_server_json::PowerLevelEventContent>
+          &power_level_override) const;
 
-    private:
-        Config _config;
-        Database _db;
-    };
+private:
+  Config _config;
+  Database _db;
+};
 } // namespace client_server_api

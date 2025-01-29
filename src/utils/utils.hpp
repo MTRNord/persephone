@@ -91,7 +91,7 @@ migrate_localpart(const std::string &localpart) {
   std::string migrated_localpart;
   migrated_localpart.reserve(localpart.size());
 
-  for (auto const &c: localpart) {
+  for (auto const &c : localpart) {
     if (c >= 'A' && c <= 'Z') {
       migrated_localpart.push_back(static_cast<char>(c + 32));
     } else if (c == '_') {
@@ -110,12 +110,13 @@ migrate_localpart(const std::string &localpart) {
 /**
  * @brief Encodes an unsigned long integer into a base62 string.
  *
- * This function takes an unsigned long integer as input and encodes it into a base62 string.
- * The base62 string is composed of the characters 0-9, a-z, and A-Z. The function iteratively
- * takes the modulus of the input by 62 and uses the result as an index into the base62 alphabet
- * to select a character. The selected character is added to the output string. The input is then
- * divided by 62 and the process repeats until the input becomes 0. The function returns the
- * base62-encoded string.
+ * This function takes an unsigned long integer as input and encodes it into a
+ * base62 string. The base62 string is composed of the characters 0-9, a-z, and
+ * A-Z. The function iteratively takes the modulus of the input by 62 and uses
+ * the result as an index into the base62 alphabet to select a character. The
+ * selected character is added to the output string. The input is then divided
+ * by 62 and the process repeats until the input becomes 0. The function returns
+ * the base62-encoded string.
  *
  * @param input The unsigned long integer to be encoded.
  * @return The base62-encoded string.
@@ -136,24 +137,24 @@ migrate_localpart(const std::string &localpart) {
 /**
  * @brief Removes brackets from a server name.
  *
- * This function takes a server name as input and removes any brackets ('[' or ']') from it.
- * It iterates over each character in the server name and removes it if it is a bracket.
- * The function returns the server name with the brackets removed.
+ * This function takes a server name as input and removes any brackets ('[' or
+ * ']') from it. It iterates over each character in the server name and removes
+ * it if it is a bracket. The function returns the server name with the brackets
+ * removed.
  *
  * @param server_name The server name from which to remove brackets.
  * @return The server name with the brackets removed.
  */
 [[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
-  std::erase_if(server_name,
-                [](const char c) {
-                  switch (c) {
-                    case '[':
-                    case ']':
-                      return true;
-                    default:
-                      return false;
-                  }
-                });
+  std::erase_if(server_name, [](const char c) {
+    switch (c) {
+    case '[':
+    case ']':
+      return true;
+    default:
+      return false;
+    }
+  });
   return server_name;
 }
 
@@ -178,7 +179,7 @@ migrate_localpart(const std::string &localpart) {
 [[nodiscard]] constexpr bool
 is_valid_localpart(const std::string &localpart,
                    const std::string &server_name) {
-  for (auto const &c: localpart) {
+  for (auto const &c : localpart) {
     if (std::isdigit(c) || (c >= 'a' && c <= 'z') ||
         (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' ||
          c == '+')) {
@@ -195,9 +196,10 @@ is_valid_localpart(const std::string &localpart,
 /**
  * @brief Extracts the server part from a given input string.
  *
- * This function takes a string as input and finds the position of the first colon (':').
- * If a colon is found, it returns the substring from the position after the colon to the end of the input string.
- * If no colon is found, it throws a runtime error with the message "Invalid Input".
+ * This function takes a string as input and finds the position of the first
+ * colon (':'). If a colon is found, it returns the substring from the position
+ * after the colon to the end of the input string. If no colon is found, it
+ * throws a runtime error with the message "Invalid Input".
  *
  * @param input The string from which to extract the server part.
  * @return The server part of the input string.
@@ -211,29 +213,32 @@ is_valid_localpart(const std::string &localpart,
   throw std::runtime_error("Invalid Input");
 }
 
-[[nodiscard]] Task<std::vector<SRVRecord> >
+[[nodiscard]] Task<std::vector<SRVRecord>>
 get_srv_record(const std::string &address);
 
 [[nodiscard]] Task<ResolvedServer>
 discover_server(const std::string &server_name);
 
 [[nodiscard]] std::string generate_ss_authheader(
-  const std::string &server_name, const std::string &key_id,
-  const std::vector<unsigned char> &secret_key, const std::string &method,
-  const std::string &request_uri, const std::string &origin,
-  const std::string &target, const std::optional<json> &content);
+    const std::string &server_name, const std::string &key_id,
+    const std::vector<unsigned char> &secret_key, const std::string &method,
+    const std::string &request_uri, const std::string &origin,
+    const std::string &target, const std::optional<json> &content);
 
 /**
  * @brief Generates a query parameter string from a key and a list of values.
  *
- * This function takes a key and a list of values as input and generates a query parameter string.
- * The query parameter string starts with a '?' followed by the key and '='. If the list of values is not empty,
- * it URL encodes the first value and appends it to the string. For each remaining value in the list, it appends
- * '&' followed by the key, '=', and the URL encoded value to the string. The function returns the generated
- * query parameter string.
+ * This function takes a key and a list of values as input and generates a query
+ * parameter string. The query parameter string starts with a '?' followed by
+ * the key and '='. If the list of values is not empty, it URL encodes the first
+ * value and appends it to the string. For each remaining value in the list, it
+ * appends
+ * '&' followed by the key, '=', and the URL encoded value to the string. The
+ * function returns the generated query parameter string.
  *
  * @param keyName The key to be included in the query parameter string.
- * @param values The list of values to be included in the query parameter string.
+ * @param values The list of values to be included in the query parameter
+ * string.
  * @return The generated query parameter string.
  */
 [[nodiscard]] constexpr std::string
@@ -253,7 +258,7 @@ generateQueryParamString(const std::string &keyName,
   return ss;
 }
 
-[[nodiscard]] std::unordered_map<std::string, std::vector<std::string> >
+[[nodiscard]] std::unordered_map<std::string, std::vector<std::string>>
 parseQueryParamString(const std::string &queryString);
 
 [[nodiscard]] Task<drogon::HttpResponsePtr>
@@ -264,30 +269,33 @@ federation_request(const HTTPRequest &request);
 /**
  * @brief A template struct for debugging.
  *
- * This struct is used for debugging purposes. It takes a format string and a variable number of arguments,
- * formats them into a string, and prints the string to the console. It also includes the file name and line number
- * where the debug struct is instantiated.
+ * This struct is used for debugging purposes. It takes a format string and a
+ * variable number of arguments, formats them into a string, and prints the
+ * string to the console. It also includes the file name and line number where
+ * the debug struct is instantiated.
  *
  * @tparam Args The types of the arguments to be formatted into the string.
  */
-template<typename... Args>
-struct debug {
+template <typename... Args> struct debug {
   /**
    * @brief Constructs a new debug object and prints the formatted string.
    *
-   * This constructor takes a format string and a variable number of arguments, formats them into a string,
-   * and prints the string to the console. It also includes the file name and line number where the debug struct
-   * is instantiated.
+   * This constructor takes a format string and a variable number of arguments,
+   * formats them into a string, and prints the string to the console. It also
+   * includes the file name and line number where the debug struct is
+   * instantiated.
    *
    * @param format_string The format string.
    * @param args The arguments to be formatted into the string.
-   * @param loc The source location where the debug struct is instantiated. Defaults to the current location.
+   * @param loc The source location where the debug struct is instantiated.
+   * Defaults to the current location.
    */
-  explicit debug(const std::string_view format_string, Args &&... args,
-                 const std::source_location &loc = std::source_location::current()) {
+  explicit debug(
+      const std::string_view format_string, Args &&...args,
+      const std::source_location &loc = std::source_location::current()) {
     auto str = std::format(
-      "{}({}): {}\n", loc.file_name(), loc.line(),
-      std::vformat(format_string, std::make_format_args(args...)));
+        "{}({}): {}\n", loc.file_name(), loc.line(),
+        std::vformat(format_string, std::make_format_args(args...)));
     std::cout << str;
   }
 };
@@ -295,20 +303,19 @@ struct debug {
 /**
  * @brief A deduction guide for the debug struct.
  *
- * This deduction guide allows the compiler to deduce the template arguments for the debug struct
- * from the arguments to the constructor.
+ * This deduction guide allows the compiler to deduce the template arguments for
+ * the debug struct from the arguments to the constructor.
  *
  * @tparam Args The types of the arguments to the debug constructor.
  */
-template<typename... Args>
-debug(Args &&...) -> debug<Args...>;
+template <typename... Args> debug(Args &&...) -> debug<Args...>;
 
 /**
  * @brief Converts a drogon::HttpMethod to its string representation.
  *
- * This function takes a drogon::HttpMethod as input and returns its string representation.
- * The switch statement is used to map each drogon::HttpMethod to its corresponding string.
- * If the method is invalid, it returns "INVALID".
+ * This function takes a drogon::HttpMethod as input and returns its string
+ * representation. The switch statement is used to map each drogon::HttpMethod
+ * to its corresponding string. If the method is invalid, it returns "INVALID".
  *
  * @param method The drogon::HttpMethod to be converted.
  * @return The string representation of the drogon::HttpMethod.
@@ -316,36 +323,38 @@ debug(Args &&...) -> debug<Args...>;
 [[nodiscard]] constexpr std::string
 drogon_to_string_method(const drogon::HttpMethod &method) {
   switch (method) {
-    case drogon::HttpMethod::Get:
-      return "GET";
-    case drogon::HttpMethod::Post:
-      return "POST";
-    case drogon::HttpMethod::Head:
-      return "HEAD";
-    case drogon::HttpMethod::Put:
-      return "PUT";
-    case drogon::HttpMethod::Delete:
-      return "DELETE";
-    case drogon::HttpMethod::Options:
-      return "OPTIONS";
-    case drogon::HttpMethod::Patch:
-      return "PATCH";
-    case drogon::HttpMethod::Invalid:
-      return "INVALID";
+  case drogon::HttpMethod::Get:
+    return "GET";
+  case drogon::HttpMethod::Post:
+    return "POST";
+  case drogon::HttpMethod::Head:
+    return "HEAD";
+  case drogon::HttpMethod::Put:
+    return "PUT";
+  case drogon::HttpMethod::Delete:
+    return "DELETE";
+  case drogon::HttpMethod::Options:
+    return "OPTIONS";
+  case drogon::HttpMethod::Patch:
+    return "PATCH";
+  case drogon::HttpMethod::Invalid:
+    return "INVALID";
   }
   return "INVALID";
 }
 
 [[nodiscard]] constexpr std::string
 generate_room_id(const std::string &server_name) {
-  // Generate a room id which including the server name and the `!` prefix does not exceed 255 bytes in length.
-  // The opaque_id between the `!` and the `:` must be random, and should only contain ASCII characters.
-  // It is case-sensitive.
+  // Generate a room id which including the server name and the `!` prefix does
+  // not exceed 255 bytes in length. The opaque_id between the `!` and the `:`
+  // must be random, and should only contain ASCII characters. It is
+  // case-sensitive.
 
   // Generate a random opaque_id
   auto opaque_id = random_string(16);
 
-  // Check if the combined length of the server name, `!`, opaque_id, and `:` exceeds 255 bytes and if it does truncate the opaque_id until it fits
+  // Check if the combined length of the server name, `!`, opaque_id, and `:`
+  // exceeds 255 bytes and if it does truncate the opaque_id until it fits
   while (std::format("!{}:{}", opaque_id, server_name).length() > 255) {
     opaque_id.pop_back();
   }
