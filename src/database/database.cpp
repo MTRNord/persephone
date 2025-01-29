@@ -206,7 +206,6 @@ Database::login(const LoginData login_data) {
 Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
                    std::vector<json> events, const std::string room_id) {
   try {
-#pragma unroll
     for (const auto &event : events) {
       co_await Database::add_event(transaction, event, room_id);
     }
