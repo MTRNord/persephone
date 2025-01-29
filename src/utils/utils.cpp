@@ -17,7 +17,6 @@
 #include <iterator>
 #include <ldns/ldns.h>
 #include <optional>
-#include <packet.h>
 #include <random>
 #include <rdata.h>
 #include <resolver.h>
