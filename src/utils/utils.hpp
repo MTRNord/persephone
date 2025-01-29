@@ -227,8 +227,7 @@ is_valid_localpart(const std::string &localpart,
   throw std::runtime_error("Invalid Input");
 }
 
-[[nodiscard]] static Task<std::vector<SRVRecord>>
-get_srv_record(std::string address);
+[[nodiscard]] Task<std::vector<SRVRecord>> get_srv_record(std::string address);
 
 [[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
 
