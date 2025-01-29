@@ -18,7 +18,6 @@
 #include <ldns/ldns.h>
 #include <optional>
 #include <random>
-#include <rdata.h>
 #include <resolver.h>
 #include <rr.h>
 #include <sodium/crypto_pwhash.h>
