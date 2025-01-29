@@ -3,6 +3,7 @@
 #include "database/database.hpp"
 #include "utils/config.hpp"
 #include "webserver/json.hpp"
+#include <cstddef>
 #include <drogon/HttpController.h>
 #include <drogon/HttpFilter.h>
 #include <drogon/HttpRequest.h>
@@ -12,8 +13,12 @@
 #include <functional>
 #include <optional>
 #include <utility>
+#include <vector>
 
 using namespace drogon;
+
+// Define our default room version globally
+static constexpr std::string default_room_version = "11";
 
 namespace client_server_api {
 class AccessTokenFilter final : public drogon::HttpFilter<AccessTokenFilter> {
@@ -93,13 +98,28 @@ protected:
              const std::string &roomId, const std::string &eventType,
              const std::optional<std::string> &state_key) const;
 
-  [[nodiscard]] json get_powerlevels_pdu(
-      const std::string &room_version, const std::string &sender,
-      const std::string &room_id,
-      const std::optional<client_server_json::PowerLevelEventContent>
-          &power_level_override) const;
-
 private:
   Config _config;
 };
 } // namespace client_server_api
+
+[[nodiscard]] std::
+    size_t constexpr calculate_assumed_createRoom_state_event_count(
+        const bool has_alias_name, const bool has_name, const bool has_topic,
+        const std::optional<std::size_t> &invites,
+        const std::optional<std::size_t> &invites_3pid,
+        const std::optional<std::size_t> &initial_state) {
+  unsigned long expected_state_events = 1 + 1 + 1 + (has_alias_name ? 1 : 0) +
+                                        3 + (has_name ? 1 : 0) +
+                                        (has_topic ? 1 : 0);
+  if (invites.has_value()) {
+    expected_state_events += invites.value();
+  }
+  if (invites_3pid.has_value()) {
+    expected_state_events += invites_3pid.value();
+  }
+  if (initial_state.has_value()) {
+    expected_state_events += initial_state.value();
+  }
+  return expected_state_events;
+}

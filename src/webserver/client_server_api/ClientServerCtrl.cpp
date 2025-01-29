@@ -14,13 +14,11 @@
 #include <drogon/utils/coroutine.h>
 #include <exception>
 #include <format>
-#include <fstream>
 #include <functional>
-#include <iterator>
 #include <map>
 #include <optional>
 #include <ranges>
-#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <trantor/utils/Logger.h>
 #include <unicode/locid.h>
@@ -31,8 +29,340 @@
 using namespace client_server_api;
 using json = nlohmann::json;
 
-// Define our default room version globally
-static constexpr std::string default_room_version = "11";
+namespace {
+json get_powerlevels_pdu(
+    const std::string &room_version, const std::string &sender,
+    const std::string &room_id,
+    const std::optional<client_server_json::PowerLevelEventContent>
+        &power_level_override) {
+  json power_level_event = {
+      {"type", "m.room.power_levels"},
+      {"state_key", ""},
+      {"room_id", room_id},
+      {"sender", sender},
+      {"origin_server_ts",
+       std::chrono::duration_cast<std::chrono::milliseconds>(
+           std::chrono::system_clock::now().time_since_epoch())
+           .count()},
+      {"content",
+       {
+           {"ban", 50},
+           {"events_default", 0},
+           {"invite", 0},
+           {"kick", 50},
+           {"redact", 50},
+           {"state_default", 50},
+           {"users_default", 0},
+           {"users",
+            {
+                {sender, 100},
+            }},
+           {"notifications",
+            {
+                {"room", 50},
+            }},
+       }}};
+
+  // If power_level_override has a value we need to merge it with the default
+  // power levels given above
+  if (power_level_override.has_value()) {
+    // We got a power level override, merge it with the default power levels.
+    // The override takes precedence over the default defined in
+    // `power_level_event`
+    const auto &[ban, events, events_default, invite, kick, notifications,
+                 redact, state_default, users, users_default] =
+        power_level_override.value();
+
+    if (ban.has_value()) {
+      power_level_event["content"]["ban"] = ban.value();
+    }
+    if (events.has_value()) {
+      for (const auto &[event_type, power_level] : events.value()) {
+        power_level_event["content"]["events"][event_type] = power_level;
+      }
+    }
+    if (events_default.has_value()) {
+      power_level_event["content"]["events_default"] = events_default.value();
+    }
+    if (invite.has_value()) {
+      power_level_event["content"]["invite"] = invite.value();
+    }
+    if (kick.has_value()) {
+      power_level_event["content"]["kick"] = kick.value();
+    }
+    if (notifications.has_value()) {
+      for (const auto &[notification_type, power_level] :
+           notifications.value()) {
+        power_level_event["content"]["notifications"][notification_type] =
+            power_level;
+      }
+    }
+    if (redact.has_value()) {
+      power_level_event["content"]["redact"] = redact.value();
+    }
+    if (state_default.has_value()) {
+      power_level_event["content"]["state_default"] = state_default.value();
+    }
+    if (users.has_value()) {
+      for (const auto &[user_id, power_level] : users.value()) {
+        power_level_event["content"]["users"][user_id] = power_level;
+      }
+    }
+    if (users_default.has_value()) {
+      power_level_event["content"]["users_default"] = users_default.value();
+    }
+  }
+
+  power_level_event["event_id"] = event_id(power_level_event, room_version);
+
+  return power_level_event;
+}
+
+std::vector<json> build_createRoom_state(
+    const client_server_json::CreateRoomBody &createRoom_body,
+    const std::string &room_id, const std::string &user_id,
+    const std::string &room_version) {
+  // Calculate the expected amount of state events based on the given data in
+  // the request This is used to preallocate the state_events vector We expect
+  // the following state events:
+  // 1. The m.room.create event
+  // 2. The m.room.member event for the user creating the room
+  // 3. The m.room.power_levels event
+  // 4. The m.room.canonical_alias event if room_alias_name is set
+  // 5. Based on the preset rules we might have more state events (currently
+  // m.room.join_rules, m.room.history_visibility and m.room.guest_access)
+  // 6. state events for all initial_state events
+  // 7. The m.room.name event if name is set
+  // 8. The m.room.topic event if topic is set
+  // 9. state events for all the invite and invite_3pid data (m.room.member
+  // with membership invite and m.room.third_party_invite)
+  std::size_t const expected_state_events =
+      calculate_assumed_createRoom_state_event_count(
+          createRoom_body.room_alias_name.has_value(),
+          createRoom_body.name.has_value(), createRoom_body.topic.has_value(),
+          createRoom_body.invite.has_value() ? createRoom_body.invite->size()
+                                             : 0,
+          createRoom_body.invite_3pid.has_value()
+              ? createRoom_body.invite_3pid->size()
+              : 0,
+          createRoom_body.initial_state.has_value()
+              ? createRoom_body.initial_state->size()
+              : 0);
+
+  std::vector<json> state_events;
+  state_events.reserve(expected_state_events);
+
+  // Create the m.room.create event
+  json create_room_pdu = {
+      {"type", "m.room.create"},
+      {"content", createRoom_body.creation_content.value_or(json::object({
+                      {"creator", user_id},
+                      {"room_version", room_version},
+                  }))},
+      {"origin_server_ts",
+       std::chrono::duration_cast<std::chrono::milliseconds>(
+           std::chrono::system_clock::now().time_since_epoch())
+           .count()},
+      {"sender", user_id},
+      {"state_key", ""},
+      {"room_id", room_id},
+  };
+
+  // Calculate and add event_id
+  try {
+    create_room_pdu["event_id"] = event_id(create_room_pdu, room_version);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "Failed to calculate event_id: " << e.what();
+    throw std::runtime_error("Failed to calculate event_id");
+  }
+
+  state_events.push_back(create_room_pdu);
+
+  // Create room membership event for sender of the create room request
+  json membership_pdu = {
+      {"type", "m.room.member"},
+      {"content",
+       {
+           {"membership", "join"},
+       }},
+      {"origin_server_ts",
+       std::chrono::duration_cast<std::chrono::milliseconds>(
+           std::chrono::system_clock::now().time_since_epoch())
+           .count()},
+      {"sender", user_id},
+      {"state_key", user_id},
+      {"room_id", room_id},
+  };
+
+  // Calculate and add event_id
+  try {
+    membership_pdu["event_id"] = event_id(membership_pdu, room_version);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "Failed to calculate event_id: " << e.what();
+    throw std::runtime_error("Failed to calculate event_id");
+  }
+
+  state_events.push_back(membership_pdu);
+
+  // Create the default power levels event
+  try {
+    auto power_levels_pdu =
+        get_powerlevels_pdu(room_version, user_id, room_id,
+                            createRoom_body.power_level_content_override);
+
+    state_events.push_back(power_levels_pdu);
+  } catch (const std::exception &e) {
+    LOG_ERROR << "Failed to create power levels pdu: " << e.what();
+    throw std::runtime_error("Failed to create power levels pdu");
+  }
+
+  // Check if room_alias_name is set and create the m.room.canonical_alias
+  // event
+  // TODO: record this on the DB for actual room directory logic
+  if (createRoom_body.room_alias_name.has_value()) {
+    auto canonical_alias_pdu = json{
+        {"type", "m.room.canonical_alias"},
+        {"content",
+         {
+             {"alias", createRoom_body.room_alias_name.value()},
+         }},
+        {"origin_server_ts",
+         std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+             .count()},
+        {"sender", user_id},
+        {"state_key", ""},
+        {"room_id", room_id},
+    };
+
+    // Calculate and add event_id
+    try {
+      canonical_alias_pdu["event_id"] =
+          event_id(canonical_alias_pdu, room_version);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "Failed to calculate event_id: " << e.what();
+      throw std::runtime_error("Failed to calculate event_id");
+    }
+
+    state_events.push_back(canonical_alias_pdu);
+  }
+
+  // TODO: here handle the preset
+
+  // Add origin_server_ts, room_id, sender and event_id to each initial_state
+  // event and add it to state_events
+  for (auto &initial_state :
+       createRoom_body.initial_state.value_or(std::vector<json>())) {
+    initial_state["origin_server_ts"] =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    initial_state["room_id"] = room_id;
+    initial_state["sender"] = user_id;
+
+    // Calculate and add event_id
+    try {
+      initial_state["event_id"] = event_id(initial_state, room_version);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "Failed to calculate event_id: " << e.what();
+      throw std::runtime_error("Failed to calculate event_id");
+    }
+
+    state_events.push_back(initial_state);
+  }
+
+  // If name is set create the m.room.name event
+  if (createRoom_body.name.has_value()) {
+    auto room_name_pdu = json{
+        {"type", "m.room.name"},
+        {"content",
+         {
+             {"name", createRoom_body.name.value()},
+         }},
+        {"origin_server_ts",
+         std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+             .count()},
+        {"sender", user_id},
+        {"state_key", ""},
+        {"room_id", room_id},
+    };
+
+    // Calculate and add event_id
+    try {
+      room_name_pdu["event_id"] = event_id(room_name_pdu, room_version);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "Failed to calculate event_id: " << e.what();
+      throw std::runtime_error("Failed to calculate event_id");
+    }
+
+    state_events.push_back(room_name_pdu);
+  }
+
+  // If topic is set create the m.room.topic event
+  if (createRoom_body.topic.has_value()) {
+    auto room_topic_pdu = json{
+        {"type", "m.room.topic"},
+        {"content",
+         {
+             {"topic", createRoom_body.topic.value()},
+         }},
+        {"origin_server_ts",
+         std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+             .count()},
+        {"sender", user_id},
+        {"state_key", ""},
+        {"room_id", room_id},
+    };
+
+    // Calculate and add event_id
+    try {
+      room_topic_pdu["event_id"] = event_id(room_topic_pdu, room_version);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "Failed to calculate event_id: " << e.what();
+      LOG_ERROR << "Failed to calculate event_id: " << e.what();
+      throw std::runtime_error("Failed to calculate event_id");
+    }
+
+    state_events.push_back(room_topic_pdu);
+  }
+
+  // Create invite memberhsip events
+  // TODO: Do fed requests to actually invite the users
+  // TODO: Deal with 3pid invites
+  if (createRoom_body.invite.has_value()) {
+    for (const auto &invite : createRoom_body.invite.value()) {
+      auto invite_pdu = json{
+          {"type", "m.room.member"},
+          {"content",
+           {
+               {"membership", "invite"},
+           }},
+          {"origin_server_ts",
+           std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+               .count()},
+          {"sender", user_id},
+          {"state_key", invite},
+          {"room_id", room_id},
+      };
+
+      // Calculate and add event_id
+      try {
+        invite_pdu["event_id"] = event_id(invite_pdu, room_version);
+      } catch (const std::exception &e) {
+        LOG_ERROR << "Failed to calculate event_id: " << e.what();
+        throw std::runtime_error("Failed to calculate event_id");
+      }
+
+      state_events.push_back(invite_pdu);
+    }
+  }
+
+  return state_events;
+}
+} // namespace
 
 void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
                                  FilterCallback &&callback,
@@ -495,14 +825,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     std::string room_id;
 
-    std::ifstream t(_config.matrix_config.server_key_location);
-    std::string const server_key((std::istreambuf_iterator<char>(t)),
-                                 std::istreambuf_iterator<char>());
-    std::istringstream buffer(server_key);
-    std::vector<std::string> split_data{
-        std::istream_iterator<std::string>(buffer),
-        std::istream_iterator<std::string>()};
-    auto private_key = json_utils::unbase64_key(split_data[2]);
+    const auto [key_id, private_key] =
+        load_signing_key(_config.matrix_config.server_key_location);
 
     if (roomIdOrAlias.starts_with("#")) {
       //  We first need to lookup the room alias
@@ -512,7 +836,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
            .path = std::format(
                "/_matrix/federation/v1/query/directory?room_alias={}",
                roomIdOrAlias),
-           .key_id = split_data[1],
+           .key_id = key_id,
            .secret_key = private_key,
            .origin = _config.matrix_config.server_name,
            .target = server_address.server_name,
@@ -573,7 +897,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
         {.client = client,
          .method = drogon::Get,
          .path = path,
-         .key_id = split_data[1],
+         .key_id = key_id,
          .secret_key = private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
@@ -632,8 +956,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     event["event_id"] = event_id(event, room_version.value());
     // Sign the make_join response as this is now the event
-    auto signed_event = json_utils::sign_json(
-        _config.matrix_config.server_name, split_data[1], private_key, event);
+    auto signed_event = json_utils::sign_json(_config.matrix_config.server_name,
+                                              key_id, private_key, event);
 
     // Send the signed event to the remote server on the v2/send_join endpoint
     auto send_join_resp = co_await federation_request(
@@ -642,7 +966,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .path = std::format(
              "/_matrix/federation/v2/send_join/{}/{}?omit_members=false",
              room_id, event["event_id"].get<std::string>()),
-         .key_id = split_data[1],
+         .key_id = key_id,
          .secret_key = private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
@@ -769,279 +1093,27 @@ void ClientServerCtrl::createRoom(
 
     // Generate room_id
     auto room_id = generate_room_id(_config.matrix_config.server_name);
-
-    // Calculate the expected amount of state events based on the given data in
-    // the request This is used to preallocate the state_events vector We expect
-    // the following state events:
-    // 1. The m.room.create event
-    // 2. The m.room.member event for the user creating the room
-    // 3. The m.room.power_levels event
-    // 4. The m.room.canonical_alias event if room_alias_name is set
-    // 5. Based on the preset rules we might have more state events (currently
-    // m.room.join_rules, m.room.history_visibility and m.room.guest_access)
-    // 6. state events for all initial_state events
-    // 7. The m.room.name event if name is set
-    // 8. The m.room.topic event if topic is set
-    // 9. state events for all the invite and invite_3pid data (m.room.member
-    // with membership invite and m.room.third_party_invite)
-    unsigned long expected_state_events =
-        1 + 1 + 1 + (createRoom_body.room_alias_name.has_value() ? 1 : 0) + 3 +
-        (createRoom_body.name.has_value() ? 1 : 0) +
-        (createRoom_body.topic.has_value() ? 1 : 0);
-    if (createRoom_body.invite.has_value()) {
-      expected_state_events += createRoom_body.invite.value().size();
-    }
-    if (createRoom_body.invite_3pid.has_value()) {
-      expected_state_events += createRoom_body.invite_3pid.value().size();
-    }
-    if (createRoom_body.initial_state.has_value()) {
-      expected_state_events += createRoom_body.initial_state.value().size();
-    }
-
     std::vector<json> state_events;
-    state_events.reserve(expected_state_events);
-
-    // Prepare loading the signing data
-    std::ifstream t(_config.matrix_config.server_key_location);
-    std::string const server_key((std::istreambuf_iterator<char>(t)),
-                                 std::istreambuf_iterator<char>());
-    std::istringstream buffer(server_key);
-    std::vector<std::string> split_data{
-        std::istream_iterator<std::string>(buffer),
-        std::istream_iterator<std::string>()};
-    auto private_key = json_utils::unbase64_key(split_data[2]);
-
-    // Create the m.room.create event
-    json create_room_pdu = {
-        {"type", "m.room.create"},
-        {"content", createRoom_body.creation_content.value_or(json::object({
-                        {"creator", user_info->user_id},
-                        {"room_version", room_version},
-                    }))},
-        {"origin_server_ts",
-         std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-             .count()},
-        {"sender", user_info->user_id},
-        {"state_key", ""},
-        {"room_id", room_id},
-    };
-
-    // Calculate and add event_id
     try {
-      create_room_pdu["event_id"] = event_id(create_room_pdu, room_version);
+      state_events = build_createRoom_state(createRoom_body, room_id,
+                                            user_info->user_id, room_version);
     } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                   k500InternalServerError);
+      LOG_ERROR << "Failed to build room state: " << e.what();
+      return_error(callback, "M_UNKNOWN", e.what(), k500InternalServerError);
       co_return;
-    }
-
-    state_events.push_back(create_room_pdu);
-
-    // Create room membership event for sender of the create room request
-    json membership_pdu = {
-        {"type", "m.room.member"},
-        {"content",
-         {
-             {"membership", "join"},
-         }},
-        {"origin_server_ts",
-         std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::system_clock::now().time_since_epoch())
-             .count()},
-        {"sender", user_info->user_id},
-        {"state_key", user_info->user_id},
-        {"room_id", room_id},
-    };
-
-    // Calculate and add event_id
-    try {
-      membership_pdu["event_id"] = event_id(membership_pdu, room_version);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                   k500InternalServerError);
-      co_return;
-    }
-
-    state_events.push_back(membership_pdu);
-
-    // Create the default power levels event
-    try {
-      auto power_levels_pdu =
-          get_powerlevels_pdu(room_version, user_info->user_id, room_id,
-                              createRoom_body.power_level_content_override);
-
-      state_events.push_back(power_levels_pdu);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to create power levels pdu: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to create power levels pdu",
-                   k500InternalServerError);
-      co_return;
-    }
-
-    // Check if room_alias_name is set and create the m.room.canonical_alias
-    // event
-    // TODO: record this on the DB for actual room directory logic
-    if (createRoom_body.room_alias_name.has_value()) {
-      auto canonical_alias_pdu = json{
-          {"type", "m.room.canonical_alias"},
-          {"content",
-           {
-               {"alias", createRoom_body.room_alias_name.value()},
-           }},
-          {"origin_server_ts",
-           std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-               .count()},
-          {"sender", user_info->user_id},
-          {"state_key", ""},
-          {"room_id", room_id},
-      };
-
-      // Calculate and add event_id
-      try {
-        canonical_alias_pdu["event_id"] =
-            event_id(canonical_alias_pdu, room_version);
-      } catch (const std::exception &e) {
-        LOG_ERROR << "Failed to calculate event_id: " << e.what();
-        return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     k500InternalServerError);
-        co_return;
-      }
-
-      state_events.push_back(canonical_alias_pdu);
-    }
-
-    // TODO: here handle the preset
-
-    // Add origin_server_ts, room_id, sender and event_id to each initial_state
-    // event and add it to state_events
-    for (auto &initial_state :
-         createRoom_body.initial_state.value_or(std::vector<json>())) {
-      initial_state["origin_server_ts"] =
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::system_clock::now().time_since_epoch())
-              .count();
-      initial_state["room_id"] = room_id;
-      initial_state["sender"] = user_info->user_id;
-
-      // Calculate and add event_id
-      try {
-        initial_state["event_id"] = event_id(initial_state, room_version);
-      } catch (const std::exception &e) {
-        LOG_ERROR << "Failed to calculate event_id: " << e.what();
-        return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     k500InternalServerError);
-        co_return;
-      }
-
-      state_events.push_back(initial_state);
-    }
-
-    // If name is set create the m.room.name event
-    if (createRoom_body.name.has_value()) {
-      auto room_name_pdu = json{
-          {"type", "m.room.name"},
-          {"content",
-           {
-               {"name", createRoom_body.name.value()},
-           }},
-          {"origin_server_ts",
-           std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-               .count()},
-          {"sender", user_info->user_id},
-          {"state_key", ""},
-          {"room_id", room_id},
-      };
-
-      // Calculate and add event_id
-      try {
-        room_name_pdu["event_id"] = event_id(room_name_pdu, room_version);
-      } catch (const std::exception &e) {
-        LOG_ERROR << "Failed to calculate event_id: " << e.what();
-        return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     k500InternalServerError);
-        co_return;
-      }
-
-      state_events.push_back(room_name_pdu);
-    }
-
-    // If topic is set create the m.room.topic event
-    if (createRoom_body.topic.has_value()) {
-      auto room_topic_pdu = json{
-          {"type", "m.room.topic"},
-          {"content",
-           {
-               {"topic", createRoom_body.topic.value()},
-           }},
-          {"origin_server_ts",
-           std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-               .count()},
-          {"sender", user_info->user_id},
-          {"state_key", ""},
-          {"room_id", room_id},
-      };
-
-      // Calculate and add event_id
-      try {
-        room_topic_pdu["event_id"] = event_id(room_topic_pdu, room_version);
-      } catch (const std::exception &e) {
-        LOG_ERROR << "Failed to calculate event_id: " << e.what();
-        return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     k500InternalServerError);
-        co_return;
-      }
-
-      state_events.push_back(room_topic_pdu);
-    }
-
-    // Create invite memberhsip events
-    // TODO: Do fed requests to actually invite the users
-    // TODO: Deal with 3pid invites
-    if (createRoom_body.invite.has_value()) {
-      for (const auto &invite : createRoom_body.invite.value()) {
-        auto invite_pdu = json{
-            {"type", "m.room.member"},
-            {"content",
-             {
-                 {"membership", "invite"},
-             }},
-            {"origin_server_ts",
-             std::chrono::duration_cast<std::chrono::milliseconds>(
-                 std::chrono::system_clock::now().time_since_epoch())
-                 .count()},
-            {"sender", user_info->user_id},
-            {"state_key", invite},
-            {"room_id", room_id},
-        };
-
-        // Calculate and add event_id
-        try {
-          invite_pdu["event_id"] = event_id(invite_pdu, room_version);
-        } catch (const std::exception &e) {
-          LOG_ERROR << "Failed to calculate event_id: " << e.what();
-          return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                       k500InternalServerError);
-          co_return;
-        }
-
-        state_events.push_back(invite_pdu);
-      }
     }
 
     // Sign all the state events
+
+    // Prepare loading the signing data
+    const auto [key_id, private_key] =
+        load_signing_key(_config.matrix_config.server_key_location);
     LOG_DEBUG << "Signing state events";
 
     find_auth_event_for_event_on_create(state_events, room_version);
     for (auto &state_event : state_events) {
-      state_event =
-          json_utils::sign_json(_config.matrix_config.server_name,
-                                split_data[1], private_key, state_event);
+      state_event = json_utils::sign_json(_config.matrix_config.server_name,
+                                          key_id, private_key, state_event);
     }
 
     LOG_DEBUG << "Doing state resolution";
@@ -1095,95 +1167,6 @@ void ClientServerCtrl::createRoom(
 
   );
 }
-
-json ClientServerCtrl::get_powerlevels_pdu(
-    const std::string &room_version, const std::string &sender,
-    const std::string &room_id,
-    const std::optional<client_server_json::PowerLevelEventContent>
-        &power_level_override) const {
-  json power_level_event = {
-      {"type", "m.room.power_levels"},
-      {"state_key", ""},
-      {"room_id", room_id},
-      {"sender", sender},
-      {"origin_server_ts",
-       std::chrono::duration_cast<std::chrono::milliseconds>(
-           std::chrono::system_clock::now().time_since_epoch())
-           .count()},
-      {"content",
-       {
-           {"ban", 50},
-           {"events_default", 0},
-           {"invite", 0},
-           {"kick", 50},
-           {"redact", 50},
-           {"state_default", 50},
-           {"users_default", 0},
-           {"users",
-            {
-                {sender, 100},
-            }},
-           {"notifications",
-            {
-                {"room", 50},
-            }},
-       }}};
-
-  // If power_level_override has a value we need to merge it with the default
-  // power levels given above
-  if (power_level_override.has_value()) {
-    // We got a power level override, merge it with the default power levels.
-    // The override takes precedence over the default defined in
-    // `power_level_event`
-    const auto &[ban, events, events_default, invite, kick, notifications,
-                 redact, state_default, users, users_default] =
-        power_level_override.value();
-
-    if (ban.has_value()) {
-      power_level_event["content"]["ban"] = ban.value();
-    }
-    if (events.has_value()) {
-      for (const auto &[event_type, power_level] : events.value()) {
-        power_level_event["content"]["events"][event_type] = power_level;
-      }
-    }
-    if (events_default.has_value()) {
-      power_level_event["content"]["events_default"] = events_default.value();
-    }
-    if (invite.has_value()) {
-      power_level_event["content"]["invite"] = invite.value();
-    }
-    if (kick.has_value()) {
-      power_level_event["content"]["kick"] = kick.value();
-    }
-    if (notifications.has_value()) {
-      for (const auto &[notification_type, power_level] :
-           notifications.value()) {
-        power_level_event["content"]["notifications"][notification_type] =
-            power_level;
-      }
-    }
-    if (redact.has_value()) {
-      power_level_event["content"]["redact"] = redact.value();
-    }
-    if (state_default.has_value()) {
-      power_level_event["content"]["state_default"] = state_default.value();
-    }
-    if (users.has_value()) {
-      for (const auto &[user_id, power_level] : users.value()) {
-        power_level_event["content"]["users"][user_id] = power_level;
-      }
-    }
-    if (users_default.has_value()) {
-      power_level_event["content"]["users_default"] = users_default.value();
-    }
-  }
-
-  power_level_event["event_id"] = event_id(power_level_event, room_version);
-
-  return power_level_event;
-}
-
 void ClientServerCtrl::state(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback,

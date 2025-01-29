@@ -377,3 +377,6 @@ generate_room_id(const std::string &server_name) {
 
   return std::format("!{}:{}", opaque_id, server_name);
 }
+
+[[nodiscard]] std::pair<std::string, std::vector<unsigned char>>
+load_signing_key(const std::filesystem::path &key_location);
