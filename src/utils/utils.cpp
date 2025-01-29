@@ -18,8 +18,6 @@
 #include <ldns/ldns.h>
 #include <optional>
 #include <random>
-#include <resolver.h>
-#include <rr.h>
 #include <sodium/crypto_pwhash.h>
 #include <sodium/crypto_sign.h>
 #include <sodium/crypto_sign_ed25519.h>
