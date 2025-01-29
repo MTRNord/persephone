@@ -1,9 +1,7 @@
 #include "utils.hpp"
-#include "sodium.h"
 #include "utils/json_utils.hpp"
 #include "webserver/json.hpp"
 #include <algorithm>
-#include <arpa/nameser.h>
 #include <coroutine>
 #include <cstddef>
 #include <dname.h>
@@ -19,7 +17,6 @@
 #include <functional>
 #include <iterator>
 #include <ldns/ldns.h>
-#include <map>
 #include <optional>
 #include <packet.h>
 #include <random>
