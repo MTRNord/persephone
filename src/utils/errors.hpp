@@ -1,6 +1,7 @@
 #pragma once
 #include "string"
 #include <exception>
+#include <utility>
 
 /**
  * @brief Constructs a new Config object.

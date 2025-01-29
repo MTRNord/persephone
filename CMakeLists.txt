@@ -14,6 +14,9 @@ include(FetchContent)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 17)
 
+# DEV: Set clang-tidy
+# set(CMAKE_CXX_CLANG_TIDY "clang-tidy")
+
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -66,6 +69,7 @@ target_link_libraries(persephone PRIVATE
 )
 # Set warning levels and other compiler options
 target_compile_options(persephone PRIVATE
+        -DJSON_DIAGNOSTICS=1
         -Wshadow
         -Wconversion
         -Wpedantic
@@ -113,7 +117,7 @@ if (NOT DISABLE_TESTS)
             ICU::uc
             snitch::snitch
     )
-    
+
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test

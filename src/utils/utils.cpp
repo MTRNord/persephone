@@ -4,13 +4,39 @@
 #include "webserver/json.hpp"
 #include <algorithm>
 #include <arpa/nameser.h>
+#include <common.h>
 #include <coroutine>
+#include <cstddef>
+#include <dname.h>
+#include <drogon/HttpClient.h>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/HttpTypes.h>
+#include <drogon/utils/coroutine.h>
+#include <error.h>
+#include <exception>
 #include <format>
 #include <fstream>
+#include <functional>
+#include <iterator>
 #include <ldns/ldns.h>
 #include <map>
+#include <optional>
+#include <packet.h>
 #include <random>
+#include <rdata.h>
+#include <resolver.h>
+#include <rr.h>
+#include <sodium/crypto_pwhash.h>
+#include <sodium/crypto_sign.h>
+#include <sodium/crypto_sign_ed25519.h>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 #include <utility>
+#include <vector>
+#include <zconf.h>
 #include <zlib.h>
 
 /**
@@ -29,13 +55,14 @@
  */
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                   const std::string &errorcode, const std::string &error,
-                  const int status_code) {
-  generic_json::generic_json_error json_error{errorcode, error};
-  json j = json_error;
+                  const HttpStatusCode status_code) {
+  generic_json::generic_json_error const json_error{.errcode = errorcode,
+                                                    .error = error};
+  json const json_data = json_error;
   const auto resp = HttpResponse::newHttpResponse();
-  resp->setBody(j.dump());
+  resp->setBody(json_data.dump());
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-  resp->setCustomStatusCode(status_code);
+  resp->setStatusCode(status_code);
   callback(resp);
 }
 
@@ -54,7 +81,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
 [[nodiscard]] std::string random_string(const std::size_t len) {
   std::mt19937 mt_gen(std::random_device{}());
 
-  std::string alphanum =
+  const std::string alphanum =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
   std::string tmp_s;
@@ -87,7 +114,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                         crypto_pwhash_MEMLIMIT_SENSITIVE) != 0) {
     throw std::runtime_error("Failed to hash password");
   }
-  std::string hashed_password(hashed_password_array.data());
+  std::string hashed_password(hashed_password_array);
 
   return hashed_password;
 }
@@ -142,20 +169,22 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
  * @return A Task that will eventually contain a vector of SRV records.
  */
 [[nodiscard]] Task<std::vector<SRVRecord>>
-get_srv_record(const std::string &address) {
+get_srv_record(const std::string address) {
   std::vector<SRVRecord> records;
   struct awaiter : std::suspend_always {
+  private:
     std::string _address;
     std::vector<SRVRecord> &_records;
     std::coroutine_handle<> handle;
 
+  public:
     awaiter(std::string address, std::vector<SRVRecord> &records)
         : _address(std::move(address)), _records(records) {}
 
     void await_suspend(const std::coroutine_handle<> handle_) {
       this->handle = handle_;
 
-      ldns_resolver *res;
+      ldns_resolver *res = nullptr;
       ldns_rdf *domain = ldns_dname_new_frm_str(_address.c_str());
       if (!domain) {
         throw std::runtime_error("Failed to parse domain");
@@ -165,49 +194,49 @@ get_srv_record(const std::string &address) {
         ldns_rdf_set_size(domain, ldns_rdf_size(domain) - 1);
       }
 
-      ldns_status s = ldns_resolver_new_frm_file(&res, nullptr);
-      if (s != LDNS_STATUS_OK) {
+      if (ldns_status const status = ldns_resolver_new_frm_file(&res, nullptr);
+          status != LDNS_STATUS_OK) {
         throw std::runtime_error(std::format("Failed to create resolver: {}",
-                                             ldns_get_errorstr_by_id(s)));
+                                             ldns_get_errorstr_by_id(status)));
       }
 
-      ldns_pkt *p = ldns_resolver_search(res, domain, LDNS_RR_TYPE_SRV,
-                                         LDNS_RR_CLASS_IN, LDNS_RD);
+      ldns_pkt *record_packet = ldns_resolver_search(
+          res, domain, LDNS_RR_TYPE_SRV, LDNS_RR_CLASS_IN, LDNS_RD);
       ldns_rdf_deep_free(domain);
 
-      if (!p) {
+      if (!record_packet) {
         throw std::runtime_error("Failed to resolve SRV record");
       }
 
-      ldns_rr_list *srv_record =
-          ldns_pkt_rr_list_by_type(p, LDNS_RR_TYPE_SRV, LDNS_SECTION_ANSWER);
+      ldns_rr_list *srv_record = ldns_pkt_rr_list_by_type(
+          record_packet, LDNS_RR_TYPE_SRV, LDNS_SECTION_ANSWER);
 
       if (!srv_record) {
-        ldns_pkt_free(p);
+        ldns_pkt_free(record_packet);
         ldns_resolver_deep_free(res);
         throw std::runtime_error("Failed to parse SRV record");
       }
 
       ldns_rr_list_sort(srv_record);
 
-      // Create the SRVRcord objects
+      // Create the SRVRecord objects
       for (size_t i = 0; i < ldns_rr_list_rr_count(srv_record); i++) {
-        const ldns_rr *rr = ldns_rr_list_rr(srv_record, i);
+        const ldns_rr *record_rr = ldns_rr_list_rr(srv_record, i);
         SRVRecord srv;
-        srv.host = ldns_rdf2str(ldns_rr_rdf(rr, 0));
-        srv.port = ldns_rdf2native_int16(ldns_rr_rdf(rr, 1));
-        srv.priority = ldns_rdf2native_int16(ldns_rr_rdf(rr, 2));
-        srv.weight = ldns_rdf2native_int16(ldns_rr_rdf(rr, 3));
+        srv.host = ldns_rdf2str(ldns_rr_rdf(record_rr, 0));
+        srv.port = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 1));
+        srv.priority = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 2));
+        srv.weight = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 3));
         _records.push_back(srv);
       }
       ldns_rr_list_deep_free(srv_record);
 
-      ldns_pkt_free(p);
+      ldns_pkt_free(record_packet);
       ldns_resolver_deep_free(res);
     }
   };
 
-  //  FIXME: We might need to rethrow here
+  // TODO: FIXME: We might need to rethrow here
   co_await awaiter(std::format("_matrix-fed._tcp.{}", address), records);
   co_return records;
 }
@@ -225,12 +254,14 @@ get_srv_record(const std::string &address) {
  * @return true if the address is an IP address, false otherwise.
  */
 [[nodiscard]] bool check_if_ip_address(const std::string &address) {
-  struct sockaddr_in sa;
+  struct sockaddr_in socket_addr;
   auto is_ipv4 = false;
-  const auto result = inet_pton(AF_INET, address.c_str(), &(sa.sin_addr));
+  const auto result =
+      inet_pton(AF_INET, address.c_str(), &(socket_addr.sin_addr));
   is_ipv4 = result == 1;
 
-  const auto result_v6 = inet_pton(AF_INET6, address.c_str(), &(sa.sin_addr));
+  const auto result_v6 =
+      inet_pton(AF_INET6, address.c_str(), &(socket_addr.sin_addr));
   return is_ipv4 || result_v6 == 1;
 }
 
@@ -249,7 +280,7 @@ get_srv_record(const std::string &address) {
  * @return A Task that will eventually contain a boolean value indicating
  * whether the server is reachable or not.
  */
-[[nodiscard]] Task<bool> isServerReachable(const SRVRecord &server) {
+[[nodiscard]] Task<bool> isServerReachable(const SRVRecord server) {
   const auto client = HttpClient::newHttpClient(
       std::format("https://{}:{}", server.host, server.port));
   client->setUserAgent(UserAgent);
@@ -261,7 +292,7 @@ get_srv_record(const std::string &address) {
   auto failure = false;
   try {
     if (const HttpResponsePtr resp = co_await client->sendRequestCoro(req, 10);
-        resp->statusCode() != 200) {
+        resp->statusCode() != k200OK) {
       failure = true;
     }
   } catch ([[maybe_unused]] const std::exception &err) {
@@ -291,14 +322,14 @@ get_srv_record(const std::string &address) {
  * @throws std::runtime_error if no server can be selected.
  */
 [[nodiscard]] Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
-  std::random_device rd;
-  std::mt19937 gen(rd());
+  std::random_device random_device;
+  std::mt19937 gen(random_device());
 
   while (!servers.empty()) {
     // Finding the minimum priority using std::min_element and lambda
     const auto minPriority = std::ranges::min_element(
-        servers, [](const SRVRecord &a, const SRVRecord &b) {
-          return a.priority < b.priority;
+        servers, [](const SRVRecord &first, const SRVRecord &second) {
+          return first.priority < second.priority;
         });
 
     const auto minPriorityVal = minPriority->priority;
@@ -312,13 +343,13 @@ get_srv_record(const std::string &address) {
 
     // Sorting the servers based on weight using std::sort and lambda
     std::ranges::sort(minPriorityServers,
-                      [](const SRVRecord &a, const SRVRecord &b) {
-                        return a.weight > b.weight;
+                      [](const SRVRecord &first, const SRVRecord &second) {
+                        return first.weight > second.weight;
                       });
 
     const unsigned int totalWeight =
         std::accumulate(minPriorityServers.begin(), minPriorityServers.end(),
-                        0u, [](unsigned int sum, const SRVRecord &srv) {
+                        0U, [](unsigned int sum, const SRVRecord &srv) {
                           return sum + srv.weight;
                         });
 
@@ -359,7 +390,7 @@ get_srv_record(const std::string &address) {
  * representing the discovered server.
  */
 [[nodiscard]] Task<ResolvedServer>
-discover_server(const std::string &server_name) {
+discover_server(const std::string server_name) {
   /*
    * If the hostname is an IP literal, then that IP address should be used,
    * together with the given port number, or 8448 if no port is given. The
@@ -373,13 +404,13 @@ discover_server(const std::string &server_name) {
   auto address = server_name.substr(0, server_name.find_last_of(':') + 1);
   if (auto clean_address = remove_brackets(address);
       check_if_ip_address(clean_address)) {
-    unsigned long integer_port = 8448;
+    unsigned long integer_port = MATRIX_SSL_PORT;
     if (!port.empty()) {
       integer_port = std::stoul(port);
     }
     co_return ResolvedServer{
         .address = address,
-        .port = std::move(integer_port),
+        .port = integer_port,
         .server_name = server_name,
     };
   }
@@ -410,8 +441,8 @@ discover_server(const std::string &server_name) {
   HttpResponsePtr resp;
   auto failure = false;
   try {
-    resp = co_await client->sendRequestCoro(req, 10);
-    if (resp->statusCode() != 200) {
+    resp = co_await client->sendRequestCoro(req, DEFAULT_FEDERATION_TIMEOUT);
+    if (resp->statusCode() != k200OK) {
       failure = true;
     }
   } catch ([[maybe_unused]] const std::exception &err) {
@@ -420,10 +451,10 @@ discover_server(const std::string &server_name) {
 
   if (!failure) {
     // Get the response body as json
-    json body = json::parse(resp->body());
-    auto [m_server] = body.get<server_server_json::well_known>();
+    json const body = json::parse(resp->body());
 
-    if (m_server) {
+    if (auto [m_server] = body.get<server_server_json::well_known>();
+        m_server) {
       auto delegated_server_name = m_server.value();
       auto delegated_port = delegated_server_name.substr(
           delegated_server_name.find_last_of(':') + 1,
@@ -434,13 +465,13 @@ discover_server(const std::string &server_name) {
 
       if (auto delegated_clean_address = remove_brackets(delegated_address);
           check_if_ip_address(delegated_clean_address)) {
-        unsigned long integer_port = 8448;
+        unsigned long integer_port = MATRIX_SSL_PORT;
         if (!port.empty()) {
           integer_port = std::stoul(delegated_port);
         }
         co_return ResolvedServer{
             .address = delegated_address,
-            .port = std::move(integer_port),
+            .port = integer_port,
             .server_name = delegated_server_name,
         };
       }
@@ -465,7 +496,7 @@ discover_server(const std::string &server_name) {
 
       co_return ResolvedServer{
           .address = delegated_address,
-          .port = 8448,
+          .port = MATRIX_SSL_PORT,
           .server_name = delegated_server_name,
       };
     }
@@ -479,8 +510,7 @@ discover_server(const std::string &server_name) {
    * of <hostname>. The target server must present a valid certificate for
    * <hostname>.
    */
-  auto srv_resp = co_await get_srv_record(server_name);
-  if (!srv_resp.empty()) {
+  if (auto srv_resp = co_await get_srv_record(server_name); !srv_resp.empty()) {
     auto server = co_await pick_srv_server(srv_resp);
     co_return ResolvedServer{
         .address = server.host,
@@ -491,7 +521,7 @@ discover_server(const std::string &server_name) {
 
   co_return ResolvedServer{
       .address = address,
-      .port = 8448,
+      .port = MATRIX_SSL_PORT,
       .server_name = server_name,
   };
 }
@@ -538,7 +568,7 @@ discover_server(const std::string &server_name) {
       json_utils::sign_json(server_name, key_id, secret_key, request_json);
 
   std::vector<std::string> authorization_headers;
-  for (auto &[key, val] : signed_json.items()) {
+  for (const auto &[key, val] : signed_json.items()) {
     authorization_headers.push_back(std::format(
         R"(X-Matrix origin="{}",destination="{}",key="{}",sig="{}")", origin,
         target, key, val.get<std::string>()));
@@ -606,7 +636,7 @@ parseQueryParamString(const std::string &queryString) {
  * server.
  */
 [[nodiscard]] Task<drogon::HttpResponsePtr>
-federation_request(const HTTPRequest &request) {
+federation_request(const HTTPRequest request) {
   const auto auth_header = generate_ss_authheader(
       request.origin, request.key_id, request.secret_key,
       drogon_to_string_method(request.method), request.path, request.origin,
@@ -639,8 +669,8 @@ federation_request(const HTTPRequest &request) {
  */
 [[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config) {
   std::ifstream t(config.matrix_config.server_key_location);
-  std::string server_key((std::istreambuf_iterator<char>(t)),
-                         std::istreambuf_iterator<char>());
+  std::string const server_key((std::istreambuf_iterator<char>(t)),
+                               std::istreambuf_iterator<char>());
   std::istringstream buffer(server_key);
   std::vector<std::string> split_data{
       std::istream_iterator<std::string>(buffer),

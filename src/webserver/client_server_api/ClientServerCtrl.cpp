@@ -1,51 +1,69 @@
-#define JSON_DIAGNOSTICS 1
-
 #include "ClientServerCtrl.hpp"
 #include "database/database.hpp"
 #include "nlohmann/json.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
+#include <chrono>
+#include <drogon/HttpAppFramework.h>
+#include <drogon/HttpClient.h>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/HttpTypes.h>
+#include <drogon/drogon_callbacks.h>
+#include <drogon/utils/coroutine.h>
+#include <exception>
+#include <format>
 #include <fstream>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <optional>
+#include <ranges>
+#include <sstream>
+#include <string>
+#include <trantor/utils/Logger.h>
 #include <unicode/locid.h>
 #include <unicode/unistr.h>
 #include <utils/state_res.hpp>
+#include <vector>
 
 using namespace client_server_api;
 using json = nlohmann::json;
 
 // Define our default room version globally
-static const std::string default_room_version = "11";
+static constexpr std::string default_room_version = "11";
 
 void AccessTokenFilter::doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
                                  FilterChainCallback &&ccb) {
-  drogon::async_run([req, ccb = std::move(ccb),
-                     cb = std::move(cb)]() -> drogon::Task<> {
-    // If this is an OPTIONS request, we can skip the filter
-    if (req->method() == drogon::Options) {
-      ccb();
-      co_return;
-    }
+  drogon::async_run(
+      [req, ccb = std::move(ccb), cb = std::move(cb)]() -> drogon::Task<> {
+        // If this is an OPTIONS request, we can skip the filter
+        if (req->method() == drogon::Options) {
+          ccb();
+          co_return;
+        }
 
-    // Get the access token from the Authorization header
-    const auto auth_header = req->getHeader("Authorization");
-    if (auth_header.empty()) {
-      return_error(cb, "M_MISSING_TOKEN", "Missing Authorization header", 401);
-      co_return;
-    }
-    constexpr Database db{};
-    // TMP loging for complement debugging
-    LOG_DEBUG << "Access token: " << auth_header;
+        // Get the access token from the Authorization header
+        const auto auth_header = req->getHeader("Authorization");
+        if (auth_header.empty()) {
+          return_error(cb, "M_MISSING_TOKEN", "Missing Authorization header",
+                       k401Unauthorized);
+          co_return;
+        }
+        // TMP loging for complement debugging
+        LOG_DEBUG << "Access token: " << auth_header;
 
-    // Remove the "Bearer " prefix and check if the token is valid;
-    if (const auto access_token = auth_header.substr(7);
-        co_await db.validate_access_token(access_token)) {
-      ccb();
-      co_return;
-    }
-    return_error(cb, "M_UNKNOWN_TOKEN", "Unrecognised access token.", 401);
-    co_return;
-  });
+        // Remove the "Bearer " prefix and check if the token is valid;
+        if (const auto access_token = auth_header.substr(7);
+            co_await Database::validate_access_token(access_token)) {
+          ccb();
+          co_return;
+        }
+        return_error(cb, "M_UNKNOWN_TOKEN", "Unrecognised access token.",
+                     k401Unauthorized);
+        co_return;
+      });
 }
 
 void ClientServerCtrl::versions(
@@ -68,194 +86,204 @@ void ClientServerCtrl::versions(
 void ClientServerCtrl::whoami(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
-  drogon::async_run([req, callback = std::move(callback),
-                     this]() -> drogon::Task<> {
-    // Get the access token from the Authorization header
-    const auto auth_header = req->getHeader("Authorization");
-    if (auth_header.empty()) {
-      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   401);
-      co_return;
-    }
-    // Remove the "Bearer " prefix
-    const auto access_token = auth_header.substr(7);
+  drogon::async_run(
+      [req, callback = std::move(callback), this]() -> drogon::Task<> {
+        // Get the access token from the Authorization header
+        const auto auth_header = req->getHeader("Authorization");
+        if (auth_header.empty()) {
+          return_error(callback, "M_MISSING_TOKEN",
+                       "Missing Authorization header", k401Unauthorized);
+          co_return;
+        }
+        // Remove the "Bearer " prefix
+        const auto access_token = auth_header.substr(7);
 
-    const auto resp = HttpResponse::newHttpResponse();
+        const auto resp = HttpResponse::newHttpResponse();
 
-    // Check if we have the access token in the database
-    const auto user_info = co_await _db.get_user_info(access_token);
+        // Check if we have the access token in the database
+        const auto user_info = co_await Database::get_user_info(access_token);
 
-    if (!user_info) {
-      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
-      co_return;
-    }
+        if (!user_info) {
+          return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                       k401Unauthorized);
+          co_return;
+        }
 
-    // Return the user id, if the user is a guest and the
-    // device id if its set as json
-    client_server_json::whoami_resp j_resp = {
-        .user_id = user_info->user_id,
-        .is_guest = user_info->is_guest,
-        .device_id = user_info->device_id,
-    };
-    const json j = j_resp;
+        // Return the user id, if the user is a guest and the
+        // device id if its set as json
+        client_server_json::whoami_resp const j_resp = {
+            .user_id = user_info->user_id,
+            .is_guest = user_info->is_guest,
+            .device_id = user_info->device_id,
+        };
+        const json json = j_resp;
 
-    resp->setBody(j.dump());
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-    callback(resp);
-  });
+        resp->setBody(json.dump());
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        callback(resp);
+      });
 }
 
 void ClientServerCtrl::user_available(
     const HttpRequestPtr &,
     std::function<void(const HttpResponsePtr &)> &&callback,
     const std::string &username) const {
-  drogon::async_run([username, callback = std::move(callback),
-                     this]() -> drogon::Task<> {
-    auto server_name = _config.matrix_config.server_name;
+  drogon::async_run(
+      [username, callback = std::move(callback), this]() -> drogon::Task<> {
+        auto server_name = _config.matrix_config.server_name;
 
-    // Check if the username is valid
-    auto fixed_username = migrate_localpart(username);
-    if (!is_valid_localpart(fixed_username, server_name)) {
-      return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
-      co_return;
-    }
+        // Check if the username is valid
+        auto fixed_username = migrate_localpart(username);
+        if (!is_valid_localpart(fixed_username, server_name)) {
+          return_error(callback, "M_INVALID_USERNAME", "Invalid username",
+                       k400BadRequest);
+          co_return;
+        }
 
-    const auto resp = HttpResponse::newHttpResponse();
-    // Check if the username is already taken
-    const auto user_exists = co_await _db.user_exists(
-        std::format("@{}:{}", fixed_username, server_name));
+        const auto resp = HttpResponse::newHttpResponse();
+        // Check if the username is already taken
+        const auto user_exists = co_await Database::user_exists(
+            std::format("@{}:{}", fixed_username, server_name));
 
-    if (user_exists) {
-      return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
-      co_return;
-    }
+        if (user_exists) {
+          return_error(callback, "M_USER_IN_USE", "Username already taken",
+                       k400BadRequest);
+          co_return;
+        }
 
-    // Check if the username is in a namespace exclusively
-    // claimed by an application service.
-    // TODO: Implement this
+        // Check if the username is in a namespace exclusively
+        // claimed by an application service.
+        // TODO: Implement this
 
-    // Return 200 OK with empty json body
-    const auto json_data = []() {
-      auto j = json::object();
-      j["available"] = true;
-      return j.dump();
-    }();
+        // Return 200 OK with empty json body
+        const auto json_data = []() {
+          auto json = json::object();
+          json["available"] = true;
+          return json.dump();
+        }();
 
-    resp->setBody(json_data);
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-    callback(resp);
-  });
+        resp->setBody(json_data);
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        callback(resp);
+      });
 }
 
 void ClientServerCtrl::login(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
-  drogon::async_run([req, callback = std::move(callback),
-                     this]() -> drogon::Task<> {
-    if (req->method() == drogon::Get) {
-      const auto login_flow = []() {
-        const client_server_json::LoginFlow password_flow = {
-            .type = "m.login.password"};
-        client_server_json::GetLogin login{.flows = {std::move(password_flow)}};
-        const json j = login;
-        return j.dump();
-      }();
+  drogon::async_run(
+      [req, callback = std::move(callback), this]() -> drogon::Task<> {
+        if (req->method() == drogon::Get) {
+          const auto login_flow = []() {
+            const client_server_json::LoginFlow password_flow = {
+                .type = "m.login.password"};
+            client_server_json::GetLogin const login{.flows = {password_flow}};
+            const json json = login;
+            return json.dump();
+          }();
 
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setBody(login_flow);
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-      callback(resp);
-    } else if (req->method() == drogon::Post) {
-      // Print body for debugging
-      LOG_DEBUG << "Body: " << req->body();
-      LOG_DEBUG << "Content type: " << req->getHeader("Content-Type");
-      // Parse body as login_body json
-      json body;
-      try {
-        body = json::parse(req->body());
-      } catch (json::parse_error &ex) {
-        LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
-        return_error(callback, "M_NOT_JSON",
-                     "Unable to parse json. Is this valid json?", 500);
-        co_return;
-      }
+          const auto resp = HttpResponse::newHttpResponse();
+          resp->setBody(login_flow);
+          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+          callback(resp);
+        } else if (req->method() == drogon::Post) {
+          // Print body for debugging
+          LOG_DEBUG << "Body: " << req->body();
+          LOG_DEBUG << "Content type: " << req->getHeader("Content-Type");
+          // Parse body as login_body json
+          json body;
+          try {
+            body = json::parse(req->body());
+          } catch (json::parse_error &ex) {
+            LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
+            return_error(callback, "M_NOT_JSON",
+                         "Unable to parse json. Is this valid json?",
+                         k500InternalServerError);
+            co_return;
+          }
 
-      client_server_json::login_body login_body;
-      try {
-        login_body = body.get<client_server_json::login_body>();
-      } catch (...) {
-        const auto ex_re = std::current_exception();
-        try {
-          std::rethrow_exception(ex_re);
-        } catch (std::bad_exception const &ex) {
-          LOG_WARN << "Failed to parse json as login_body in login: "
-                   << ex.what() << '\n';
+          client_server_json::login_body login_body;
+          try {
+            login_body = body.get<client_server_json::login_body>();
+          } catch (...) {
+            const auto ex_re = std::current_exception();
+            try {
+              std::rethrow_exception(ex_re);
+            } catch (std::bad_exception const &ex) {
+              LOG_WARN << "Failed to parse json as login_body in login: "
+                       << ex.what() << '\n';
+            }
+            return_error(
+                callback, "M_BAD_JSON",
+                "Unable to parse json. Ensure all required fields are present?",
+                k500InternalServerError);
+            co_return;
+          }
+
+          // We for now only support type "m.login.password"
+          if (login_body.type != "m.login.password") {
+            return_error(callback, "M_UNKNOWN", "Unknown login type",
+                         k400BadRequest);
+            co_return;
+          }
+
+          // If identifier is not set, we return 400
+          if (!login_body.identifier.has_value()) {
+            return_error(callback, "M_UNKNOWN", "Missing identifier",
+                         k400BadRequest);
+            co_return;
+          }
+
+          // Use the database login function to check if the user exists and
+          // create an access token
+          try {
+            const auto supplied_user_id = login_body.identifier->user.value();
+            // Convert the user id to a icu compatible char16_t/UChar string
+            icu::UnicodeString user_id_icu(supplied_user_id.c_str());
+            // Get the english locale
+            const auto locale = icu::Locale::getEnglish();
+
+            // Ensure the user id is lowercase using icu library's u_strToLower
+            const auto user_id_lower_uci = user_id_icu.toLower(locale);
+
+            // Convert the user id to a std::string again
+            std::string user_id_lower;
+            user_id_lower_uci.toUTF8String(user_id_lower);
+            // If the user id does not start with @, we assume it is a localpart
+            // and append the server name
+            const std::string user_id =
+                user_id_lower[0] == '@'
+                    ? user_id_lower
+                    : std::format("@{}:{}", user_id_lower,
+                                  _config.matrix_config.server_name);
+
+            const Database::LoginData login_data{
+                .matrix_id = user_id,
+                .password = login_body.password.value(),
+                .initial_device_name = login_body.initial_device_display_name,
+                .device_id = login_body.device_id,
+            };
+            const auto login_resp = co_await Database::login(login_data);
+
+            // If the login was successful, return the response as json
+            const auto resp = HttpResponse::newHttpResponse();
+            resp->setBody(json(login_resp).dump());
+            resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+            resp->setStatusCode(k200OK);
+            callback(resp);
+          } catch (const std::exception &e) {
+            // Return 403 M_FORBIDDEN if the login failed
+            return_error(callback, "M_FORBIDDEN", e.what(), k403Forbidden);
+            co_return;
+          }
+        } else {
+          const auto resp = HttpResponse::newHttpResponse();
+          resp->setBody("{}");
+          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+          resp->setStatusCode(k200OK);
+          callback(resp);
         }
-        return_error(
-            callback, "M_BAD_JSON",
-            "Unable to parse json. Ensure all required fields are present?",
-            500);
-        co_return;
-      }
-
-      // We for now only support type "m.login.password"
-      if (login_body.type != "m.login.password") {
-        return_error(callback, "M_UNKNOWN", "Unknown login type", 400);
-        co_return;
-      }
-
-      // If identifier is not set, we return 400
-      if (!login_body.identifier.has_value()) {
-        return_error(callback, "M_UNKNOWN", "Missing identifier", 400);
-        co_return;
-      }
-
-      // Use the database login function to check if the user exists and
-      // create an access token
-      try {
-        const auto supplied_user_id = login_body.identifier->user.value();
-        // Convert the user id to a icu compatible char16_t/UChar string
-        icu::UnicodeString user_id_icu(supplied_user_id.c_str());
-        // Get the english locale
-        const auto locale = icu::Locale::getEnglish();
-
-        // Ensure the user id is lowercase using icu library's u_strToLower
-        const auto user_id_lower_uci = user_id_icu.toLower(locale);
-
-        // Convert the user id to a std::string again
-        std::string user_id_lower;
-        user_id_lower_uci.toUTF8String(user_id_lower);
-        // If the user id does not start with @, we assume it is a localpart
-        // and append the server name
-        const std::string user_id =
-            user_id_lower[0] == '@'
-                ? user_id_lower
-                : std::format("@{}:{}", user_id_lower,
-                              _config.matrix_config.server_name);
-
-        const auto login_resp = co_await _db.login(
-            user_id, login_body.password.value(),
-            login_body.initial_device_display_name, login_body.device_id);
-
-        // If the login was successful, return the response as json
-        const auto resp = HttpResponse::newHttpResponse();
-        resp->setBody(json(login_resp).dump());
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-        resp->setStatusCode(k200OK);
-        callback(resp);
-      } catch (const std::exception &e) {
-        // Return 403 M_FORBIDDEN if the login failed
-        return_error(callback, "M_FORBIDDEN", e.what(), 403);
-        co_return;
-      }
-    } else {
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setBody("{}");
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-      resp->setStatusCode(k200OK);
-      callback(resp);
-    }
-  });
+      });
 }
 
 void ClientServerCtrl::register_user(
@@ -271,7 +299,8 @@ void ClientServerCtrl::register_user(
       LOG_WARN << "Failed to parse json in register_user: " << ex.what()
                << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?", 500);
+                   "Unable to parse json. Is this valid json?",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -289,7 +318,8 @@ void ClientServerCtrl::register_user(
       }
       return_error(
           callback, "M_BAD_JSON",
-          "Unable to parse json. Ensure all required fields are present?", 500);
+          "Unable to parse json. Ensure all required fields are present?",
+          k500InternalServerError);
       co_return;
     }
 
@@ -306,8 +336,9 @@ void ClientServerCtrl::register_user(
     auto kind_param = req->getOptionalParameter<std::string>("kind");
 
     // TODO: Remove this if we support guests:
-    if (std::string kind = kind_param.value_or("user"); kind == "guest") {
-      return_error(callback, "M_UNKNOWN", "Guests are not supported yet", 403);
+    if (std::string const kind = kind_param.value_or("user"); kind == "guest") {
+      return_error(callback, "M_UNKNOWN", "Guests are not supported yet",
+                   k403Forbidden);
       co_return;
     }
 
@@ -317,15 +348,15 @@ void ClientServerCtrl::register_user(
       // TODO: Keep track of running sessions
       client_server_json::FlowInformation dummy_flow = {
           .stages = {"m.login.dummy"}};
-      client_server_json::incomplete_registration_resp reg_resp = {
+      client_server_json::incomplete_registration_resp const reg_resp = {
           .session = random_string(25),
           .flows = {dummy_flow},
       };
-      json j = reg_resp;
+      json const json_data = reg_resp;
 
       auto resp = HttpResponse::newHttpResponse();
       resp->setStatusCode(k401Unauthorized);
-      resp->setBody(j.dump());
+      resp->setBody(json_data.dump());
       resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
       callback(resp);
       co_return;
@@ -335,19 +366,22 @@ void ClientServerCtrl::register_user(
 
     // Check if the username is valid. Note that `username` means localpart in
     // matrix terms.
+    // TODO: Add a comment why we do a random string fallback?!
     auto username = reg_body.username.value_or(random_string(25));
     auto fixed_username = migrate_localpart(username);
     auto user_id = std::format("@{}:{}", fixed_username, server_name);
     if (!is_valid_localpart(fixed_username, server_name)) {
-      return_error(callback, "M_INVALID_USERNAME", "Invalid username", 400);
+      return_error(callback, "M_INVALID_USERNAME", "Invalid username",
+                   k400BadRequest);
       co_return;
     }
 
     auto resp = HttpResponse::newHttpResponse();
 
     // Check if the username is already taken
-    if (co_await _db.user_exists(user_id)) {
-      return_error(callback, "M_USER_IN_USE", "Username already taken", 400);
+    if (co_await Database::user_exists(user_id)) {
+      return_error(callback, "M_USER_IN_USE", "Username already taken",
+                   k400BadRequest);
       co_return;
     }
     auto initial_device_display_name = reg_body.initial_device_display_name;
@@ -362,16 +396,17 @@ void ClientServerCtrl::register_user(
     if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
       return_error(callback, "M_UNKNOWN",
                    "Invalid input. You are missing either username or password",
-                   500);
+                   k500InternalServerError);
       co_return;
     }
 
     // Try to register the user
-    Database::UserCreationData data{.matrix_id = user_id,
-                                    .device_id = device_id,
-                                    .device_name = initial_device_display_name,
-                                    .password = reg_body.password.value()};
-    auto device_data = co_await _db.create_user(data);
+    Database::UserCreationData const data{
+        .matrix_id = user_id,
+        .device_id = device_id,
+        .device_name = initial_device_display_name,
+        .password = reg_body.password.value()};
+    auto device_data = co_await Database::create_user(data);
 
     auto access_token = std::make_optional<std::string>();
     auto device_id_opt = std::make_optional<std::string>();
@@ -380,13 +415,13 @@ void ClientServerCtrl::register_user(
       device_id_opt = device_data.device_id;
     }
 
-    client_server_json::registration_resp reg_resp = {
+    client_server_json::registration_resp const reg_resp = {
         .access_token = access_token,
         .device_id = device_id_opt,
         .user_id = user_id,
     };
-    json j = reg_resp;
-    resp->setBody(j.dump());
+    json json_data = reg_resp;
+    resp->setBody(json_data.dump());
     resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
     callback(resp);
   });
@@ -402,16 +437,17 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     auto req_auth_header = req->getHeader("Authorization");
     if (req_auth_header.empty()) {
       return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   401);
+                   k401Unauthorized);
       co_return;
     }
     // Remove the "Bearer " prefix
     auto access_token = req_auth_header.substr(7);
     // Check if we have the access token in the database
-    auto user_info = co_await _db.get_user_info(access_token);
+    auto user_info = co_await Database::get_user_info(access_token);
 
     if (!user_info) {
-      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
+      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                   k401Unauthorized);
       co_return;
     }
 
@@ -423,7 +459,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       LOG_WARN << "Failed to parse json in joinRoomIdOrAlias: " << ex.what()
                << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?", 500);
+                   "Unable to parse json. Is this valid json?",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -432,7 +469,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     try {
       join_body = body.get<client_server_json::JoinBody>();
     } catch (...) {
-      std::exception_ptr ex_re = std::current_exception();
+      std::exception_ptr const ex_re = std::current_exception();
       try {
         std::rethrow_exception(ex_re);
       } catch (std::bad_exception const &ex) {
@@ -441,7 +478,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       }
       return_error(
           callback, "M_BAD_JSON",
-          "Unable to parse json. Ensure all required fields are present?", 500);
+          "Unable to parse json. Ensure all required fields are present?",
+          k500InternalServerError);
       co_return;
     }
 
@@ -461,8 +499,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     std::string room_id;
 
     std::ifstream t(_config.matrix_config.server_key_location);
-    std::string server_key((std::istreambuf_iterator<char>(t)),
-                           std::istreambuf_iterator<char>());
+    std::string const server_key((std::istreambuf_iterator<char>(t)),
+                                 std::istreambuf_iterator<char>());
     std::istringstream buffer(server_key);
     std::vector<std::string> split_data{
         std::istream_iterator<std::string>(buffer),
@@ -482,16 +520,17 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
            .origin = _config.matrix_config.server_name,
            .target = server_address.server_name,
            .content = nullptr,
-           .timeout = 10});
+           .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
-      if (resp->statusCode() != 200) {
-        return_error(callback, "M_NOT_FOUND", "Room alias not found.", 404);
+      if (resp->statusCode() != k200OK) {
+        return_error(callback, "M_NOT_FOUND", "Room alias not found.",
+                     k404NotFound);
         co_return;
       }
 
       // Next we parse the alias to fetch the server
       // Get the response body as json
-      json resp_body = json::parse(resp->body());
+      json const resp_body = json::parse(resp->body());
       auto directory_query =
           resp_body.get<server_server_json::directory_query>();
 
@@ -500,12 +539,12 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       //  We can directly use the room id but we will need to have server_name's
       if (!server_names.has_value()) {
         return_error(callback, "M_MISSING_PARAM",
-                     "Missing server_name parameter", 500);
+                     "Missing server_name parameter", k500InternalServerError);
       }
       if (server_names.value().empty()) {
         return_error(callback, "M_INVALID_PARAM",
                      "server_name parameter can't be empty if using a room_id",
-                     500);
+                     k500InternalServerError);
       }
 
       const auto &param_server_name = server_names.value();
@@ -542,38 +581,38 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
          .content = nullptr,
-         .timeout = 30});
+         .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
-    if (make_join_resp->statusCode() == 404) {
+    if (make_join_resp->statusCode() == k404NotFound) {
       return_error(callback, "M_NOT_FOUND",
-                   "The remote server doesn't know the room.", 404);
+                   "The remote server doesn't know the room.", k404NotFound);
       co_return;
     }
-    if (make_join_resp->statusCode() == 403) {
-      json resp_body = json::parse(make_join_resp->body());
+    if (make_join_resp->statusCode() == k403Forbidden) {
+      json const resp_body = json::parse(make_join_resp->body());
       auto [errcode, error] = resp_body.get<generic_json::generic_json_error>();
-      return_error(callback, errcode, error, 403);
+      return_error(callback, errcode, error, k403Forbidden);
       co_return;
     }
-    if (make_join_resp->statusCode() == 400) {
-      json resp_body = json::parse(make_join_resp->body());
+    if (make_join_resp->statusCode() == k400BadRequest) {
+      json const resp_body = json::parse(make_join_resp->body());
       auto incompatible_room_version_error =
           resp_body.get<server_server_json::incompatible_room_version_error>();
       return_error(callback, "M_UNSUPPORTED_ROOM_VERSION",
                    std::format("The room version of this room is {} but your "
                                "Homeserver does not support that version yet.",
                                incompatible_room_version_error.room_version),
-                   400);
+                   k400BadRequest);
       co_return;
     }
 
-    if (make_join_resp->statusCode() != 200) {
+    if (make_join_resp->statusCode() != k200OK) {
       return_error(callback, "M_UNKNOWN",
                    "The remote server returned an error thats not known to us.",
-                   500);
+                   k500InternalServerError);
       co_return;
     }
-    json resp_body = json::parse(make_join_resp->body());
+    json const resp_body = json::parse(make_join_resp->body());
     auto [event, room_version] =
         resp_body.get<server_server_json::MakeJoinResp>();
 
@@ -583,7 +622,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       return_error(callback, "M_UNKNOWN",
                    "The remote server did not return a room version which "
                    "means we don't support it.",
-                   500);
+                   k500InternalServerError);
       co_return;
     }
 
@@ -611,30 +650,31 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
          .content = signed_event,
-         .timeout = 30});
+         .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
-    if (send_join_resp->statusCode() == 400) {
+    if (send_join_resp->statusCode() == k400BadRequest) {
       // Event was invalid in some way
       return_error(callback, "M_UNKNOWN",
-                   "The remote server considers the join event invalid.", 500);
+                   "The remote server considers the join event invalid.",
+                   k500InternalServerError);
       co_return;
     }
 
-    if (send_join_resp->statusCode() == 403) {
-      json error_resp_body = json::parse(send_join_resp->body());
+    if (send_join_resp->statusCode() == k403Forbidden) {
+      json const error_resp_body = json::parse(send_join_resp->body());
       auto [errcode, error] =
           error_resp_body.get<generic_json::generic_json_error>();
-      return_error(callback, errcode, error, 403);
+      return_error(callback, errcode, error, k403Forbidden);
       co_return;
     }
 
-    if (send_join_resp->statusCode() != 200) {
+    if (send_join_resp->statusCode() != k200OK) {
       return_error(callback, "M_UNKNOWN",
                    "The remote server returned an error thats not known to us.",
-                   500);
+                   k500InternalServerError);
       co_return;
     }
-    json send_join_resp_body = json::parse(send_join_resp->body());
+    json const send_join_resp_body = json::parse(send_join_resp->body());
     auto [auth_chain, membership_event, members_omitted, origin,
           servers_in_room, state] =
         send_join_resp_body.get<server_server_json::SendJoinResp>();
@@ -646,7 +686,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     const auto sql = drogon::app().getDbClient();
     const auto transaction = sql->newTransaction();
-    co_await _db.add_room(transaction, state_with_membership, room_id);
+    co_await Database::add_room(transaction, state_with_membership, room_id);
 
     // TODO: Walk the auth_chain, get our signed membership event, use the
     // resolved current room state prior to join
@@ -671,15 +711,16 @@ void ClientServerCtrl::createRoom(
     const auto req_auth_header = req->getHeader("Authorization");
     if (req_auth_header.empty()) {
       return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   401);
+                   k401Unauthorized);
       co_return;
     }
     // Remove the "Bearer " prefix
     const auto access_token = req_auth_header.substr(7);
     // Check if we have the access token in the database
-    const auto user_info = co_await _db.get_user_info(access_token);
+    const auto user_info = co_await Database::get_user_info(access_token);
     if (!user_info) {
-      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token", 401);
+      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                   k401Unauthorized);
       co_return;
     }
 
@@ -691,7 +732,8 @@ void ClientServerCtrl::createRoom(
     } catch (json::parse_error &ex) {
       LOG_WARN << "Failed to parse json in createRoom: " << ex.what() << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?", 500);
+                   "Unable to parse json. Is this valid json?",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -703,7 +745,8 @@ void ClientServerCtrl::createRoom(
                << ex.what() << '\n';
       return_error(
           callback, "M_BAD_JSON",
-          "Unable to parse json. Ensure all required fields are present?", 400);
+          "Unable to parse json. Ensure all required fields are present?",
+          k400BadRequest);
       co_return;
     }
 
@@ -717,7 +760,7 @@ void ClientServerCtrl::createRoom(
                 "The requested room version of this room is {} but your "
                 "Homeserver does not support that version yet.",
                 createRoom_body.room_version.value()),
-            400);
+            k400BadRequest);
         co_return;
       }
     }
@@ -763,8 +806,8 @@ void ClientServerCtrl::createRoom(
 
     // Prepare loading the signing data
     std::ifstream t(_config.matrix_config.server_key_location);
-    std::string server_key((std::istreambuf_iterator<char>(t)),
-                           std::istreambuf_iterator<char>());
+    std::string const server_key((std::istreambuf_iterator<char>(t)),
+                                 std::istreambuf_iterator<char>());
     std::istringstream buffer(server_key);
     std::vector<std::string> split_data{
         std::istream_iterator<std::string>(buffer),
@@ -792,7 +835,8 @@ void ClientServerCtrl::createRoom(
       create_room_pdu["event_id"] = event_id(create_room_pdu, room_version);
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id", 500);
+      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -819,7 +863,8 @@ void ClientServerCtrl::createRoom(
       membership_pdu["event_id"] = event_id(membership_pdu, room_version);
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id", 500);
+      return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -835,7 +880,7 @@ void ClientServerCtrl::createRoom(
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to create power levels pdu: " << e.what();
       return_error(callback, "M_UNKNOWN", "Failed to create power levels pdu",
-                   500);
+                   k500InternalServerError);
       co_return;
     }
 
@@ -865,7 +910,7 @@ void ClientServerCtrl::createRoom(
       } catch (const std::exception &e) {
         LOG_ERROR << "Failed to calculate event_id: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     500);
+                     k500InternalServerError);
         co_return;
       }
 
@@ -891,7 +936,7 @@ void ClientServerCtrl::createRoom(
       } catch (const std::exception &e) {
         LOG_ERROR << "Failed to calculate event_id: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     500);
+                     k500InternalServerError);
         co_return;
       }
 
@@ -921,7 +966,7 @@ void ClientServerCtrl::createRoom(
       } catch (const std::exception &e) {
         LOG_ERROR << "Failed to calculate event_id: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     500);
+                     k500InternalServerError);
         co_return;
       }
 
@@ -951,7 +996,7 @@ void ClientServerCtrl::createRoom(
       } catch (const std::exception &e) {
         LOG_ERROR << "Failed to calculate event_id: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                     500);
+                     k500InternalServerError);
         co_return;
       }
 
@@ -984,7 +1029,7 @@ void ClientServerCtrl::createRoom(
         } catch (const std::exception &e) {
           LOG_ERROR << "Failed to calculate event_id: " << e.what();
           return_error(callback, "M_UNKNOWN", "Failed to calculate event_id",
-                       500);
+                       k500InternalServerError);
           co_return;
         }
 
@@ -1004,14 +1049,15 @@ void ClientServerCtrl::createRoom(
 
     LOG_DEBUG << "Doing state resolution";
     // Call stateres_v2 to get the current state of the room.
-    std::vector<std::vector<json>> state_forks = {state_events};
+    std::vector<std::vector<json>> const state_forks = {state_events};
     std::map<EventType, std::map<StateKey, StateEvent>> solved_state;
 
     try {
       solved_state = stateres_v2(state_forks);
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to resolve state: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to resolve state", 500);
+      return_error(callback, "M_UNKNOWN", "Failed to resolve state",
+                   k500InternalServerError);
       co_return;
     }
 
@@ -1028,16 +1074,17 @@ void ClientServerCtrl::createRoom(
     const auto sql = drogon::app().getDbClient();
     const auto transaction = sql->newTransaction();
     try {
-      co_await _db.add_room(transaction, state_events_vector, room_id);
+      co_await Database::add_room(transaction, state_events_vector, room_id);
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to add room to db: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to add room to db", 500);
+      return_error(callback, "M_UNKNOWN", "Failed to add room to db",
+                   k500InternalServerError);
       co_return;
     }
 
     // Return the room_id as a json response
     LOG_DEBUG << "Returning room_id as response";
-    json resp_body = {
+    json const resp_body = {
         {"room_id", room_id},
     };
 
@@ -1150,7 +1197,7 @@ void ClientServerCtrl::state(
     // TODO: Look up the latest state in the db
 
     try {
-      const json json_data = co_await _db.get_state_event(
+      const json json_data = co_await Database::get_state_event(
           roomId, eventType, stateKey.value_or(""));
 
       // Return the state event as json
@@ -1161,7 +1208,8 @@ void ClientServerCtrl::state(
       callback(resp);
       co_return;
     } catch (const std::exception &e) {
-      return_error(callback, "M_UNKNOWN", "Failed to get state event", 404);
+      return_error(callback, "M_UNKNOWN", "Failed to get state event",
+                   k404NotFound);
       co_return;
     }
   });

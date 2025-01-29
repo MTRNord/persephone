@@ -2,17 +2,26 @@
 #include "database/migrations/migrator.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
+#include "webserver/json.hpp"
+#include <cassert>
+#include <cstddef>
+#include <drogon/HttpAppFramework.h>
+#include <drogon/orm/DbClient.h>
+#include <drogon/orm/Exception.h>
 #include <drogon/utils/coroutine.h>
 #include <format>
+#include <memory>
+#include <optional>
 #include <stdexcept>
+#include <vector>
 
-void Database::migrate() const {
-  constexpr Migrator migrator;
-  migrator.migrate();
-}
+void Database::migrate() { Migrator::migrate(); }
+
+static constexpr std::size_t DEVICE_ID_LENGTH = 7;
+static constexpr int TOKEN_RANDOM_PART_LENGTH = 20;
 
 [[nodiscard]] drogon::Task<Database::UserCreationResp>
-Database::create_user(Database::UserCreationData const &data) const {
+Database::create_user(Database::UserCreationData const data) {
   const auto sql = drogon::app().getDbClient();
 
   const auto transPtr = co_await sql->newTransactionCoro();
@@ -20,10 +29,10 @@ Database::create_user(Database::UserCreationData const &data) const {
 
   // TODO: If we have a guest registering we are required to always
   // generate this.
-  auto device_id = data.device_id.value_or(random_string(7));
+  auto device_id = data.device_id.value_or(random_string(DEVICE_ID_LENGTH));
   auto password_hash = hash_password(data.password);
   auto matrix_id = data.matrix_id;
-  auto device_name = data.device_name.value_or(random_string(7));
+  auto device_name = data.device_name.value_or(random_string(DEVICE_ID_LENGTH));
 
   // This token should have this pattern:
   // `persephone_<unpadded base64 local part of the matrix
@@ -32,7 +41,7 @@ Database::create_user(Database::UserCreationData const &data) const {
   const std::vector<unsigned char> localpart_vec(localpart_str.begin(),
                                                  localpart_str.end());
 
-  auto random_component = random_string(20);
+  auto random_component = random_string(TOKEN_RANDOM_PART_LENGTH);
   auto access_token =
       std::format("persephone_{}_{}_{}", json_utils::base64_key(localpart_vec),
                   random_component,
@@ -63,15 +72,14 @@ Database::create_user(Database::UserCreationData const &data) const {
   co_return resp_data;
 }
 
-[[nodiscard]] drogon::Task<bool>
-Database::user_exists(std::string matrix_id) const {
+[[nodiscard]] drogon::Task<bool> Database::user_exists(std::string matrix_id) {
   const auto sql = drogon::app().getDbClient();
   try {
-    const auto f = co_await sql->execSqlCoro(
+    const auto query = co_await sql->execSqlCoro(
         "select exists(select 1 from users where matrix_id = $1) as exists",
         matrix_id);
 
-    co_return f.at(0)["exists"].as<bool>();
+    co_return query.at(0)["exists"].as<bool>();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
 
@@ -81,7 +89,7 @@ Database::user_exists(std::string matrix_id) const {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-Database::get_user_info(const std::string &auth_token) const {
+Database::get_user_info(const std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
   try {
     const auto result = co_await sql->execSqlCoro(
@@ -92,7 +100,7 @@ Database::get_user_info(const std::string &auth_token) const {
     // TODO: track if the user is a guest in the database
     constexpr bool is_guest = false;
 
-    if (result.size() == 0) {
+    if (result.empty()) {
       co_return std::nullopt;
     }
 
@@ -115,18 +123,18 @@ Database::get_user_info(const std::string &auth_token) const {
 }
 
 [[nodiscard]] drogon::Task<bool>
-Database::validate_access_token(std::string auth_token) const {
+Database::validate_access_token(std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
   try {
-    const auto f =
+    const auto query =
         co_await sql->execSqlCoro("select exists(select 1 from devices "
                                   "where access_token = $1) as exists",
                                   auth_token);
     // TMP loging for complement debugging
     LOG_DEBUG << "Access token: " << auth_token;
-    LOG_DEBUG << "Exists: " << f.at(0)["exists"].as<bool>();
+    LOG_DEBUG << "Exists: " << query.at(0)["exists"].as<bool>();
 
-    co_return f.at(0)["exists"].as<bool>();
+    co_return query.at(0)["exists"].as<bool>();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     co_return false;
@@ -134,50 +142,51 @@ Database::validate_access_token(std::string auth_token) const {
 }
 
 [[nodiscard]] drogon::Task<client_server_json::login_resp>
-Database::login(const std::string &matrix_id, const std::string &password,
-                const std::optional<std::string> &initial_device_name,
-                const std::optional<std::string> &device_id) const {
+Database::login(const LoginData login_data) {
   const auto sql = drogon::app().getDbClient();
   const auto transaction = sql->newTransaction();
   try {
     // Check if user exists, check if password matches the hash we got and
     // return the access token if it does
-    const auto f = co_await transaction->execSqlCoro(
-        "select password_hash from users where matrix_id = $1", matrix_id);
+    const auto query = co_await transaction->execSqlCoro(
+        "select password_hash from users where matrix_id = $1",
+        login_data.matrix_id);
 
-    if (f.size() == 0) {
+    if (query.empty()) {
       throw std::runtime_error("User does not exist");
     }
 
     // Check if the password matches
-    if (const auto password_hash = f.at(0)["password_hash"].as<std::string>();
-        !verify_hashed_password(password_hash, password)) {
+    if (const auto password_hash =
+            query.at(0)["password_hash"].as<std::string>();
+        !verify_hashed_password(password_hash, login_data.password)) {
       throw std::runtime_error("Password does not match");
     }
 
     // Create a new access token with initial_device_name if it is set
-    auto device_name = initial_device_name.value_or(random_string(7));
+    auto device_name = login_data.initial_device_name.value_or(
+        random_string(DEVICE_ID_LENGTH));
 
     // This token should have this pattern:
     // `persephone_<unpadded base64 local part of the matrix
     // id>_<random string (20 chars)>_<base62 crc32 check>`
-    auto localpart_str = localpart(matrix_id);
+    auto localpart_str = localpart(login_data.matrix_id);
     const std::vector<unsigned char> localpart_vec(localpart_str.begin(),
                                                    localpart_str.end());
 
-    auto random_component = random_string(20);
+    auto random_component = random_string(TOKEN_RANDOM_PART_LENGTH);
     auto access_token =
         std::format("persephone_{}_{}_{}",
                     json_utils::base64_key(localpart_vec), random_component,
-                    base62_encode(crc32_helper(
-                        std::format("{}_{}", matrix_id, random_component))));
+                    base62_encode(crc32_helper(std::format(
+                        "{}_{}", login_data.matrix_id, random_component))));
 
-    const auto safe_device_id = device_id.value_or(random_string(7));
+    const auto safe_device_id = login_data.device_id.value_or(random_string(7));
     // Insert the device into the database
     co_await transaction->execSqlCoro(
         "INSERT INTO devices(matrix_id, device_id, device_name, access_token) "
         "VALUES($1, $2, $3, $4)",
-        matrix_id, safe_device_id, device_name, access_token);
+        login_data.matrix_id, safe_device_id, device_name, access_token);
 
     // Return the access token
     co_return {.access_token = access_token,
@@ -185,7 +194,7 @@ Database::login(const std::string &matrix_id, const std::string &password,
                .expires_in_ms = std::nullopt,
                .home_server = std::nullopt,
                .refresh_token = std::nullopt,
-               .user_id = matrix_id,
+               .user_id = login_data.matrix_id,
                .well_known = std::nullopt};
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
@@ -194,11 +203,12 @@ Database::login(const std::string &matrix_id, const std::string &password,
 }
 
 [[nodiscard]] drogon::Task<void>
-Database::add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-                   std::vector<json> events, const std::string &room_id) const {
+Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                   std::vector<json> events, const std::string room_id) {
   try {
+#pragma unroll
     for (const auto &event : events) {
-      co_await this->add_event(transaction, event, room_id);
+      co_await Database::add_event(transaction, event, room_id);
     }
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
@@ -206,9 +216,9 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
   }
 }
 
-[[nodiscard]] drogon::Task<void> Database::add_event(
-    const std::shared_ptr<drogon::orm::Transaction> &transaction, json event,
-    const std::string &room_id) const {
+[[nodiscard]] drogon::Task<void>
+Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                    json event, const std::string room_id) {
   std::string auth_events_str = "{}";
   if (event.contains("auth_events")) {
     // We need the auth_events as TEXT[] so we need to map the json array to a
@@ -222,7 +232,7 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
       auth_events_str += "\"" + auth_event + "\",";
     }
     // Remove the trailing comma if present
-    if (auth_events.size() > 0) {
+    if (!auth_events.empty()) {
       auth_events_str.pop_back();
     }
     auth_events_str += "}";
@@ -260,24 +270,24 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
  * and not as a full PDU
  */
 [[nodiscard]] drogon::Task<json>
-Database::get_state_event(const std::string &room_id,
-                          const std::string &event_type,
-                          const std::string &state_key) const {
+Database::get_state_event(const std::string room_id,
+                          const std::string event_type,
+                          const std::string state_key) {
   const auto sql = drogon::app().getDbClient();
   try {
     // TODO: We do not respect state res ordering yet. We should do that in the
     // future
     // TODO: Use the materialized view for this
-    const auto f =
+    const auto query =
         co_await sql->execSqlCoro("SELECT json FROM events WHERE room_id = $1 "
                                   "AND type = $2 AND state_key = $3",
                                   room_id, event_type, state_key);
 
-    if (f.size() == 0) {
+    if (query.empty()) {
       throw std::runtime_error("State event not found");
     }
 
-    auto json_data = json::parse(f.at(0)["json"].as<std::string>());
+    auto json_data = json::parse(query.at(0)["json"].as<std::string>());
     // Remove the signatures from the state event
     json_data.erase("signatures");
     co_return json_data;

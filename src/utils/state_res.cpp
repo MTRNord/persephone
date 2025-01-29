@@ -1,12 +1,24 @@
 #include "state_res.hpp"
-#include "drogon/drogon.h"
 #include "utils/errors.hpp"
+#include <algorithm>
+#include <cstddef>
+#include <ctime>
+#include <format>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <optional>
 #include <ranges>
+#include <set>
 #include <sodium/crypto_hash_sha256.h>
 #include <sodium/utils.h>
-#include <stack>
+#include <stdexcept>
+#include <string>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
+namespace {
 /**
  * @brief Redacts the provided JSON event object based on Matrix Protocol
  * version 11 rules.
@@ -45,7 +57,7 @@
 
   // Special events have special allow rules for things in content
   if (event["type"] == "m.room.member") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (const auto &[key, val] : event["content"].items()) {
       if (key != "membership" && key != "join_authorised_via_users_server" &&
           key != "third_party_invite") {
         event_copy["content"].erase(key);
@@ -53,20 +65,21 @@
     }
 
     if (event["content"].contains("third_party_invite")) {
-      for (auto &[key, val] : event["content"]["third_party_invite"].items()) {
+      for (const auto &[key, val] :
+           event["content"]["third_party_invite"].items()) {
         if (key != "signed") {
           event_copy["content"]["third_party_invite"].erase(key);
         }
       }
     }
   } else if (event["type"] == "m.room.join_rules") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (const auto &[key, val] : event["content"].items()) {
       if (key != "join_rule" && key != "allow") {
         event_copy["content"].erase(key);
       }
     }
   } else if (event["type"] == "m.room.power_levels") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (const auto &[key, val] : event["content"].items()) {
       if (key != "ban" && key != "events" && key != "events_default" &&
           key != "invite" && key != "kick" && key != "redact" &&
           key != "state_default" && key != "users" && key != "users_default") {
@@ -74,13 +87,13 @@
       }
     }
   } else if (event["type"] == "m.room.history_visibility") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (const auto &[key, val] : event["content"].items()) {
       if (key != "history_visibility") {
         event_copy["content"].erase(key);
       }
     }
   } else if (event["type"] == "m.room.redaction") {
-    for (auto &[key, val] : event["content"].items()) {
+    for (const auto &[key, val] : event["content"].items()) {
       if (key != "redacts") {
         event_copy["content"].erase(key);
       }
@@ -90,26 +103,6 @@
   }
 
   return event_copy;
-}
-
-/**
- * @brief Redacts the provided JSON event object based on the room version.
- *
- * This function takes a JSON object representing an event and a room version as
- * input. If the room version is "11", it calls the v11_redact function to
- * redact the event according to Matrix Protocol version 11 rules. If the room
- * version is not "11", it throws a MatrixRoomVersionError.
- *
- * @param event The JSON object representing the event to be redacted.
- * @param room_version The version of the room.
- * @return A JSON object redacted according to the specified room version rules.
- * @throw MatrixRoomVersionError If the room version is not "11".
- */
-[[nodiscard]] json redact(const json &event, const std::string &room_version) {
-  if (room_version == "11") {
-    return v11_redact(event);
-  }
-  throw MatrixRoomVersionError(room_version);
 }
 
 /**
@@ -150,74 +143,7 @@
                      reinterpret_cast<const unsigned char *>(input.c_str()),
                      input.size());
 
-  return std::vector<unsigned char>(sha256_hash,
-                                    sha256_hash + crypto_hash_sha256_BYTES);
-}
-
-/**
- * @brief Computes the reference hash for a JSON event object based on the room
- * version.
- *
- * This function takes a JSON object representing an event and a room version as
- * input. If the room version is "11", it calls the reference_hash_v11 function
- * to compute the reference hash of the event according to Matrix Protocol
- * version 11 rules. If the room version is not "11", it throws a
- * MatrixRoomVersionError.
- *
- * @param event The JSON object representing the event.
- * @param room_version The version of the room.
- * @return The reference hash of the event as a string.
- * @throw MatrixRoomVersionError If the room version is not "11".
- */
-[[nodiscard]] std::vector<unsigned char>
-reference_hash(const json &event, const std::string &room_version) {
-  if (room_version == "11") {
-    return reference_hash_v11(event);
-  }
-
-  throw MatrixRoomVersionError(room_version);
-}
-
-/**
- * @brief Computes the event ID for a JSON event object based on the room
- * version.
- *
- * This function takes a JSON object representing an event and a room version as
- * input. It first calls the reference_hash function to compute the reference
- * hash of the event. The hash is represented as a string. The function then
- * computes the length of the hash and the maximum length of the base64-encoded
- * string. It creates a string of the maximum length and fills it with zeros.
- * The function then converts the hash to a base64 string using the Sodium
- * library's sodium_bin2base64 function. The base64 string is represented as a
- * URL-safe string with no padding. If the base64 encoding fails, the function
- * throws a runtime error. Finally, the function returns the base64 string,
- * which is the event ID.
- *
- * @param event The JSON object representing the event.
- * @param room_version The version of the room.
- * @return The event ID as a base64 string.
- * @throw std::runtime_error If the base64 encoding fails.
- */
-[[nodiscard]] std::string event_id(const json &event,
-                                   const std::string &room_version) {
-  if (event == nullptr) {
-    throw std::invalid_argument("Event cannot be null");
-  }
-  const auto hash = reference_hash(event, room_version);
-
-  const unsigned long long hash_len = hash.size();
-  const size_t base64_max_len = sodium_base64_encoded_len(
-      hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
-
-  std::string base64_str(base64_max_len - 1, 0);
-  const auto encoded_str_char =
-      sodium_bin2base64(base64_str.data(), base64_max_len, hash.data(),
-                        hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
-  if (encoded_str_char == nullptr) {
-    throw std::runtime_error("Base64 Error: Failed to encode string");
-  }
-
-  return std::format("${}", base64_str);
+  return {sha256_hash, sha256_hash + crypto_hash_sha256_BYTES};
 }
 
 /**
@@ -317,6 +243,8 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   return result;
 }
 
+constexpr int DEFAULT_STATE_POWERLEVEL = 50;
+
 /**
  * @brief Sorts the incoming edges of events based on certain criteria.
  *
@@ -337,17 +265,17 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
 [[nodiscard]] std::map<EventID, int>
 sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
                       const std::map<EventID, StateEvent> &event_map) {
-  auto comparator = [&](const EventID &x, const EventID &y) {
+  auto comparator = [&](const EventID &first, const EventID &second) {
     // Same event's are equal and not having a second event is always less
-    if (x == y) {
+    if (first == second) {
       return false;
     }
-    if (y == "") {
+    if (second.empty()) {
       return false;
     }
 
-    const StateEvent &state_event_x = event_map.at(x);
-    const StateEvent &state_event_y = event_map.at(y);
+    const StateEvent &state_event_x = event_map.at(first);
+    const StateEvent &state_event_y = event_map.at(second);
 
     // Get the powerlevels of each sender in for each event so we then can
     // compare them
@@ -394,10 +322,10 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
             }
           } else {
             if (!sender_x_power_level.has_value()) {
-              sender_x_power_level = 50;
+              sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
             }
             if (!sender_y_power_level.has_value()) {
-              sender_y_power_level = 50;
+              sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
             }
           }
         } else if (content.contains("state_default")) {
@@ -409,18 +337,18 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
           }
         } else {
           if (!sender_x_power_level.has_value()) {
-            sender_x_power_level = 50;
+            sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
           }
           if (!sender_y_power_level.has_value()) {
-            sender_y_power_level = 50;
+            sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
           }
         }
       } else {
         if (!sender_x_power_level.has_value()) {
-          sender_x_power_level = 50;
+          sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
         }
         if (!sender_y_power_level.has_value()) {
-          sender_y_power_level = 50;
+          sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
         }
       }
     }
@@ -441,8 +369,8 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
   std::map<EventID, int> sorted_edges;
   std::vector<EventID> keys;
   keys.reserve(incoming_edges.size());
-  for (const auto &id : incoming_edges | std::views::keys) {
-    keys.push_back(id);
+  for (const auto &event_id : incoming_edges | std::views::keys) {
+    keys.push_back(event_id);
   }
 
   if (!keys.empty() && keys.size() > 1) {
@@ -481,9 +409,9 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::map<EventID, int> incoming_edges;
   std::map<EventID, StateEvent> event_map;
 
-  for (const auto &e : full_conflicted_set) {
-    auto event_id = e["event_id"].get<std::string>();
-    event_map[event_id] = e;
+  for (const auto &event : full_conflicted_set) {
+    auto event_id = event["event_id"].get<std::string>();
+    event_map[event_id] = event;
     incoming_edges[event_id] = 0;
   }
 
@@ -531,7 +459,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  *
  * @param current_partial_state A map of the current partial state, where the
  * key is the event type and the value is a map of state keys to StateEvents.
- * @param e The StateEvent object to be checked.
+ * @param event The StateEvent object to be checked.
  * @return A boolean value indicating whether the event is authorized.
  *
  * @details The function performs the following checks:
@@ -551,24 +479,24 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 [[nodiscard]] bool auth_against_partial_state_version_11(
     const std::map<EventType, std::map<StateKey, StateEvent>>
         &current_partial_state,
-    StateEvent &e) {
+    StateEvent &event) {
   // If type is m.room.create
-  if (e["type"].get<std::string>() == "m.room.create") {
+  if (event["type"].get<std::string>() == "m.room.create") {
     // If it has any prev_events, reject.
-    if (e.contains("prev_events")) {
+    if (event.contains("prev_events")) {
       return false;
     }
     // If the domain of the room_id does not match the domain of the sender,
     // reject.
-    const auto room_id = e["room_id"].get<std::string>();
-    const auto sender = e["sender"].get<std::string>();
+    const auto room_id = event["room_id"].get<std::string>();
+    const auto sender = event["sender"].get<std::string>();
     if (!matchDomain(room_id, sender)) {
       return false;
     }
 
     // If content.room_version is present and is not a recognised version,
     // reject.
-    if (e["content"]["room_version"].get<std::string>() != "11") {
+    if (event["content"]["room_version"].get<std::string>() != "11") {
       return false;
     }
 
@@ -578,7 +506,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   // Considering the event's auth_events:
 
   // If there are duplicate entries for a given type and state_key pair, reject.
-  auto auth_events_ids = e["auth_events"].get<std::vector<std::string>>();
+  auto auth_events_ids = event["auth_events"].get<std::vector<std::string>>();
 
   std::map<EventType, std::map<StateKey, StateEvent>> auth_events_map;
   for (const auto &[event_type, inner_map] : current_partial_state) {
@@ -639,18 +567,19 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  *
  * @param current_partial_state A map of the current partial state, where the
  * key is the event type and the value is a map of state keys to StateEvents.
- * @param e The StateEvent object to be checked.
+ * @param event The StateEvent object to be checked.
  * @return A boolean value indicating whether the event is authorized.
  */
 [[nodiscard]] bool auth_against_partial_state(
     std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
-    StateEvent &e) {
-  if (e["type"].get<std::string>() == "m.room.create") {
-    if (!e["content"].contains("room_version")) {
+    StateEvent &event) {
+  if (event["type"].get<std::string>() == "m.room.create") {
+    if (!event["content"].contains("room_version")) {
       return false;
     }
-    if (e["content"]["room_version"].get<std::string>() == "11") {
-      return auth_against_partial_state_version_11(current_partial_state, e);
+    if (event["content"]["room_version"].get<std::string>() == "11") {
+      return auth_against_partial_state_version_11(current_partial_state,
+                                                   event);
     }
   } else {
     auto create_event = current_partial_state["m.room.create"][""];
@@ -658,7 +587,8 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
       return false;
     }
     if (create_event["content"]["room_version"].get<std::string>() == "11") {
-      return auth_against_partial_state_version_11(current_partial_state, e);
+      return auth_against_partial_state_version_11(current_partial_state,
+                                                   event);
     }
   }
 
@@ -736,28 +666,26 @@ void mainline_iterate(
         search_iter != power_level_mainline.end()) {
       closest_mainline_event = inner_event;
       return;
-    } else {
-      // For each auth event of the event if the auth event is of type
-      // m.room.powerlevel then call func_closest_iterate recursively
-      for (const auto &auth_event_id : inner_event["auth_events"]) {
-        const std::string actual_auth_event_id =
-            auth_event_id.get<std::string>();
+    }
+    // For each auth event of the event if the auth event is of type
+    // m.room.powerlevel then call func_closest_iterate recursively
+    for (const auto &auth_event_id : inner_event["auth_events"]) {
+      const std::string actual_auth_event_id = auth_event_id.get<std::string>();
 
-        // Get the actual auth event object from the auth events map
-        StateEvent auth_event_obj;
-        for (const auto &inner_map : auth_events | std::views::values) {
-          for (const auto &state_event : inner_map | std::views::values) {
-            if (state_event["event_id"].get<std::string>() ==
-                actual_auth_event_id) {
-              auth_event_obj = state_event;
-              break;
-            }
+      // Get the actual auth event object from the auth events map
+      StateEvent auth_event_obj;
+      for (const auto &inner_map : auth_events | std::views::values) {
+        for (const auto &state_event : inner_map | std::views::values) {
+          if (state_event["event_id"].get<std::string>() ==
+              actual_auth_event_id) {
+            auth_event_obj = state_event;
+            break;
           }
         }
+      }
 
-        if (auth_event_obj["type"] == "m.room.powerlevel") {
-          func_closest_iterate(auth_event_obj);
-        }
+      if (auth_event_obj["type"] == "m.room.powerlevel") {
+        func_closest_iterate(auth_event_obj);
       }
     }
   };
@@ -792,23 +720,111 @@ void mainline_iterate(
  */
 [[nodiscard]] std::vector<StateEvent>
 sorted_normal_state_events(std::vector<StateEvent> normal_events) {
-  auto compare_events = [](StateEvent &x, StateEvent &y) {
-    if (x["position_on_mainline"].get<std::string>() !=
-        y["position_on_mainline"].get<std::string>()) {
-      return x["position_on_mainline"].get<std::string>() <
-             y["position_on_mainline"].get<std::string>();
+  auto compare_events = [](StateEvent &first, StateEvent &second) {
+    if (first["position_on_mainline"].get<std::string>() !=
+        second["position_on_mainline"].get<std::string>()) {
+      return first["position_on_mainline"].get<std::string>() <
+             second["position_on_mainline"].get<std::string>();
     }
-    if (x["origin_server_ts"].get<time_t>() !=
-        y["origin_server_ts"].get<time_t>()) {
-      return x["origin_server_ts"].get<time_t>() <
-             y["origin_server_ts"].get<time_t>();
+    if (first["origin_server_ts"].get<time_t>() !=
+        second["origin_server_ts"].get<time_t>()) {
+      return first["origin_server_ts"].get<time_t>() <
+             second["origin_server_ts"].get<time_t>();
     }
-    return x["event_id"].get<std::string>() < y["event_id"].get<std::string>();
+    return first["event_id"].get<std::string>() <
+           second["event_id"].get<std::string>();
   };
 
   std::ranges::sort(normal_events, compare_events);
 
   return normal_events;
+}
+} // namespace
+
+/**
+ * @brief Redacts the provided JSON event object based on the room version.
+ *
+ * This function takes a JSON object representing an event and a room version as
+ * input. If the room version is "11", it calls the v11_redact function to
+ * redact the event according to Matrix Protocol version 11 rules. If the room
+ * version is not "11", it throws a MatrixRoomVersionError.
+ *
+ * @param event The JSON object representing the event to be redacted.
+ * @param room_version The version of the room.
+ * @return A JSON object redacted according to the specified room version rules.
+ * @throw MatrixRoomVersionError If the room version is not "11".
+ */
+[[nodiscard]] json redact(const json &event, const std::string &room_version) {
+  if (room_version == "11") {
+    return v11_redact(event);
+  }
+  throw MatrixRoomVersionError(room_version);
+}
+
+/**
+ * @brief Computes the reference hash for a JSON event object based on the room
+ * version.
+ *
+ * This function takes a JSON object representing an event and a room version as
+ * input. If the room version is "11", it calls the reference_hash_v11 function
+ * to compute the reference hash of the event according to Matrix Protocol
+ * version 11 rules. If the room version is not "11", it throws a
+ * MatrixRoomVersionError.
+ *
+ * @param event The JSON object representing the event.
+ * @param room_version The version of the room.
+ * @return The reference hash of the event as a string.
+ * @throw MatrixRoomVersionError If the room version is not "11".
+ */
+[[nodiscard]] std::vector<unsigned char>
+reference_hash(const json &event, const std::string &room_version) {
+  if (room_version == "11") {
+    return reference_hash_v11(event);
+  }
+
+  throw MatrixRoomVersionError(room_version);
+}
+
+/**
+ * @brief Computes the event ID for a JSON event object based on the room
+ * version.
+ *
+ * This function takes a JSON object representing an event and a room version as
+ * input. It first calls the reference_hash function to compute the reference
+ * hash of the event. The hash is represented as a string. The function then
+ * computes the length of the hash and the maximum length of the base64-encoded
+ * string. It creates a string of the maximum length and fills it with zeros.
+ * The function then converts the hash to a base64 string using the Sodium
+ * library's sodium_bin2base64 function. The base64 string is represented as a
+ * URL-safe string with no padding. If the base64 encoding fails, the function
+ * throws a runtime error. Finally, the function returns the base64 string,
+ * which is the event ID.
+ *
+ * @param event The JSON object representing the event.
+ * @param room_version The version of the room.
+ * @return The event ID as a base64 string.
+ * @throw std::runtime_error If the base64 encoding fails.
+ */
+[[nodiscard]] std::string event_id(const json &event,
+                                   const std::string &room_version) {
+  if (event == nullptr) {
+    throw std::invalid_argument("Event cannot be null");
+  }
+  const auto hash = reference_hash(event, room_version);
+
+  const unsigned long long hash_len = hash.size();
+  const size_t base64_max_len = sodium_base64_encoded_len(
+      hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+
+  std::string base64_str(base64_max_len - 1, 0);
+  const auto *encoded_str_char =
+      sodium_bin2base64(base64_str.data(), base64_max_len, hash.data(),
+                        hash_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+  if (encoded_str_char == nullptr) {
+    throw std::runtime_error("Base64 Error: Failed to encode string");
+  }
+
+  return std::format("${}", base64_str);
 }
 
 /**
@@ -845,8 +861,9 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   auto auth_difference = findAuthDifference(conflictedEvents, forks);
 
-  std::vector<StateEvent> full_conflicted_set, conflicted_control_events,
-      conflicted_others;
+  std::vector<StateEvent> full_conflicted_set;
+  std::vector<StateEvent> conflicted_control_events;
+  std::vector<StateEvent> conflicted_others;
   full_conflicted_set.reserve(conflictedEvents.size() + auth_difference.size());
   full_conflicted_set.insert(full_conflicted_set.end(),
                              conflictedEvents.begin(), conflictedEvents.end());
@@ -859,19 +876,19 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto is_control_event = [](StateEvent event) {
     if (event["type"].get<std::string>() == "m.room.power_levels") {
       // Power level events with an empty state key are control events.
-      if (event["state_key"].get<std::string>() == "") {
+      if (event["state_key"].get<std::string>().empty()) {
         return true;
       }
     }
     if (event["type"].get<std::string>() == "m.room.join_rules") {
       // Join rule events with an empty state key are control events.
-      if (event["state_key"].get<std::string>() == "") {
+      if (event["state_key"].get<std::string>().empty()) {
         return true;
       }
     }
     if (event["type"].get<std::string>() == "m.room.member") {
       // Membership events must not have an empty state key.
-      if (event["state_key"].get<std::string>() == "") {
+      if (event["state_key"].get<std::string>().empty()) {
         return false;
       }
       // Membership events are only control events if the sender does not match
@@ -908,11 +925,11 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   auto conflicted_control_events_sorted = kahns_algorithm(full_conflicted_set);
 
-  for (auto &e : conflicted_control_events_sorted) {
-    if (auth_against_partial_state(partial_state, e)) {
-      auto event_type = e["type"].get<EventType>();
-      auto state_key = e["state_key"].get<StateKey>();
-      partial_state[event_type][state_key] = e;
+  for (auto &event : conflicted_control_events_sorted) {
+    if (auth_against_partial_state(partial_state, event)) {
+      auto event_type = event["type"].get<EventType>();
+      auto state_key = event["state_key"].get<StateKey>();
+      partial_state[event_type][state_key] = event;
     }
   }
 
@@ -922,9 +939,9 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   // TODO: Check if this is correct?
   auto resolved_power_level_event = partial_state["m.room.power_levels"][""];
   if (resolved_power_level_event.is_null()) {
-    for (auto &e : conflicted_control_events_sorted) {
-      if (e["type"].get<std::string>() == "m.room.power_levels") {
-        resolved_power_level_event = e;
+    for (auto &event : conflicted_control_events_sorted) {
+      if (event["type"].get<std::string>() == "m.room.power_levels") {
+        resolved_power_level_event = event;
         break;
       }
     }
@@ -942,9 +959,9 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   // Call get_closest_mainline_event for each event in conflicted_others so we
   // have the data required for the next step.
-  for (auto &e : conflicted_others) {
+  for (auto &event : conflicted_others) {
     auto closest_mainline_event =
-        get_closest_mainline_event(power_level_mainline, e, partial_state);
+        get_closest_mainline_event(power_level_mainline, event, partial_state);
 
     // Get the position of the closest mainline event on the mainline (partial
     // state) by using the distance to the create event from the closest
@@ -952,22 +969,22 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
     auto position_on_mainline = std::distance(
         power_level_mainline.begin(),
         std::ranges::find(power_level_mainline, closest_mainline_event));
-    e["position_on_mainline"] = std::to_string(position_on_mainline);
+    event["position_on_mainline"] = std::to_string(position_on_mainline);
   }
 
   for (auto sorted_others = sorted_normal_state_events(conflicted_others);
-       auto &e : sorted_others) {
-    if (auth_against_partial_state(partial_state, e)) {
-      auto event_type = e["type"].get<EventType>();
-      auto state_key = e["state_key"].get<StateKey>();
-      partial_state[event_type][state_key] = e;
+       auto &event : sorted_others) {
+    if (auth_against_partial_state(partial_state, event)) {
+      auto event_type = event["type"].get<EventType>();
+      auto state_key = event["state_key"].get<StateKey>();
+      partial_state[event_type][state_key] = event;
     }
   }
 
-  for (auto &e : unconflictedEvents) {
-    auto event_type = e["type"].get<EventType>();
-    auto state_key = e["state_key"].get<StateKey>();
-    partial_state[event_type][state_key] = e;
+  for (auto &event : unconflictedEvents) {
+    auto event_type = event["type"].get<EventType>();
+    auto state_key = event["state_key"].get<StateKey>();
+    partial_state[event_type][state_key] = event;
   }
 
   return partial_state;

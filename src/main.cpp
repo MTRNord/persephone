@@ -1,13 +1,20 @@
 #include "database/database.hpp"
-#include "drogon/drogon.h"
 #include "utils/config.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/client_server_api/ClientServerCtrl.hpp"
 #include "webserver/server_server_api/ServerServerCtrl.hpp"
 #include "yaml-cpp/exceptions.h"
+#include <drogon/HttpAppFramework.h>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/orm/DbConfig.h>
+#include <memory>
 #include <sodium/core.h>
 #include <stdexcept>
+#include <trantor/utils/Logger.h>
+
+static constexpr int DATABASE_CONNECTIONS = 10;
 
 int main() {
   // Libsodium init
@@ -18,7 +25,7 @@ int main() {
 
   // Actual startup
   try {
-    Config config;
+    const Config config{};
 
     try {
       json_utils::ensure_server_keys(config);
@@ -30,7 +37,7 @@ int main() {
 
     LOG_INFO << "Server running on 127.0.0.1:8008";
     drogon::app()
-        .addListener("0.0.0.0", 8008)
+        .addListener("0.0.0.0", MATRIX_HTTP_PORT)
         .setThreadNum(0)
         .setLogLevel(trantor::Logger::LogLevel::kDebug)
         .addDbClient(orm::PostgresConfig{
@@ -39,7 +46,7 @@ int main() {
             .databaseName = config.db_config.database_name,
             .username = config.db_config.user,
             .password = config.db_config.password,
-            .connectionNumber = 10,
+            .connectionNumber = DATABASE_CONNECTIONS,
             .name = "default",
         })
         .enableGzip(true)
@@ -51,24 +58,20 @@ int main() {
           resp->addHeader("Access-Control-Allow-Headers",
                           "X-Requested-With, Content-Type, Authorization");
         })
-        .registerBeginningAdvice([]() {
-          constexpr Database db{};
-          db.migrate();
-        });
+        .registerBeginningAdvice([]() { Database::migrate(); });
 
     const auto srv_srv_ctrlPtr =
         std::make_shared<server_server_api::ServerServerCtrl>(config,
                                                               verify_key_data);
-    Database db{};
     const auto client_srv_ctrlPtr =
-        std::make_shared<client_server_api::ClientServerCtrl>(config, db);
+        std::make_shared<client_server_api::ClientServerCtrl>(config);
     drogon::app()
         .registerController(client_srv_ctrlPtr)
         .registerController(srv_srv_ctrlPtr);
 
     if (config.webserver_config.ssl) {
-      drogon::app().addListener("0.0.0.0", 8448, true, "./server.crt",
-                                "./server.key", false);
+      drogon::app().addListener("0.0.0.0", MATRIX_SSL_PORT, true,
+                                "./server.crt", "./server.key", false);
     }
 
     drogon::app().run();

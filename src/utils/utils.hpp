@@ -1,19 +1,33 @@
 #pragma once
 
-#define JSON_DIAGNOSTICS 1
-#include "drogon/drogon.h"
 #include "drogon/utils/coroutine.h"
 #include "utils/config.hpp"
+#include <cstddef>
+#include <drogon/HttpClient.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/HttpTypes.h>
+#include <drogon/utils/Utilities.h>
 #include <format>
+#include <functional>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <source_location>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <vector>
 
 using json = nlohmann::json;
 using namespace drogon;
 
-constexpr auto UserAgent = "persephone/0.1.0";
+static constexpr auto UserAgent = "persephone/0.1.0";
+static constexpr auto DEFAULT_FEDERATION_TIMEOUT = 30;
+
+static constexpr int MATRIX_SSL_PORT = 8448;
+static constexpr int MATRIX_HTTP_PORT = 8008;
+
+static constexpr auto id_max_length = 255;
 
 struct [[nodiscard]] SRVRecord {
   std::string host;
@@ -50,7 +64,7 @@ struct [[nodiscard]] VerifyKeyData {
 
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                   const std::string &errorcode, const std::string &error,
-                  const int status_code);
+                  const HttpStatusCode status_code);
 
 [[nodiscard]] std::string random_string(const std::size_t len);
 
@@ -91,14 +105,14 @@ migrate_localpart(const std::string &localpart) {
   std::string migrated_localpart;
   migrated_localpart.reserve(localpart.size());
 
-  for (auto const &c : localpart) {
-    if (c >= 'A' && c <= 'Z') {
-      migrated_localpart.push_back(static_cast<char>(c + 32));
-    } else if (c == '_') {
+  for (auto const &character : localpart) {
+    if (character >= 'A' && character <= 'Z') {
+      migrated_localpart.push_back(static_cast<char>(character + 32));
+    } else if (character == '_') {
       migrated_localpart.push_back('_');
       migrated_localpart.push_back('_');
     } else {
-      migrated_localpart.push_back(c);
+      migrated_localpart.push_back(character);
     }
   }
 
@@ -146,8 +160,8 @@ migrate_localpart(const std::string &localpart) {
  * @return The server name with the brackets removed.
  */
 [[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
-  std::erase_if(server_name, [](const char c) {
-    switch (c) {
+  std::erase_if(server_name, [](const char character) {
+    switch (character) {
     case '[':
     case ']':
       return true;
@@ -179,18 +193,18 @@ migrate_localpart(const std::string &localpart) {
 [[nodiscard]] constexpr bool
 is_valid_localpart(const std::string &localpart,
                    const std::string &server_name) {
-  for (auto const &c : localpart) {
-    if (std::isdigit(c) || (c >= 'a' && c <= 'z') ||
-        (c == '-' || c == '.' || c == '=' || c == '_' || c == '/' ||
-         c == '+')) {
+  for (auto const &character : localpart) {
+    if (std::isdigit(character) || (character >= 'a' && character <= 'z') ||
+        (character == '-' || character == '.' || character == '=' ||
+         character == '_' || character == '/' || character == '+')) {
       continue;
-    } else {
-      return false;
     }
+    return false;
   }
 
   // Check if the localpart is too long
-  return std::format("@{}:{}", localpart, server_name).length() <= 255;
+  return std::format("@{}:{}", localpart, server_name).length() <=
+         id_max_length;
 }
 
 /**
@@ -213,11 +227,10 @@ is_valid_localpart(const std::string &localpart,
   throw std::runtime_error("Invalid Input");
 }
 
-[[nodiscard]] Task<std::vector<SRVRecord>>
-get_srv_record(const std::string &address);
+[[nodiscard]] static Task<std::vector<SRVRecord>>
+get_srv_record(std::string address);
 
-[[nodiscard]] Task<ResolvedServer>
-discover_server(const std::string &server_name);
+[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
 
 [[nodiscard]] std::string generate_ss_authheader(
     const std::string &server_name, const std::string &key_id,
@@ -244,25 +257,26 @@ discover_server(const std::string &server_name);
 [[nodiscard]] constexpr std::string
 generateQueryParamString(const std::string &keyName,
                          const std::vector<std::string> &values) {
-  std::string ss{};
-  ss += '?' + keyName + '=';
+  std::string query_param_string{};
+  query_param_string += '?' + keyName + '=';
 
   if (!values.empty()) {
-    ss += drogon::utils::urlEncodeComponent(values[0]);
+    query_param_string += drogon::utils::urlEncodeComponent(values[0]);
 
     for (size_t i = 1; i < values.size(); ++i) {
-      ss += '&' + keyName + '=' + drogon::utils::urlEncodeComponent(values[i]);
+      query_param_string +=
+          '&' + keyName + '=' + drogon::utils::urlEncodeComponent(values[i]);
     }
   }
 
-  return ss;
+  return query_param_string;
 }
 
 [[nodiscard]] std::unordered_map<std::string, std::vector<std::string>>
 parseQueryParamString(const std::string &queryString);
 
 [[nodiscard]] Task<drogon::HttpResponsePtr>
-federation_request(const HTTPRequest &request);
+federation_request(HTTPRequest request);
 
 [[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config);
 
@@ -296,7 +310,7 @@ template <typename... Args> struct debug {
     auto str = std::format(
         "{}({}): {}\n", loc.file_name(), loc.line(),
         std::vformat(format_string, std::make_format_args(args...)));
-    std::cout << str;
+    LOG_DEBUG << str;
   }
 };
 
@@ -351,11 +365,13 @@ generate_room_id(const std::string &server_name) {
   // case-sensitive.
 
   // Generate a random opaque_id
-  auto opaque_id = random_string(16);
+  constexpr auto opaque_id_start_length = 16;
+  auto opaque_id = random_string(opaque_id_start_length);
 
   // Check if the combined length of the server name, `!`, opaque_id, and `:`
   // exceeds 255 bytes and if it does truncate the opaque_id until it fits
-  while (std::format("!{}:{}", opaque_id, server_name).length() > 255) {
+  while (std::format("!{}:{}", opaque_id, server_name).length() >
+         id_max_length) {
     opaque_id.pop_back();
   }
 

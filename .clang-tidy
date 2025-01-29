@@ -1,11 +1,6 @@
 ---
-FormatStyle:     llvm
-Checks: >
-    cert-*,
-    -cert-err58-cpp,
-    misc-misplaced-const,
-    performance-*,
-    modernize-*,
-    bugprone-*,
-    -modernize-use-trailing-return-type
-...
+Checks: '*,-fuchsia-*,-google-*,-zircon-*,-abseil-*,-modernize-use-trailing-return-type,-llvm-*,-llvmlibc-*,-altera-*'
+CheckOptions: [ { key: misc-non-private-member-variables-in-classes, value: IgnoreClassesWithAllMemberVariablesBeingPublic } ]
+WarningsAsErrors: '*'
+HeaderFilterRegex: ''
+FormatStyle: none

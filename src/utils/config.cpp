@@ -1,6 +1,8 @@
 #include "utils/config.hpp"
-#include "yaml-cpp/node/node.h"
+#include "yaml-cpp/yaml.h"
 #include <stdexcept>
+
+static constexpr unsigned short DEFAULT_POSTGRES_PORT = 5432;
 
 /**
  * @brief Loads the database configuration from a YAML node.
@@ -18,8 +20,8 @@
 void Config::load_db(const YAML::Node &config) {
   db_config.host = config["database"]["host"].as<std::string>();
   // Default to 5432 if not provided
-  db_config.port = config["database"]["port"].as<unsigned short>(
-      static_cast<unsigned short>(5432));
+  db_config.port =
+      config["database"]["port"].as<unsigned short>(DEFAULT_POSTGRES_PORT);
   db_config.database_name =
       config["database"]["database_name"].as<std::string>();
   db_config.user = config["database"]["user"].as<std::string>();

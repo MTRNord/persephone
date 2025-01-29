@@ -4,6 +4,7 @@
 #include "utils/config.hpp"
 #include <drogon/HttpController.h>
 #include <drogon/HttpFilter.h>
+#include <drogon/HttpTypes.h>
 
 using namespace drogon;
 
@@ -46,8 +47,7 @@ public:
       Get, Options, "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
 
-  explicit ClientServerCtrl(Config config, Database db)
-      : _config(std::move(config)), _db(db) {}
+  explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
 
 protected:
   void versions(const HttpRequestPtr &,
@@ -81,7 +81,7 @@ protected:
              const std::string &roomId, const std::string &eventType,
              const std::optional<std::string> &state_key) const;
 
-  json get_powerlevels_pdu(
+  [[nodiscard]] json get_powerlevels_pdu(
       const std::string &room_version, const std::string &sender,
       const std::string &room_id,
       const std::optional<client_server_json::PowerLevelEventContent>
@@ -89,6 +89,5 @@ protected:
 
 private:
   Config _config;
-  Database _db;
 };
 } // namespace client_server_api

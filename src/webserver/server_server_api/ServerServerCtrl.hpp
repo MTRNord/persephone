@@ -3,6 +3,11 @@
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
 #include <drogon/HttpController.h>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/HttpTypes.h>
+#include <functional>
+#include <utility>
 
 using namespace drogon;
 
@@ -21,8 +26,8 @@ public:
         _verify_key_data(std::move(verify_key_data)) {}
 
 protected:
-  void version(const HttpRequestPtr &,
-               std::function<void(const HttpResponsePtr &)> &&callback) const;
+  static void version(const HttpRequestPtr &,
+                      std::function<void(const HttpResponsePtr &)> &&callback);
 
   void
   server_key(const HttpRequestPtr &,

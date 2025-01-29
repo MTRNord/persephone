@@ -4,11 +4,12 @@
 /// @brief The Configuration of the application.
 /// This allows to have a nice structure as a struct instead of using brackets.
 
-#include "drogon/drogon.h"
-#include "yaml-cpp/yaml.h"
-#include <cstddef>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
+#include <trantor/utils/Logger.h>
+#include <yaml-cpp/node/node.h>
+#include <yaml-cpp/node/parse.h>
 
 /**
  * @brief A struct representing the database configuration.
@@ -26,7 +27,7 @@ struct [[nodiscard]] DBConfig {
   std::string database_name;
   std::string user;
   std::string password;
-  unsigned short port;
+  unsigned short port{};
 };
 
 /**
@@ -70,9 +71,11 @@ struct [[nodiscard]] MatrixConfig {
  * the return value is discarded.
  */
 struct [[nodiscard]] Config {
-  DBConfig db_config;
-  MatrixConfig matrix_config;
-  WebserverConfig webserver_config;
+  DBConfig db_config{}; // NOLINT(*-non-private-member-variables-in-classes)
+  MatrixConfig
+      matrix_config{}; // NOLINT(*-non-private-member-variables-in-classes)
+  WebserverConfig
+      webserver_config{}; // NOLINT(*-non-private-member-variables-in-classes)
 
   /**
    * @brief Constructs a new Config object.

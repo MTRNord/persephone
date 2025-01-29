@@ -1,8 +1,11 @@
 #pragma once
-#define JSON_DIAGNOSTICS 1
 
-#include <iostream>
+#include <map>
 #include <nlohmann/json.hpp>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 using json = nlohmann::json;
 
@@ -88,18 +91,18 @@ findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
                    const std::vector<std::vector<StateEvent>> &forks) {
   std::vector<StateEvent> authDifference;
 
-  for (const auto &e : conflictedEvents) {
+  for (const auto &event : conflictedEvents) {
     bool found = true;
 
     for (const auto &authSet : forks) {
-      if (std::ranges::find(authSet, e) == authSet.end()) {
+      if (std::ranges::find(authSet, event) == authSet.end()) {
         found = false;
         break;
       }
     }
 
     if (!found) {
-      authDifference.push_back(e);
+      authDifference.push_back(event);
     }
   }
 
@@ -128,9 +131,9 @@ find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
 
     // Add the m.room.create event_id from the events array to the auth events
     // array
-    for (const auto &e : known_events) {
-      if (e["type"] == "m.room.create") {
-        auth_events.push_back(e["event_id"].get<std::string>());
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.create") {
+        auth_events.push_back(event["event_id"].get<std::string>());
       }
     }
 
@@ -141,19 +144,19 @@ find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
     }
 
     // Add m.room.power_levels event_id to the auth events array, if any
-    for (const auto &e : known_events) {
-      if (e["type"] == "m.room.power_levels") {
-        auth_events.push_back(e["event_id"].get<std::string>());
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.power_levels") {
+        auth_events.push_back(event["event_id"].get<std::string>());
       }
     }
 
     // Add the sender's m.room.member event_id to the auth events array, if any
     std::optional<json> sender_membership = std::nullopt;
-    for (const auto &e : known_events) {
-      if (e["type"] == "m.room.member" &&
-          e["state_key"] == outermost_event["sender"]) {
-        sender_membership = e;
-        auth_events.push_back(e["event_id"].get<std::string>());
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.member" &&
+          event["state_key"] == outermost_event["sender"]) {
+        sender_membership = event;
+        auth_events.push_back(event["event_id"].get<std::string>());
       }
     }
 
@@ -178,9 +181,9 @@ find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
           outermost_event["content"]["membership"] == "invite") {
         // ... add the m.room.join_rules event_id to the auth events array, if
         // any
-        for (const auto &e : known_events) {
-          if (e["type"] == "m.room.join_rules") {
-            auth_events.push_back(e["event_id"].get<std::string>());
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.join_rules") {
+            auth_events.push_back(event["event_id"].get<std::string>());
           }
         }
       }
@@ -192,9 +195,9 @@ find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
         // TODO:: if the token can't be found, the event is invalid. This should
         // be checked before this function. The event MUST also exist.
         const auto current_count = auth_events.size();
-        for (const auto &e : known_events) {
-          if (e["type"] == "m.room.third_party_invite") {
-            auth_events.push_back(e["event_id"].get<std::string>());
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.third_party_invite") {
+            auth_events.push_back(event["event_id"].get<std::string>());
           }
         }
 
@@ -216,12 +219,12 @@ find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
         // (join_authorised_via_users_server) (if the user does not get found ->
         // throw an exception)
         const auto current_count = auth_events.size();
-        for (const auto &e : known_events) {
-          if (e["type"] == "m.room.member" &&
-              e["state_key"] ==
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.member" &&
+              event["state_key"] ==
                   outermost_event["content"]
                                  ["join_authorised_via_users_server"]) {
-            auth_events.push_back(e["event_id"].get<std::string>());
+            auth_events.push_back(event["event_id"].get<std::string>());
           }
         }
 

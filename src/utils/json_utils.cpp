@@ -1,16 +1,19 @@
-#define JSON_DIAGNOSTICS 1
 #include "json_utils.hpp"
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <map>
-#include <nlohmann/detail/value_t.hpp>
 #include <nlohmann/json.hpp>
+#include <sodium/crypto_sign.h>
 #include <sodium/utils.h>
 #include <stdexcept>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace json_utils {
 /**
@@ -62,7 +65,7 @@ unbase64_key(const std::string &input) {
       private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
-  const auto encoded_str_char = sodium_bin2base64(
+  const auto *encoded_str_char = sodium_bin2base64(
       base64_str.data(), base64_max_len, input.data(), private_key_len,
       sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
@@ -148,11 +151,11 @@ unbase64_key(const std::string &input) {
 [[nodiscard]] std::tuple<std::array<unsigned char, crypto_sign_PUBLICKEYBYTES>,
                          std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key() {
-  std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> pk;
-  std::array<unsigned char, crypto_sign_SECRETKEYBYTES> sk;
-  crypto_sign_keypair(pk.data(), sk.data());
+  std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> public_key{};
+  std::array<unsigned char, crypto_sign_SECRETKEYBYTES> secret_key{};
+  crypto_sign_keypair(public_key.data(), secret_key.data());
 
-  return {pk, sk};
+  return {public_key, secret_key};
 }
 
 /**

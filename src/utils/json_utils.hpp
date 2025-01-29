@@ -1,8 +1,7 @@
 #pragma once
-#define JSON_DIAGNOSTICS 1
 
 #include <array>
-#include <nlohmann/json_fwd.hpp>
+#include <nlohmann/json.hpp>
 #include <sodium/crypto_sign.h>
 #include <string>
 #include <tuple>

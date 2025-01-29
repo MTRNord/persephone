@@ -2,12 +2,7 @@
 
 /// @file
 /// @brief A wrapper for the database operations to ensure they are uniform.
-#define JSON_DIAGNOSTICS 1
 #include "drogon/drogon.h"
-#include <coroutine>
-#include <cstddef>
-#include <functional>
-#include <future>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -16,15 +11,13 @@
 
 using json = nlohmann::json;
 
-void prepare_statements();
-
 /**
  * @brief A wrapper for database operations. This is intentionally stateless and
  * not a cache.
  */
 class Database {
 public:
-  void migrate() const;
+  static void migrate();
 
   struct [[nodiscard]] UserCreationData {
     std::string matrix_id;
@@ -45,31 +38,36 @@ public:
     std::string user_id;
   };
 
-  [[nodiscard]] drogon::Task<Database::UserCreationResp>
-  create_user(UserCreationData const &data) const;
+  struct [[nodiscard]] LoginData {
+    std::string matrix_id;
+    std::string password;
+    std::optional<std::string> initial_device_name;
+    std::optional<std::string> device_id;
+  };
 
-  [[nodiscard]] drogon::Task<bool> user_exists(std::string matrix_id) const;
+  [[nodiscard]] static drogon::Task<Database::UserCreationResp>
+  create_user(UserCreationData const data);
 
-  [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-  get_user_info(const std::string &auth_token) const;
+  [[nodiscard]] static drogon::Task<bool> user_exists(std::string matrix_id);
 
-  [[nodiscard]] drogon::Task<bool>
-  validate_access_token(std::string auth_token) const;
+  [[nodiscard]] static drogon::Task<std::optional<Database::UserInfo>>
+  get_user_info(const std::string auth_token);
 
-  [[nodiscard]] drogon::Task<client_server_json::login_resp>
-  login(const std::string &matrix_id, const std::string &password,
-        const std::optional<std::string> &initial_device_name,
-        const std::optional<std::string> &device_id) const;
+  [[nodiscard]] static drogon::Task<bool>
+  validate_access_token(std::string auth_token);
 
-  [[nodiscard]] drogon::Task<void>
-  add_room(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-           std::vector<json> events, const std::string &room_id) const;
+  [[nodiscard]] static drogon::Task<client_server_json::login_resp>
+      login(LoginData login_data);
 
-  [[nodiscard]] drogon::Task<void>
-  add_event(const std::shared_ptr<drogon::orm::Transaction> &transaction,
-            json event, const std::string &room_id) const;
+  [[nodiscard]] static drogon::Task<void>
+  add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
+           std::vector<json> events, const std::string room_id);
 
-  [[nodiscard]] drogon::Task<json>
-  get_state_event(const std::string &room_id, const std::string &event_type,
-                  const std::string &state_key) const;
+  [[nodiscard]] static drogon::Task<void>
+  add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
+            json event, const std::string room_id);
+
+  [[nodiscard]] static drogon::Task<json>
+  get_state_event(const std::string room_id, const std::string event_type,
+                  const std::string state_key);
 };

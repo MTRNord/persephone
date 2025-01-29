@@ -1,13 +1,12 @@
 #pragma once
-#include "drogon/drogon.h"
 
 class Migrator {
 public:
-  void migrate() const;
+  static void migrate();
 
 private:
-  void migration_v0() const;
-  void migration_v1() const;
-  void migration_v2() const;
-  void migration_v3() const;
+  static void migration_v0();
+  static void migration_v1();
+  static void migration_v2();
+  static void migration_v3();
 };

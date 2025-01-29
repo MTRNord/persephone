@@ -1,9 +1,14 @@
-#define JSON_DIAGNOSTICS 1
 #include "ServerServerCtrl.hpp"
 #include "nlohmann/json.hpp"
 #include "utils/config.hpp"
 #include "utils/json_utils.hpp"
 #include "webserver/json.hpp"
+#include <chrono>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
+#include <drogon/HttpTypes.h>
+#include <format>
+#include <functional>
 
 using namespace server_server_api;
 using json = nlohmann::json;
@@ -23,13 +28,13 @@ using json = nlohmann::json;
  */
 void ServerServerCtrl::version(
     const HttpRequestPtr &,
-    std::function<void(const HttpResponsePtr &)> &&callback) const {
+    std::function<void(const HttpResponsePtr &)> &&callback) {
   static constexpr server_server_json::version version = {
       .server = {.name = "persephone", .version = "0.1.0"}};
-  const json j = version;
+  const json json = version;
 
   const auto resp = HttpResponse::newHttpResponse();
-  resp->setBody(j.dump());
+  resp->setBody(json.dump());
   resp->setExpiredTime(0);
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
   callback(resp);
@@ -44,7 +49,7 @@ void ServerServerCtrl::server_key(
                        .count();
   const long tomorrow = now + static_cast<long>(24 * 60 * 60 * 1000); // 24h
 
-  server_server_json::keys keys = {
+  const server_server_json::keys keys = {
       .server_name = server_name,
       .valid_until_ts = tomorrow,
       .old_verify_keys = {},
@@ -52,9 +57,9 @@ void ServerServerCtrl::server_key(
                                    _verify_key_data.key_id),
                        {.key = _verify_key_data.public_key_base64}}},
   };
-  const json j = keys;
+  const json json = keys;
   const auto signed_j = json_utils::sign_json(
-      server_name, _verify_key_data.key_id, _verify_key_data.private_key, j);
+      server_name, _verify_key_data.key_id, _verify_key_data.private_key, json);
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(signed_j.dump());

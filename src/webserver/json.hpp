@@ -4,10 +4,10 @@
 /// @brief This header contains all struct definitions of json response and
 /// request types
 
-#define JSON_DIAGNOSTICS 1
 #include "nlohmann/json.hpp"
 #include <map>
 #include <optional>
+#include <string>
 
 using json = nlohmann::json;
 
@@ -35,9 +35,9 @@ struct [[nodiscard]] MakeJoinResp {
   std::optional<std::string> room_version;
 };
 
-void from_json(const json &obj, MakeJoinResp &p);
+void from_json(const json &obj, MakeJoinResp &data_type);
 
-void to_json(json &obj, const MakeJoinResp &p);
+void to_json(json &obj, const MakeJoinResp &data_type);
 
 struct [[nodiscard]] SendJoinResp {
   // TODO: Have a type for the basic PDU structure
@@ -130,9 +130,9 @@ struct [[nodiscard]] well_known {
   std::optional<std::string> m_server;
 };
 
-void from_json(const json &obj, well_known &p);
+void from_json(const json &obj, well_known &data_type);
 
-void to_json(json &obj, const well_known &p);
+void to_json(json &obj, const well_known &data_type);
 
 struct [[nodiscard]] directory_query {
   std::string room_id;
@@ -168,9 +168,9 @@ struct [[nodiscard]] StateEvent {
   std::string type;
 };
 
-void from_json(const json &obj, StateEvent &p);
+void from_json(const json &obj, StateEvent &data_type);
 
-void to_json(json &obj, const StateEvent &p);
+void to_json(json &obj, const StateEvent &data_type);
 
 struct [[nodiscard]] PowerLevelEventContent {
   std::optional<int> ban;
@@ -185,9 +185,9 @@ struct [[nodiscard]] PowerLevelEventContent {
   std::optional<int> users_default;
 };
 
-void from_json(const json &obj, PowerLevelEventContent &p);
+void from_json(const json &obj, PowerLevelEventContent &data_type);
 
-void to_json(json &obj, const PowerLevelEventContent &p);
+void to_json(json &obj, const PowerLevelEventContent &data_type);
 
 struct [[nodiscard]] Invite3pid {
   std::string address;
@@ -214,18 +214,18 @@ struct [[nodiscard]] CreateRoomBody {
   std::optional<bool> is_direct;
 };
 
-void from_json(const json &obj, CreateRoomBody &p);
+void from_json(const json &obj, CreateRoomBody &data_type);
 
-void to_json(json &obj, const CreateRoomBody &p);
+void to_json(json &obj, const CreateRoomBody &data_type);
 
 struct [[nodiscard]] AuthenticationData {
   std::optional<std::string> session;
   std::string type;
 };
 
-void from_json(const json &obj, AuthenticationData &p);
+void from_json(const json &obj, AuthenticationData &data_type);
 
-void to_json(json &obj, const AuthenticationData &p);
+void to_json(json &obj, const AuthenticationData &data_type);
 
 struct [[nodiscard]] registration_body {
   std::optional<AuthenticationData> auth;
@@ -237,9 +237,9 @@ struct [[nodiscard]] registration_body {
   std::optional<std::string> username;
 };
 
-void from_json(const json &obj, registration_body &p);
+void from_json(const json &obj, registration_body &data_type);
 
-void to_json(json &obj, const registration_body &p);
+void to_json(json &obj, const registration_body &data_type);
 
 struct [[nodiscard]] login_identifier {
   std::string type;
@@ -253,9 +253,9 @@ struct [[nodiscard]] login_identifier {
   std::optional<std::string> phone;
 };
 
-void from_json(const json &obj, login_identifier &p);
+void from_json(const json &obj, login_identifier &data_type);
 
-void to_json(json &obj, const login_identifier &p);
+void to_json(json &obj, const login_identifier &data_type);
 
 struct [[nodiscard]] login_body {
   std::optional<std::string> address;
@@ -270,9 +270,9 @@ struct [[nodiscard]] login_body {
   std::optional<std::string> user;
 };
 
-void from_json(const json &obj, login_body &p);
+void from_json(const json &obj, login_body &data_type);
 
-void to_json(json &obj, const login_body &p);
+void to_json(json &obj, const login_body &data_type);
 
 struct [[nodiscard]] well_known_m_homeserver {
   std::string base_url;
@@ -291,9 +291,9 @@ struct [[nodiscard]] well_known {
   std::optional<well_known_identity_server> m_identity_server;
 };
 
-void from_json(const json &obj, well_known &p);
+void from_json(const json &obj, well_known &data_type);
 
-void to_json(json &obj, const well_known &p);
+void to_json(json &obj, const well_known &data_type);
 
 struct [[nodiscard]] login_resp {
   std::string access_token;
@@ -305,9 +305,9 @@ struct [[nodiscard]] login_resp {
   std::optional<client_server_json::well_known> well_known;
 };
 
-void from_json(const json &obj, login_resp &p);
+void from_json(const json &obj, login_resp &data_type);
 
-void to_json(json &obj, const login_resp &p);
+void to_json(json &obj, const login_resp &data_type);
 
 /**
  * @brief JSON Object for the 200 response of the /register endpoint
@@ -322,9 +322,9 @@ struct [[nodiscard]] registration_resp {
   std::string user_id;
 };
 
-void from_json(const json &obj, registration_resp &p);
+void from_json(const json &obj, registration_resp &data_type);
 
-void to_json(json &obj, const registration_resp &p);
+void to_json(json &obj, const registration_resp &data_type);
 
 struct [[nodiscard]] FlowInformation {
   std::array<std::string, 1> stages;
@@ -350,9 +350,9 @@ struct [[nodiscard]] whoami_resp {
   std::optional<std::string> device_id;
 };
 
-void from_json(const json &obj, whoami_resp &p);
+void from_json(const json &obj, whoami_resp &data_type);
 
-void to_json(json &obj, const whoami_resp &p);
+void to_json(json &obj, const whoami_resp &data_type);
 
 /**
  * @brief JSON Object for the 200 response of the /versions endpoint
@@ -392,7 +392,7 @@ struct [[nodiscard]] JoinBody {
   std::optional<ThirdPartySigned> third_party_signed;
 };
 
-void from_json(const json &obj, JoinBody &p);
+void from_json(const json &obj, JoinBody &data_type);
 
-void to_json(json &obj, const JoinBody &p);
+void to_json(json &obj, const JoinBody &data_type);
 } // namespace client_server_json
