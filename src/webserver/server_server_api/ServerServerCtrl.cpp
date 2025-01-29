@@ -31,10 +31,10 @@ void ServerServerCtrl::version(
     std::function<void(const HttpResponsePtr &)> &&callback) {
   static constexpr server_server_json::version version = {
       .server = {.name = "persephone", .version = "0.1.0"}};
-  const json json = version;
+  const json json_data = version;
 
   const auto resp = HttpResponse::newHttpResponse();
-  resp->setBody(json.dump());
+  resp->setBody(json_data.dump());
   resp->setExpiredTime(0);
   resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
   callback(resp);
@@ -57,9 +57,10 @@ void ServerServerCtrl::server_key(
                                    _verify_key_data.key_id),
                        {.key = _verify_key_data.public_key_base64}}},
   };
-  const json json = keys;
-  const auto signed_j = json_utils::sign_json(
-      server_name, _verify_key_data.key_id, _verify_key_data.private_key, json);
+  const json json_data = keys;
+  const auto signed_j =
+      json_utils::sign_json(server_name, _verify_key_data.key_id,
+                            _verify_key_data.private_key, json_data);
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(signed_j.dump());

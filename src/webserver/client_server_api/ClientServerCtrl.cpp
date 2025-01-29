@@ -447,9 +447,9 @@ void ClientServerCtrl::whoami(
             .is_guest = user_info->is_guest,
             .device_id = user_info->device_id,
         };
-        const json json = j_resp;
+        const json json_data = j_resp;
 
-        resp->setBody(json.dump());
+        resp->setBody(json_data.dump());
         resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
         callback(resp);
       });
@@ -508,8 +508,8 @@ void ClientServerCtrl::login_get(
           const client_server_json::LoginFlow password_flow = {
               .type = "m.login.password"};
           client_server_json::GetLogin const login{.flows = {password_flow}};
-          const json json = login;
-          return json.dump();
+          const json json_data = login;
+          return json_data.dump();
         }();
 
         const auto resp = HttpResponse::newHttpResponse();
