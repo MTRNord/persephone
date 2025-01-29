@@ -2,17 +2,24 @@
 
 #include "database/database.hpp"
 #include "utils/config.hpp"
+#include "webserver/json.hpp"
 #include <drogon/HttpController.h>
 #include <drogon/HttpFilter.h>
+#include <drogon/HttpRequest.h>
+#include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
+#include <drogon/drogon_callbacks.h>
+#include <functional>
+#include <optional>
+#include <utility>
 
 using namespace drogon;
 
 namespace client_server_api {
 class AccessTokenFilter final : public drogon::HttpFilter<AccessTokenFilter> {
 public:
-  void doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
-                FilterChainCallback &&ccb) override;
+  void doFilter(const HttpRequestPtr &req, FilterCallback &&callback,
+                FilterChainCallback &&chain_callback) override;
 };
 
 class ClientServerCtrl final
@@ -26,7 +33,9 @@ public:
   ADD_METHOD_TO(ClientServerCtrl::user_available,
                 "/_matrix/client/v3/register/available?username={1}", Get,
                 Options);
-  ADD_METHOD_TO(ClientServerCtrl::login, "/_matrix/client/v3/login", Get, Post,
+  ADD_METHOD_TO(ClientServerCtrl::login_get, "/_matrix/client/v3/login", Get,
+                Options);
+  ADD_METHOD_TO(ClientServerCtrl::login_post, "/_matrix/client/v3/login", Post,
                 Options);
   ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
                 Post, Options);
@@ -60,7 +69,10 @@ protected:
                       std::function<void(const HttpResponsePtr &)> &&callback,
                       const std::string &username) const;
 
-  void login(const HttpRequestPtr &,
+  void login_get(const HttpRequestPtr &,
+                 std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void
+  login_post(const HttpRequestPtr &req,
              std::function<void(const HttpResponsePtr &)> &&callback) const;
 
   void

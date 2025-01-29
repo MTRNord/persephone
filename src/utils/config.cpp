@@ -1,6 +1,7 @@
 #include "utils/config.hpp"
 #include "yaml-cpp/yaml.h"
 #include <stdexcept>
+#include <yaml-cpp/node/node.h>
 
 static constexpr unsigned short DEFAULT_POSTGRES_PORT = 5432;
 

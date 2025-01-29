@@ -34,36 +34,37 @@ using json = nlohmann::json;
 // Define our default room version globally
 static constexpr std::string default_room_version = "11";
 
-void AccessTokenFilter::doFilter(const HttpRequestPtr &req, FilterCallback &&cb,
-                                 FilterChainCallback &&ccb) {
-  drogon::async_run(
-      [req, ccb = std::move(ccb), cb = std::move(cb)]() -> drogon::Task<> {
-        // If this is an OPTIONS request, we can skip the filter
-        if (req->method() == drogon::Options) {
-          ccb();
-          co_return;
-        }
+void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
+                                 FilterCallback &&callback,
+                                 FilterChainCallback &&chain_callback) {
+  drogon::async_run([req, chain_callback = std::move(chain_callback),
+                     callback = std::move(callback)]() -> drogon::Task<> {
+    // If this is an OPTIONS request, we can skip the filter
+    if (req->method() == drogon::Options) {
+      chain_callback();
+      co_return;
+    }
 
-        // Get the access token from the Authorization header
-        const auto auth_header = req->getHeader("Authorization");
-        if (auth_header.empty()) {
-          return_error(cb, "M_MISSING_TOKEN", "Missing Authorization header",
-                       k401Unauthorized);
-          co_return;
-        }
-        // TMP loging for complement debugging
-        LOG_DEBUG << "Access token: " << auth_header;
+    // Get the access token from the Authorization header
+    const auto auth_header = req->getHeader("Authorization");
+    if (auth_header.empty()) {
+      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+                   k401Unauthorized);
+      co_return;
+    }
+    // TMP loging for complement debugging
+    LOG_DEBUG << "Access token: " << auth_header;
 
-        // Remove the "Bearer " prefix and check if the token is valid;
-        if (const auto access_token = auth_header.substr(7);
-            co_await Database::validate_access_token(access_token)) {
-          ccb();
-          co_return;
-        }
-        return_error(cb, "M_UNKNOWN_TOKEN", "Unrecognised access token.",
-                     k401Unauthorized);
-        co_return;
-      });
+    // Remove the "Bearer " prefix and check if the token is valid;
+    if (const auto access_token = auth_header.substr(7);
+        co_await Database::validate_access_token(access_token)) {
+      chain_callback();
+      co_return;
+    }
+    return_error(callback, "M_UNKNOWN_TOKEN", "Unrecognised access token.",
+                 k401Unauthorized);
+    co_return;
+  });
 }
 
 void ClientServerCtrl::versions(
@@ -168,122 +169,118 @@ void ClientServerCtrl::user_available(
       });
 }
 
-void ClientServerCtrl::login(
+void ClientServerCtrl::login_get(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
   drogon::async_run(
       [req, callback = std::move(callback), this]() -> drogon::Task<> {
-        if (req->method() == drogon::Get) {
-          const auto login_flow = []() {
-            const client_server_json::LoginFlow password_flow = {
-                .type = "m.login.password"};
-            client_server_json::GetLogin const login{.flows = {password_flow}};
-            const json json = login;
-            return json.dump();
-          }();
+        const auto login_flow = []() {
+          const client_server_json::LoginFlow password_flow = {
+              .type = "m.login.password"};
+          client_server_json::GetLogin const login{.flows = {password_flow}};
+          const json json = login;
+          return json.dump();
+        }();
 
-          const auto resp = HttpResponse::newHttpResponse();
-          resp->setBody(login_flow);
-          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-          callback(resp);
-        } else if (req->method() == drogon::Post) {
-          // Print body for debugging
-          LOG_DEBUG << "Body: " << req->body();
-          LOG_DEBUG << "Content type: " << req->getHeader("Content-Type");
-          // Parse body as login_body json
-          json body;
-          try {
-            body = json::parse(req->body());
-          } catch (json::parse_error &ex) {
-            LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
-            return_error(callback, "M_NOT_JSON",
-                         "Unable to parse json. Is this valid json?",
-                         k500InternalServerError);
-            co_return;
-          }
-
-          client_server_json::login_body login_body;
-          try {
-            login_body = body.get<client_server_json::login_body>();
-          } catch (...) {
-            const auto ex_re = std::current_exception();
-            try {
-              std::rethrow_exception(ex_re);
-            } catch (std::bad_exception const &ex) {
-              LOG_WARN << "Failed to parse json as login_body in login: "
-                       << ex.what() << '\n';
-            }
-            return_error(
-                callback, "M_BAD_JSON",
-                "Unable to parse json. Ensure all required fields are present?",
-                k500InternalServerError);
-            co_return;
-          }
-
-          // We for now only support type "m.login.password"
-          if (login_body.type != "m.login.password") {
-            return_error(callback, "M_UNKNOWN", "Unknown login type",
-                         k400BadRequest);
-            co_return;
-          }
-
-          // If identifier is not set, we return 400
-          if (!login_body.identifier.has_value()) {
-            return_error(callback, "M_UNKNOWN", "Missing identifier",
-                         k400BadRequest);
-            co_return;
-          }
-
-          // Use the database login function to check if the user exists and
-          // create an access token
-          try {
-            const auto supplied_user_id = login_body.identifier->user.value();
-            // Convert the user id to a icu compatible char16_t/UChar string
-            icu::UnicodeString user_id_icu(supplied_user_id.c_str());
-            // Get the english locale
-            const auto locale = icu::Locale::getEnglish();
-
-            // Ensure the user id is lowercase using icu library's u_strToLower
-            const auto user_id_lower_uci = user_id_icu.toLower(locale);
-
-            // Convert the user id to a std::string again
-            std::string user_id_lower;
-            user_id_lower_uci.toUTF8String(user_id_lower);
-            // If the user id does not start with @, we assume it is a localpart
-            // and append the server name
-            const std::string user_id =
-                user_id_lower[0] == '@'
-                    ? user_id_lower
-                    : std::format("@{}:{}", user_id_lower,
-                                  _config.matrix_config.server_name);
-
-            const Database::LoginData login_data{
-                .matrix_id = user_id,
-                .password = login_body.password.value(),
-                .initial_device_name = login_body.initial_device_display_name,
-                .device_id = login_body.device_id,
-            };
-            const auto login_resp = co_await Database::login(login_data);
-
-            // If the login was successful, return the response as json
-            const auto resp = HttpResponse::newHttpResponse();
-            resp->setBody(json(login_resp).dump());
-            resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-            resp->setStatusCode(k200OK);
-            callback(resp);
-          } catch (const std::exception &e) {
-            // Return 403 M_FORBIDDEN if the login failed
-            return_error(callback, "M_FORBIDDEN", e.what(), k403Forbidden);
-            co_return;
-          }
-        } else {
-          const auto resp = HttpResponse::newHttpResponse();
-          resp->setBody("{}");
-          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-          resp->setStatusCode(k200OK);
-          callback(resp);
-        }
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody(login_flow);
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        callback(resp);
+        co_return;
       });
+}
+
+void ClientServerCtrl::login_post(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback) const {
+  drogon::async_run([req, callback = std::move(callback),
+                     this]() -> drogon::Task<> {
+    // Parse body as login_body json
+    json body;
+    try {
+      body = json::parse(req->body());
+    } catch (json::parse_error &ex) {
+      LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
+      return_error(callback, "M_NOT_JSON",
+                   "Unable to parse json. Is this valid json?",
+                   k500InternalServerError);
+      co_return;
+    }
+
+    client_server_json::login_body login_body;
+    try {
+      login_body = body.get<client_server_json::login_body>();
+    } catch (...) {
+      const auto ex_re = std::current_exception();
+      try {
+        std::rethrow_exception(ex_re);
+      } catch (std::bad_exception const &ex) {
+        LOG_WARN << "Failed to parse json as login_body in login: " << ex.what()
+                 << '\n';
+      }
+      return_error(
+          callback, "M_BAD_JSON",
+          "Unable to parse json. Ensure all required fields are present?",
+          k500InternalServerError);
+      co_return;
+    }
+
+    // We for now only support type "m.login.password"
+    if (login_body.type != "m.login.password") {
+      return_error(callback, "M_UNKNOWN", "Unknown login type", k400BadRequest);
+      co_return;
+    }
+
+    // If identifier is not set, we return 400
+    if (!login_body.identifier.has_value()) {
+      return_error(callback, "M_UNKNOWN", "Missing identifier", k400BadRequest);
+      co_return;
+    }
+
+    // Use the database login function to check if the user exists and
+    // create an access token
+    try {
+      const auto supplied_user_id = login_body.identifier->user.value();
+      // Convert the user id to a icu compatible char16_t/UChar string
+      icu::UnicodeString user_id_icu(supplied_user_id.c_str());
+      // Get the english locale
+      const auto locale = icu::Locale::getEnglish();
+
+      // Ensure the user id is lowercase using icu library's u_strToLower
+      const auto user_id_lower_uci = user_id_icu.toLower(locale);
+
+      // Convert the user id to a std::string again
+      std::string user_id_lower;
+      user_id_lower_uci.toUTF8String(user_id_lower);
+      // If the user id does not start with @, we assume it is a localpart
+      // and append the server name
+      const std::string user_id =
+          user_id_lower[0] == '@'
+              ? user_id_lower
+              : std::format("@{}:{}", user_id_lower,
+                            _config.matrix_config.server_name);
+
+      const Database::LoginData login_data{
+          .matrix_id = user_id,
+          .password = login_body.password.value(),
+          .initial_device_name = login_body.initial_device_display_name,
+          .device_id = login_body.device_id,
+      };
+      const auto login_resp = co_await Database::login(login_data);
+
+      // If the login was successful, return the response as json
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(json(login_resp).dump());
+      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setStatusCode(k200OK);
+      callback(resp);
+    } catch (const std::exception &e) {
+      // Return 403 M_FORBIDDEN if the login failed
+      return_error(callback, "M_FORBIDDEN", e.what(), k403Forbidden);
+      co_return;
+    }
+    co_return;
+  });
 }
 
 void ClientServerCtrl::register_user(
@@ -486,8 +483,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     auto server_names =
         req->getOptionalParameter<std::vector<std::string>>("server_name");
 
-    auto server_name = get_serverpart(roomIdOrAlias);
-    auto server_address = co_await discover_server(server_name);
+    const auto server_name = get_serverpart(roomIdOrAlias);
+    const auto server_address = co_await discover_server(server_name);
     auto address = std::format("https://{}", server_address.address);
     if (server_address.port) {
       address = std::format("https://{}:{}", server_address.address,
@@ -531,7 +528,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       // Next we parse the alias to fetch the server
       // Get the response body as json
       json const resp_body = json::parse(resp->body());
-      auto directory_query =
+      const auto directory_query =
           resp_body.get<server_server_json::directory_query>();
 
       room_id = directory_query.room_id;
