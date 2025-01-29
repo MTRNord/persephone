@@ -31,7 +31,7 @@ public:
   /**
    * @brief Returns a pointer to the error message string.
    *
-   * This method overrides the what method of the standard exception class. It
+   * This method overrides the "what" method of the standard exception class. It
    * returns a pointer to a string that describes the error ("Unsupported room
    * version").
    *

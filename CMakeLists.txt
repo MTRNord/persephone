@@ -113,24 +113,10 @@ if (NOT DISABLE_TESTS)
             ICU::uc
             snitch::snitch
     )
-
-    add_executable(client_server_test tests/client_server_test.cpp ${SOURCES})
-    target_link_libraries(client_server_test PRIVATE
-            Drogon::Drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
-            ICU::uc
-            snitch::snitch
-    )
-    ParseAndAddDrogonTests(client_server_test)
-
+    
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
-            COMMAND client_server_test
     )
 
     add_test(

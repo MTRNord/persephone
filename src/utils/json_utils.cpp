@@ -28,13 +28,13 @@ namespace json_utils {
  */
 [[nodiscard]] std::vector<unsigned char>
 unbase64_key(const std::string &input) {
-  size_t b64_str_len = input.size();
+  const size_t b64_str_len = input.size();
   size_t bin_len = b64_str_len * (static_cast<size_t>(4) * 3);
   std::vector<unsigned char> bin_str(bin_len);
 
-  int status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
-                                 b64_str_len, nullptr, &bin_len, nullptr,
-                                 sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+  const int status = sodium_base642bin(
+      bin_str.data(), bin_len, input.data(), b64_str_len, nullptr, &bin_len,
+      nullptr, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   if (status < 0) {
     throw std::runtime_error("Base64 String decode failed to decode");
@@ -57,12 +57,12 @@ unbase64_key(const std::string &input) {
  * @throw std::runtime_error If the encoding fails.
  */
 [[nodiscard]] std::string base64_key(const std::vector<unsigned char> &input) {
-  unsigned long long private_key_len = input.size();
+  const unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
       private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
 
   std::string base64_str(base64_max_len - 1, 0);
-  auto encoded_str_char = sodium_bin2base64(
+  const auto encoded_str_char = sodium_bin2base64(
       base64_str.data(), base64_max_len, input.data(), private_key_len,
       sodium_base64_VARIANT_URLSAFE_NO_PADDING);
   if (encoded_str_char == nullptr) {
@@ -176,8 +176,8 @@ void write_server_key(const Config &config,
   auto base64_str = json_utils::base64_key(private_key);
 
   auto version = std::format("a_{}", random_string(4));
-  std::ofstream keyfile(config.matrix_config.server_key_location);
-  if (keyfile.is_open()) {
+  if (std::ofstream keyfile(config.matrix_config.server_key_location);
+      keyfile.is_open()) {
     keyfile << std::format("{} {} {}", algo, version, base64_str);
     keyfile.close();
   }

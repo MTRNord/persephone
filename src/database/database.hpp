@@ -51,7 +51,7 @@ public:
   [[nodiscard]] drogon::Task<bool> user_exists(std::string matrix_id) const;
 
   [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-  get_user_info(std::string auth_token) const;
+  get_user_info(const std::string &auth_token) const;
 
   [[nodiscard]] drogon::Task<bool>
   validate_access_token(std::string auth_token) const;

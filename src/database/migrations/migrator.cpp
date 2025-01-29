@@ -27,7 +27,7 @@ void Migrator::migration_v0() const {
 
 void Migrator::migration_v1() const {
   LOG_INFO << "Starting database migration v0->v1";
-  auto sql = drogon::app().getDbClient("default");
+  const auto sql = drogon::app().getDbClient("default");
   assert(sql);
 
   try {
@@ -39,7 +39,7 @@ void Migrator::migration_v1() const {
       return;
     }
     LOG_DEBUG << "First time migrating to v1";
-    auto transPtr = sql->newTransaction();
+    const auto transPtr = sql->newTransaction();
     assert(transPtr);
 
     /* Global events table
@@ -55,14 +55,14 @@ void Migrator::migration_v1() const {
 
     /* Index for membership events (helps also to create the user specific
      * views) */
-    auto f2 = transPtr->execSqlAsyncFuture(
+    const auto f2 = transPtr->execSqlAsyncFuture(
         "CREATE INDEX IF NOT EXISTS events_idx ON events (room_id, state_key) "
         "WHERE type = 'm.room.member'");
     f2.wait();
 
     /* Create materialized views on insert -- Sadly formating is broken. See
      * migration sql files for readable versions */
-    auto f3 = transPtr->execSqlAsyncFuture(
+    const auto f3 = transPtr->execSqlAsyncFuture(
         "CREATE OR REPLACE FUNCTION new_room_view() "
         "RETURNS trigger LANGUAGE plpgsql AS $$ "
         "DECLARE room_cleared text; "
@@ -81,14 +81,14 @@ void Migrator::migration_v1() const {
     f3.wait();
 
     /* Create trigger to create the room view */
-    auto f4 = transPtr->execSqlAsyncFuture(
+    const auto f4 = transPtr->execSqlAsyncFuture(
         "CREATE TRIGGER tg_room_view_create AFTER INSERT ON events FOR EACH "
         "ROW EXECUTE FUNCTION new_room_view()");
     f4.wait();
 
     /* Create update fn which needs to be called manually as we can batch this
      * in the app logic */
-    auto f5 = transPtr->execSqlAsyncFuture(
+    const auto f5 = transPtr->execSqlAsyncFuture(
         "CREATE OR REPLACE FUNCTION room_view_update(room_id text) "
         "RETURNS void "
         "LANGUAGE plpgsql AS $$ "
@@ -104,7 +104,7 @@ void Migrator::migration_v1() const {
 
     /* User View - Create materialized view on insert. This view only contains
      * for each user the membership events */
-    auto f6 = transPtr->execSqlAsyncFuture(
+    const auto f6 = transPtr->execSqlAsyncFuture(
         "CREATE OR REPLACE FUNCTION new_user_view() "
         "RETURNS trigger LANGUAGE plpgsql AS $$ "
         "DECLARE state_key_cleared text; "
@@ -129,12 +129,12 @@ void Migrator::migration_v1() const {
         "$$;");
     f6.wait();
 
-    auto f7 = transPtr->execSqlAsyncFuture(
+    const auto f7 = transPtr->execSqlAsyncFuture(
         "CREATE TRIGGER tg_user_view_create AFTER INSERT ON events FOR EACH "
         "ROW EXECUTE FUNCTION new_user_view();");
     f7.wait();
 
-    auto f8 = transPtr->execSqlAsyncFuture(
+    const auto f8 = transPtr->execSqlAsyncFuture(
         "CREATE OR REPLACE FUNCTION user_view_update(state_key text) "
         "RETURNS void "
         "LANGUAGE plpgsql AS $$ "
@@ -149,7 +149,7 @@ void Migrator::migration_v1() const {
     f8.wait();
 
     /* Mark the migration as completed */
-    auto f9 =
+    const auto f9 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (1);");
     f9.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
@@ -160,7 +160,7 @@ void Migrator::migration_v1() const {
 
 void Migrator::migration_v2() const {
   LOG_INFO << "Starting database migration v1->v2";
-  auto sql = drogon::app().getDbClient();
+  const auto sql = drogon::app().getDbClient();
   assert(sql);
 
   try {
@@ -177,14 +177,14 @@ void Migrator::migration_v2() const {
 
     /* Used to generate the users table
      These are LOCAL users only.*/
-    auto f1 =
+    const auto f1 =
         transPtr->execSqlAsyncFuture("CREATE TABLE IF NOT EXISTS users ( "
                                      "matrix_id TEXT PRIMARY KEY, "
                                      "password_hash TEXT NOT NULL, "
                                      "avatar_url TEXT, display_name TEXT); ");
     f1.wait();
 
-    auto f2 = transPtr->execSqlAsyncFuture(
+    const auto f2 = transPtr->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS devices ( "
         "matrix_id TEXT NOT NULL references users(matrix_id), "
         "device_id TEXT NOT NULL, device_name TEXT NOT NULL, "
@@ -193,7 +193,7 @@ void Migrator::migration_v2() const {
     f2.wait();
 
     /* Mark the migration as completed */
-    auto f3 =
+    const auto f3 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (2);");
     f3.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
@@ -216,17 +216,17 @@ void Migrator::migration_v3() const {
       return;
     }
     LOG_DEBUG << "First time migrating to v3\n";
-    auto transPtr = sql->newTransaction();
+    const auto transPtr = sql->newTransaction();
     assert(transPtr);
 
     /*Create an index for state events*/
-    auto f1 =
+    const auto f1 =
         transPtr->execSqlAsyncFuture("CREATE INDEX ON events (room_id, type, "
                                      "state_key) WHERE state_key IS NOT NULL;");
     f1.wait();
 
     /* Mark the migration as completed */
-    auto f3 =
+    const auto f3 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (3);");
     f3.wait();
   } catch (const drogon::orm::DrogonDbException &e) {

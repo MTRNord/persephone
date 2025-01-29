@@ -18,8 +18,6 @@ using json = nlohmann::json;
  * object, sets the expired time to 0, and sets the content type to
  * application/json. Finally, it calls the callback function with the response.
  *
- * @param req The HTTP request pointer. This parameter is not used in the
- * function.
  * @param callback A callback function that takes an HTTP response pointer as
  * input. This function is called with the response.
  */

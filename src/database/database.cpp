@@ -81,7 +81,7 @@ Database::user_exists(std::string matrix_id) const {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-Database::get_user_info(std::string auth_token) const {
+Database::get_user_info(const std::string &auth_token) const {
   const auto sql = drogon::app().getDbClient();
   try {
     const auto result = co_await sql->execSqlCoro(
