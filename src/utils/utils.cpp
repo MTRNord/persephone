@@ -4,7 +4,6 @@
 #include "webserver/json.hpp"
 #include <algorithm>
 #include <arpa/nameser.h>
-#include <common.h>
 #include <coroutine>
 #include <cstddef>
 #include <dname.h>
