@@ -9,10 +9,13 @@
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
 #include <drogon/orm/DbConfig.h>
+#include <event2/event.h>
 #include <memory>
 #include <sodium/core.h>
 #include <stdexcept>
 #include <trantor/utils/Logger.h>
+#include <worker_queue/producer.hpp>
+#include <worker_queue/worker.hpp>
 
 static constexpr int DATABASE_CONNECTIONS = 10;
 
@@ -34,6 +37,12 @@ int main() {
       return 1;
     }
     auto verify_key_data = get_verify_key_data(config);
+
+    LOG_INFO << "Starting producer and worker queue";
+    const auto evbase = event_base_new();
+    Producer producer(config.rabbitmq_config.get_rabbitmq_url(), evbase);
+    Worker worker(config.rabbitmq_config.get_rabbitmq_url(), evbase);
+    std::thread([&worker] { worker.start(); }).detach();
 
     LOG_INFO << "Server running on 127.0.0.1:8008";
     drogon::app()

@@ -9,6 +9,7 @@ endif ()
 enable_testing()
 include(CTest)
 include(FetchContent)
+include(cmake/CPM.cmake)
 
 # Set C++ and C standards
 set(CMAKE_CXX_STANDARD 23)
@@ -23,6 +24,13 @@ set(CMAKE_MODULE_PATH
 # nlohmann_json
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
+# amqp-cpp
+CPMAddPackage(
+        NAME amqpcpp
+        GITHUB_REPOSITORY CopernicaMarketingSoftware/AMQP-CPP
+        VERSION 4.3.27
+        OPTIONS "AMQP-CPP_BUILD_SHARED ON" "AMQP-CPP_LINUX_TCP ON"
+)
 
 # Dependencies
 find_package(Drogon 1.9.9 REQUIRED)
@@ -34,6 +42,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
 # icu for unicode support
 find_package(ICU COMPONENTS uc REQUIRED)
+
+# libevent
+pkg_check_modules(libevent REQUIRED)
 
 # Include directories
 include_directories(
@@ -54,6 +65,9 @@ set(SOURCES
         src/webserver/client_server_api/ClientServerCtrl.cpp
         src/webserver/json.cpp
         src/webserver/server_server_api/ServerServerCtrl.cpp
+        src/worker_queue/producer.cpp
+        src/worker_queue/worker.cpp
+        src/worker_queue/ReconnectingLibEventHandler.cpp
 )
 
 # Executable
@@ -66,6 +80,8 @@ target_link_libraries(persephone PRIVATE
         ZLIB::ZLIB
         PkgConfig::LDNS
         ICU::uc
+        amqpcpp
+        event
 )
 # Set warning levels and other compiler options
 target_compile_options(persephone PRIVATE
@@ -87,7 +103,7 @@ target_link_options(persephone PRIVATE
 )
 
 # Tests
-option(DISABLE_TESTS "Disable tests" ON)
+option(DISABLE_TESTS " Disable tests" ON)
 if (NOT DISABLE_TESTS)
     FetchContent_Declare(snitch
             GIT_REPOSITORY https://github.com/snitch-org/snitch.git

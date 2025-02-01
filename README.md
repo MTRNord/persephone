@@ -26,6 +26,8 @@ The technology used will be:
 - [drogon](https://drogon.org/)
 - snitch2
 - ldns
+- libev
+- rabbitmq
 
 ## Building
 
