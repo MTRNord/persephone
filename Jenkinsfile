@@ -88,7 +88,7 @@ pipeline {
                     steps {
                         container('fedora') {
                             script {
-                                def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", "-f complement/Dockerfile .")
+                                def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", ".")
                                 dockerImage.push()
                             }
                         }

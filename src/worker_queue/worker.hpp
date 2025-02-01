@@ -12,7 +12,7 @@
 class Worker {
 public:
   Worker(const std::string &address, struct event_base *evbase);
-  void start();
+  [[noreturn]] void start();
 
 private:
   struct event_base *evbase;

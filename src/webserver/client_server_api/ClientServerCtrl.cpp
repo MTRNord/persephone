@@ -417,42 +417,41 @@ void ClientServerCtrl::versions(
 void ClientServerCtrl::whoami(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
-  drogon::async_run(
-      [req, callback = std::move(callback), this]() -> drogon::Task<> {
-        // Get the access token from the Authorization header
-        const auto auth_header = req->getHeader("Authorization");
-        if (auth_header.empty()) {
-          return_error(callback, "M_MISSING_TOKEN",
-                       "Missing Authorization header", k401Unauthorized);
-          co_return;
-        }
-        // Remove the "Bearer " prefix
-        const auto access_token = auth_header.substr(7);
+  drogon::async_run([req, callback = std::move(callback)]() -> drogon::Task<> {
+    // Get the access token from the Authorization header
+    const auto auth_header = req->getHeader("Authorization");
+    if (auth_header.empty()) {
+      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+                   k401Unauthorized);
+      co_return;
+    }
+    // Remove the "Bearer " prefix
+    const auto access_token = auth_header.substr(7);
 
-        const auto resp = HttpResponse::newHttpResponse();
+    const auto resp = HttpResponse::newHttpResponse();
 
-        // Check if we have the access token in the database
-        const auto user_info = co_await Database::get_user_info(access_token);
+    // Check if we have the access token in the database
+    const auto user_info = co_await Database::get_user_info(access_token);
 
-        if (!user_info) {
-          return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
-                       k401Unauthorized);
-          co_return;
-        }
+    if (!user_info) {
+      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                   k401Unauthorized);
+      co_return;
+    }
 
-        // Return the user id, if the user is a guest and the
-        // device id if its set as json
-        client_server_json::whoami_resp const j_resp = {
-            .user_id = user_info->user_id,
-            .is_guest = user_info->is_guest,
-            .device_id = user_info->device_id,
-        };
-        const json json_data = j_resp;
+    // Return the user id, if the user is a guest and the
+    // device id if its set as json
+    client_server_json::whoami_resp const j_resp = {
+        .user_id = user_info->user_id,
+        .is_guest = user_info->is_guest,
+        .device_id = user_info->device_id,
+    };
+    const json json_data = j_resp;
 
-        resp->setBody(json_data.dump());
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-        callback(resp);
-      });
+    resp->setBody(json_data.dump());
+    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    callback(resp);
+  });
 }
 
 void ClientServerCtrl::user_available(
@@ -502,22 +501,21 @@ void ClientServerCtrl::user_available(
 void ClientServerCtrl::login_get(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
-  drogon::async_run(
-      [req, callback = std::move(callback), this]() -> drogon::Task<> {
-        const auto login_flow = []() {
-          const client_server_json::LoginFlow password_flow = {
-              .type = "m.login.password"};
-          client_server_json::GetLogin const login{.flows = {password_flow}};
-          const json json_data = login;
-          return json_data.dump();
-        }();
+  drogon::async_run([req, callback = std::move(callback)]() -> drogon::Task<> {
+    const auto login_flow = []() {
+      const client_server_json::LoginFlow password_flow = {
+          .type = "m.login.password"};
+      client_server_json::GetLogin const login{.flows = {password_flow}};
+      const json json_data = login;
+      return json_data.dump();
+    }();
 
-        const auto resp = HttpResponse::newHttpResponse();
-        resp->setBody(login_flow);
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-        callback(resp);
-        co_return;
-      });
+    const auto resp = HttpResponse::newHttpResponse();
+    resp->setBody(login_flow);
+    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    callback(resp);
+    co_return;
+  });
 }
 
 void ClientServerCtrl::login_post(
@@ -1172,8 +1170,8 @@ void ClientServerCtrl::state(
     std::function<void(const HttpResponsePtr &)> &&callback,
     const std::string &roomId, const std::string &eventType,
     const std::optional<std::string> &stateKey) const {
-  drogon::async_run([req, callback = std::move(callback), this, roomId,
-                     eventType, stateKey]() -> drogon::Task<> {
+  drogon::async_run([req, callback = std::move(callback), roomId, eventType,
+                     stateKey]() -> drogon::Task<> {
     // TODO: Look up the latest state in the db
 
     try {
