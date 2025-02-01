@@ -120,6 +120,8 @@ if (NOT DISABLE_TESTS)
             PkgConfig::LDNS
             ICU::uc
             snitch::snitch
+            amqpcpp
+            event
     )
 
     add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
@@ -132,6 +134,8 @@ if (NOT DISABLE_TESTS)
             PkgConfig::LDNS
             ICU::uc
             snitch::snitch
+            amqpcpp
+            event
     )
 
     add_custom_target(tests
@@ -164,6 +168,8 @@ if (BUILD_FUZZ_TARGETS)
             trantor
             jsoncpp
             ICU::uc
+            amqpcpp
+            event
     )
     add_custom_target(fuzz_targets
             COMMAND fuzz_json_sign
