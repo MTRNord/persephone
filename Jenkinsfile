@@ -1,5 +1,19 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            yaml """
+            apiVersion: v1
+            kind: Pod
+            spec:
+              containers:
+              - name: fedora
+                image: fedora:41
+                command:
+                - cat
+                tty: true
+            """
+        }
+    }
 
     environment {
         DOCKER_BUILDKIT = '1'
@@ -9,80 +23,100 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                container('fedora') {
+                    checkout scm
+                }
             }
         }
 
         stage('Set Pending Status') {
             steps {
-                script {
-                    setBuildStatus("Build started", "PENDING")
+                container('fedora') {
+                    script {
+                        setBuildStatus("Build started", "PENDING")
+                    }
                 }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                sudo dnf install -y libevent-devel lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
-                '''
+                container('fedora') {
+                    sh '''
+                    dnf install -y libevent-devel lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
+                    '''
+                }
             }
         }
 
         stage('Build and Test') {
             steps {
-                sh '''
-                CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
-                cmake --build cmake-build-debug --config Debug
-                ctest -T Test -T Coverage --rerun-failed --output-on-failure
-                '''
+                container('fedora') {
+                    sh '''
+                    CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
+                    cmake --build cmake-build-debug --config Debug
+                    ctest -T Test -T Coverage --rerun-failed --output-on-failure
+                    '''
+                }
             }
         }
 
         stage('Report Coverage') {
             steps {
-                sh '''
-                pushd cmake-build-debug
-                lcov --directory ./CMakeFiles --capture --output-file coverage.info
-                lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
-                popd
-                '''
+                container('fedora') {
+                    sh '''
+                    pushd cmake-build-debug
+                    lcov --directory ./CMakeFiles --capture --output-file coverage.info
+                    lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
+                    popd
+                    '''
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                script {
-                    def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", "-f complement/Dockerfile .")
-                    dockerImage.push()
+                container('fedora') {
+                    script {
+                        def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", "-f complement/Dockerfile .")
+                        dockerImage.push()
+                    }
                 }
             }
         }
 
         stage('Run Complement Tests') {
             steps {
-                sh '''
-                docker build -t complement-persephone -f complement/Dockerfile .
-                docker run --rm complement-persephone:latest
-                '''
+                container('fedora') {
+                    sh '''
+                    docker build -t complement-persephone -f complement/Dockerfile .
+                    docker run --rm complement-persephone:latest
+                    '''
+                }
             }
         }
     }
 
     post {
         success {
-            script {
-                setBuildStatus("Build succeeded", "SUCCESS")
+            container('fedora') {
+                script {
+                    setBuildStatus("Build succeeded", "SUCCESS")
+                }
             }
         }
         failure {
-            script {
-                setBuildStatus("Build failed", "FAILURE")
+            container('fedora') {
+                script {
+                    setBuildStatus("Build failed", "FAILURE")
+                }
             }
         }
         always {
-            archiveArtifacts artifacts: 'cmake-build-debug/coverage_filtered.info', allowEmptyArchive: true
-            junit 'cmake-build-debug/**/*.xml'
+            container('fedora') {
+                archiveArtifacts artifacts: 'cmake-build-debug/coverage_filtered.info', allowEmptyArchive: true
+                junit 'cmake-build-debug/**/*.xml'
+            }
         }
     }
 }
