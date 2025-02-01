@@ -488,9 +488,9 @@ void ClientServerCtrl::user_available(
 
         // Return 200 OK with empty json body
         const auto json_data = []() {
-          auto json_data = json::object();
-          json_data["available"] = true;
-          return json_data.dump();
+          auto json_data_inner = json::object();
+          json_data_inner["available"] = true;
+          return json_data_inner.dump();
         }();
 
         resp->setBody(json_data);
