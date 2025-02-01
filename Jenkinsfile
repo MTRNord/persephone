@@ -49,14 +49,49 @@ pipeline {
             }
         }
 
-        stage('Build and Test') {
+        stage('Build Drogon') {
             steps {
                 container('fedora') {
                     sh '''
-                    CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
-                    cmake --build cmake-build-debug --config Debug
-                    ctest -T Test -T Coverage --rerun-failed --output-on-failure
+                    cd /tmp
+                    git clone https://github.com/drogonframework/drogon
+                    cd drogon
+                    git submodule update --init
+                    mkdir build
+                    cd build
+                    cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+                    make
+                    make install
+                    ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
+                    ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
                     '''
+                }
+            }
+        }
+
+        stage('Build and Test') {
+            parallel {
+                stage('Build and Test CMake') {
+                    steps {
+                        container('fedora') {
+                            sh '''
+                            CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
+                            cmake --build cmake-build-debug --config Debug
+                            ctest -T Test -T Coverage --rerun-failed --output-on-failure
+                            '''
+                        }
+                    }
+                }
+
+                stage('Build Docker Image') {
+                    steps {
+                        container('fedora') {
+                            script {
+                                def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", "-f complement/Dockerfile .")
+                                dockerImage.push()
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -70,17 +105,6 @@ pipeline {
                     lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
                     popd
                     '''
-                }
-            }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                container('fedora') {
-                    script {
-                        def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", "-f complement/Dockerfile .")
-                        dockerImage.push()
-                    }
                 }
             }
         }
