@@ -6,7 +6,7 @@ ARG BUILDPLATFORM
 ARG CROSS_COMPILE
 
 # TODO: Figure out how to get an arm64 c++ stdlib to link to...
-RUN dnf copr enable -y lantw44/aarch64-linux-gnu-toolchain && dnf install -y libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang gcc-aarch64-linux-gnu gcc-c++-aarch64-linux-gnu aarch64-linux-gnu-glibc
+RUN dnf copr enable -y lantw44/aarch64-linux-gnu-toolchain && dnf install -y libevent-devel libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang gcc-aarch64-linux-gnu gcc-c++-aarch64-linux-gnu aarch64-linux-gnu-glibc
 
 WORKDIR /build
 

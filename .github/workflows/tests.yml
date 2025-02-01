@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
-          dnf install -y lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
+          dnf install -y libevent-devel lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
           
           # Due to https://bugzilla.redhat.com/show_bug.cgi?id=2338878 in /usr/lib/pkgconfig/ldns.pc we need to replace `includedir=/usr/include/ldns/ldns` with `includedir=/usr/include/ldns`.
           sed -i 's%includedir=/usr/include/ldns/ldns%includedir=/usr/include/ldns%g' /usr/lib64/pkgconfig/ldns.pc
