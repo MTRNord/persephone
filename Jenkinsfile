@@ -78,7 +78,10 @@ pipeline {
                             sh '''
                             CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
                             cmake --build cmake-build-debug --config Debug
+                            cp ./.lcovrc ~/.lcovrc
+                            cd cmake-build-debug
                             ctest -T Test -T Coverage --rerun-failed --output-on-failure
+                            cd ..
                             '''
                         }
                     }
