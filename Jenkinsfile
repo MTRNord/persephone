@@ -76,11 +76,10 @@ pipeline {
                     steps {
                         container('fedora') {
                             sh '''
-                            CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCMAKE_CXX_FLAGS_DEBUG="-g -O0 -Wall -fprofile-arcs -ftest-coverage" -DCMAKE_C_FLAGS_DEBUG="-g -O0 -Wall -W -fprofile-arcs -ftest-coverage" -DCMAKE_EXE_LINKER_FLAGS="-fprofile-arcs -ftest-coverage"
-                            cmake --build cmake-build-debug --config Debug
+                            CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake -S . -B cmake-build-debug -DCMAKE_BUILD_TYPE=Debug -DDISABLE_TESTS=OFF -DCODE_COVERAGE=ON
                             cp ./.lcovrc ~/.lcovrc
                             cd cmake-build-debug
-                            ctest -T Test -T Coverage --rerun-failed --output-on-failure
+                            make ccov-all
                             cd ..
                             '''
                         }
@@ -100,15 +99,14 @@ pipeline {
             }
         }
 
-        stage('Report Coverage') {
+        stage('Publish Coverage') {
             steps {
                 container('fedora') {
-                    sh '''
-                    pushd cmake-build-debug
-                    lcov --directory ./CMakeFiles --capture --output-file coverage.info
-                    lcov --remove coverage.info -o coverage_filtered.info '*/_deps/*'
-                    popd
-                    '''
+                    publishHTML(target: [
+                        reportDir: 'cmake-build-debug/ccov/all-merged',
+                        reportFiles: 'index.html',
+                        reportName: 'Code Coverage Report'
+                    ])
                 }
             }
         }

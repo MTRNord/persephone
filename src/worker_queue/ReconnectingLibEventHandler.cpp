@@ -4,9 +4,9 @@
 #include <trantor/utils/Logger.h>
 
 ReconnectingLibEventHandler::ReconnectingLibEventHandler(
-    struct event_base *evbase, const std::string &address)
-    : AMQP::LibEventHandler(evbase), evbase(evbase), address(address),
-      reconnect_event(nullptr, event_free) {}
+    struct event_base *evbase_passed, const std::string &address_passed)
+    : AMQP::LibEventHandler(evbase_passed), evbase(evbase_passed),
+      address(address_passed), reconnect_event(nullptr, event_free) {}
 
 void ReconnectingLibEventHandler::onError(AMQP::TcpConnection *connection,
                                           const char *message) {

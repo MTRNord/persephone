@@ -20,6 +20,15 @@ set(CMAKE_C_STANDARD 17)
 
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(code-coverage)
+if (DEFINED ENV{CPM_SOURCE_CACHE})
+    # file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS $ENV{CPM_SOURCE_CACHE}/*)
+    set(CCOV_EXCLUDES $ENV{CPM_SOURCE_CACHE}/.* $ENV{CPM_SOURCE_CACHE}/*)
+endif ()
+# file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS ${CMAKE_BINARY_DIR}/*)
+set(CCOV_EXCLUDES ${CMAKE_BINARY_DIR}/.* ${CMAKE_BINARY_DIR}/*)
+
+add_code_coverage_all_targets(EXCLUDE ${CCOV_EXCLUDES})
 
 # nlohmann_json
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
@@ -151,6 +160,9 @@ if (NOT DISABLE_TESTS)
             NAME state_res_test
             COMMAND state_res_test
     )
+    target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+
 endif ()
 
 # Fuzz targets
