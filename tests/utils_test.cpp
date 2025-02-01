@@ -20,7 +20,7 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
     auto json_data = json{};
     REQUIRE_THROWS_AS(
         json_utils::sign_json("test", "test", private_key_vec, json_data),
-        json::type_error);
+        std::runtime_error);
   }
 
   SECTION("Simple signing") {
