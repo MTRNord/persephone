@@ -16,8 +16,7 @@ pipeline {
         stage('Set Pending Status') {
             steps {
                 script {
-                    def commitSha = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    githubCommitStatus context: 'Jenkins', status: 'PENDING', description: 'Build started', sha: commitSha
+                    setBuildStatus("Build started", "PENDING")
                 }
             }
         }
@@ -73,14 +72,12 @@ pipeline {
     post {
         success {
             script {
-                def commitSha = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                githubCommitStatus context: 'Jenkins', status: 'SUCCESS', description: 'Build succeeded', sha: commitSha
+                setBuildStatus("Build succeeded", "SUCCESS")
             }
         }
         failure {
             script {
-                def commitSha = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                githubCommitStatus context: 'Jenkins', status: 'FAILURE', description: 'Build failed', sha: commitSha
+                setBuildStatus("Build failed", "FAILURE")
             }
         }
         always {
@@ -88,4 +85,14 @@ pipeline {
             junit 'cmake-build-debug/**/*.xml'
         }
     }
+}
+
+void setBuildStatus(String message, String state) {
+    step([
+        $class: "GitHubCommitStatusSetter",
+        reposSource: [$class: "ManuallyEnteredRepositorySource", url: "https://github.com/MTRNord/persephone"],
+        contextSource: [$class: "ManuallyEnteredCommitContextSource", context: "ci/jenkins/build-status"],
+        errorHandlers: [[$class: "ChangingBuildStatusErrorHandler", result: "UNSTABLE"]],
+        statusResultSource: [$class: "ConditionalStatusResultSource", results: [[$class: "AnyBuildResult", message: message, state: state]]]
+    ])
 }
