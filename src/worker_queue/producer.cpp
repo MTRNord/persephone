@@ -1,7 +1,7 @@
 #include "producer.hpp"
 
 Producer::Producer(const std::string &address, struct event_base *evbase)
-    : evbase(evbase), handler(evbase, AMQP::Address(address)),
+    : handler(evbase, AMQP::Address(address)),
       connection(&handler, AMQP::Address(address)), channel(&connection) {
   channel.declareQueue("federation_requests");
 }

@@ -14,7 +14,6 @@ public:
                                   const std::string &reply_to);
 
 private:
-  struct event_base *evbase;
   ReconnectingLibEventHandler handler;
   AMQP::TcpConnection connection;
   AMQP::TcpChannel channel;
