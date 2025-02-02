@@ -291,3 +291,15 @@ TEST_CASE("Matrix IDs", "[matrix_ids]") {
     REQUIRE(localpart("@test:[::1]") == "test");
   }
 }
+
+TEST_CASE("Passwords", "[passwords]") {
+  SECTION("Can hash and verify password") {
+    const auto original_password = "test";
+
+    const auto password_hash = hash_password(original_password);
+
+    REQUIRE(!password_hash.empty());
+
+    REQUIRE(verify_hashed_password(password_hash, original_password));
+  }
+}
