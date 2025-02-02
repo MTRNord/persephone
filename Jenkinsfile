@@ -106,7 +106,8 @@ pipeline {
                                     publishHTML(target: [
                                         reportDir: 'cmake-build-debug/ccov/all-merged',
                                         reportFiles: 'index.html',
-                                        reportName: 'Code Coverage Report'
+                                        reportName: 'Code Coverage Report',
+                                        keepAll: true,
                                     ])
                                 }
                             }
