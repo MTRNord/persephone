@@ -147,9 +147,24 @@ if (NOT DISABLE_TESTS)
             event
     )
 
+    add_executable(config_test tests/config_test.cpp ${SOURCES})
+    target_link_libraries(config_test PRIVATE
+            Drogon::Drogon
+            nlohmann_json::nlohmann_json
+            yaml-cpp
+            sodium
+            ZLIB::ZLIB
+            PkgConfig::LDNS
+            ICU::uc
+            snitch::snitch
+            amqpcpp
+            event
+    )
+
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
+            COMMAND config_test
     )
 
     add_test(
@@ -160,8 +175,13 @@ if (NOT DISABLE_TESTS)
             NAME state_res_test
             COMMAND state_res_test
     )
+    add_test(
+            NAME config_test
+            COMMAND config_test
+    )
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
 
 endif ()
 
