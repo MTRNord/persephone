@@ -11,6 +11,13 @@ pipeline {
                 command:
                 - cat
                 tty: true
+                securityContext:
+                  capabilities:
+                    add:
+                    - SYS_ADMIN
+                    - MKNOD
+                    - SYS_CHROOT
+                    - SETFCAP
             """
         }
     }
