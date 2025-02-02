@@ -823,8 +823,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     std::string room_id;
 
-    const auto [key_id, private_key] =
-        load_signing_key(_config.matrix_config.server_key_location);
+    const auto key_data = get_verify_key_data(_config);
 
     if (roomIdOrAlias.starts_with("#")) {
       //  We first need to lookup the room alias
@@ -834,8 +833,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
            .path = std::format(
                "/_matrix/federation/v1/query/directory?room_alias={}",
                roomIdOrAlias),
-           .key_id = key_id,
-           .secret_key = private_key,
+           .key_id = key_data.key_id,
+           .secret_key = key_data.private_key,
            .origin = _config.matrix_config.server_name,
            .target = server_address.server_name,
            .content = nullptr,
@@ -895,8 +894,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
         {.client = client,
          .method = drogon::Get,
          .path = path,
-         .key_id = key_id,
-         .secret_key = private_key,
+         .key_id = key_data.key_id,
+         .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
          .content = nullptr,
@@ -954,8 +953,9 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     event["event_id"] = event_id(event, room_version.value());
     // Sign the make_join response as this is now the event
-    auto signed_event = json_utils::sign_json(_config.matrix_config.server_name,
-                                              key_id, private_key, event);
+    auto signed_event =
+        json_utils::sign_json(_config.matrix_config.server_name,
+                              key_data.key_id, key_data.private_key, event);
 
     // Send the signed event to the remote server on the v2/send_join endpoint
     auto send_join_resp = co_await federation_request(
@@ -964,8 +964,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .path = std::format(
              "/_matrix/federation/v2/send_join/{}/{}?omit_members=false",
              room_id, event["event_id"].get<std::string>()),
-         .key_id = key_id,
-         .secret_key = private_key,
+         .key_id = key_data.key_id,
+         .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
          .content = signed_event,
@@ -1104,14 +1104,14 @@ void ClientServerCtrl::createRoom(
     // Sign all the state events
 
     // Prepare loading the signing data
-    const auto [key_id, private_key] =
-        load_signing_key(_config.matrix_config.server_key_location);
+    const auto key_data = get_verify_key_data(_config);
     LOG_DEBUG << "Signing state events";
 
     find_auth_event_for_event_on_create(state_events, room_version);
     for (auto &state_event : state_events) {
       state_event = json_utils::sign_json(_config.matrix_config.server_name,
-                                          key_id, private_key, state_event);
+                                          key_data.key_id, key_data.private_key,
+                                          state_event);
     }
 
     LOG_DEBUG << "Doing state resolution";

@@ -677,15 +677,3 @@ federation_request(const HTTPRequest request) {
           .key_id = split_data[1],
           .key_type = split_data[0]};
 }
-
-[[nodiscard]] std::pair<std::string, std::vector<unsigned char>>
-load_signing_key(const std::filesystem::path &key_location) {
-  std::ifstream t(key_location);
-  std::string const server_key((std::istreambuf_iterator<char>(t)),
-                               std::istreambuf_iterator<char>());
-  std::istringstream buffer(server_key);
-  std::vector<std::string> split_data{
-      std::istream_iterator<std::string>(buffer),
-      std::istream_iterator<std::string>()};
-  return {split_data[1], json_utils::unbase64_key(split_data[2])};
-}

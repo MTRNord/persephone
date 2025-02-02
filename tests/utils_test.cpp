@@ -208,6 +208,45 @@ rabbitmq:
     REQUIRE(keyfile.good());
     keyfile.close();
   }
+
+  SECTION("Can load the server key") {
+    const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+rabbitmq:
+  host: localhost
+  port: 5672
+  )";
+
+    // Write file to disk for testing
+    std::ofstream file("config.yaml");
+    file << config_file;
+    file.close();
+
+    // Test loading the config
+    const Config config{};
+
+    json_utils::ensure_server_keys(config);
+
+    // Test loading the keys
+    const auto [private_key, public_key_base64, key_id, key_type] =
+        get_verify_key_data(config);
+
+    REQUIRE(!key_id.empty());
+    REQUIRE(!key_type.empty());
+    REQUIRE(!public_key_base64.empty());
+    REQUIRE(!private_key.empty());
+  }
 }
 
 TEST_CASE("Base64", "[base64]") {
