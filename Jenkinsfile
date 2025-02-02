@@ -43,7 +43,7 @@ pipeline {
             steps {
                 container('fedora') {
                     sh '''
-                    dnf install -y libevent-devel lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang
+                    dnf install -y libevent-devel lcov libicu-devel libasan libubsan libsodium-devel libpq-devel jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang podman
                     sed -i 's%includedir=/usr/include/ldns/ldns%includedir=/usr/include/ldns%g' /usr/lib64/pkgconfig/ldns.pc
                     '''
                 }
@@ -86,12 +86,12 @@ pipeline {
                     }
                 }
 
-                stage('Build Docker Image') {
+                stage('Build Container Image') {
                     steps {
                         container('fedora') {
                             script {
-                                def dockerImage = docker.build("mtrnord/persephone:${env.BUILD_ID}", ".")
-                                dockerImage.push()
+                                def podmanImage = sh(script: "podman build -t mtrnord/persephone:${env.BUILD_ID} .", returnStdout: true).trim()
+                                //sh "podman push ${podmanImage}"
                             }
                         }
                     }
@@ -115,8 +115,8 @@ pipeline {
             steps {
                 container('fedora') {
                     sh '''
-                    docker build -t complement-persephone -f complement/Dockerfile .
-                    docker run --rm complement-persephone:latest
+                    podman build -t complement-persephone -f complement/Dockerfile .
+                    podman run --rm complement-persephone:latest
                     '''
                 }
             }
