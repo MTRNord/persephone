@@ -57,6 +57,11 @@ reference_hash(const json &event, const std::string &room_version);
  */
 [[nodiscard]] constexpr bool matchDomain(const std::string &str1,
                                          const std::string &str2) {
+  // If they are empty there is no domain to compare
+  if (str1.empty() || str2.empty()) {
+    return false;
+  }
+
   // Find the position of ':' in the strings
   const size_t pos1 = str1.find(':');
   const size_t pos2 = str2.find(':');

@@ -2,13 +2,14 @@
 #include "nlohmann/json.hpp"
 #include "utils/state_res.hpp"
 #include <snitch/snitch.hpp>
+#include <utils/errors.hpp>
 #include <vector>
 
 using json = nlohmann::json;
 
 TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
   SECTION("Redact Event Based on v11 Rules") {
-    json event = R"(
+    auto event = R"(
       {
         "auth_events": [],
         "content": {
@@ -73,7 +74,7 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
   }
 
   SECTION("Redact Updated Event Based on v11 Rules") {
-    json event = R"(
+    auto event = R"(
       {
         "auth_events": [
           {
@@ -158,5 +159,98 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
       REQUIRE(!redacted_event["content"].contains("displayname"));
       REQUIRE(redacted_event["content"].contains("membership"));
     }
+  }
+}
+
+TEST_CASE("EventID", "[event_ids]") {
+  SECTION("Test generating event_ids for a room_version 11 event") {
+    const auto event = R"(
+      {
+        "auth_events": [],
+        "content": {
+          "join_authorised_via_users_server": "@arbitrary:resident.example.com",
+          "membership": "join"
+        },
+        "depth": 12,
+        "hashes": {
+          "sha256": "thishashcoversallfieldsincasethisisredacted"
+        },
+        "origin": "example.com",
+        "origin_server_ts": 1404838188000,
+        "prev_events": [],
+        "room_id": "!UcYsUzyxTGDxLBEvLy:example.org",
+        "sender": "@alice:example.com",
+        "state_key": "@alice:example.com",
+        "type": "m.room.member",
+        "unsigned": {
+          "age": 4612
+        }
+      }
+    )"_json;
+
+    const json generated_event_id = event_id(event, "11");
+
+    REQUIRE(generated_event_id ==
+            "$9ofI-OZYoOSm7YdDRD0uv0UQ5zYsPJw59ffHmPX5jlU");
+  }
+
+  SECTION("Unsupported room_versions fail to generate an event_id") {
+    auto event = R"(
+      {
+        "auth_events": [],
+        "content": {
+          "join_authorised_via_users_server": "@arbitrary:resident.example.com",
+          "membership": "join"
+        },
+        "depth": 12,
+        "hashes": {
+          "sha256": "thishashcoversallfieldsincasethisisredacted"
+        },
+        "origin": "example.com",
+        "origin_server_ts": 1404838188000,
+        "prev_events": [],
+        "room_id": "!UcYsUzyxTGDxLBEvLy:example.org",
+        "sender": "@alice:example.com",
+        "state_key": "@alice:example.com",
+        "type": "m.room.member",
+        "unsigned": {
+          "age": 4612
+        }
+      }
+    )"_json;
+
+    REQUIRE_THROWS_AS(event_id(event, "unknown"), MatrixRoomVersionError);
+  }
+}
+
+TEST_CASE("Match Domain") {
+  SECTION("Matching domains") {
+    REQUIRE(matchDomain("@test:localhost", "@user:localhost"));
+    REQUIRE(matchDomain("!test:localhost", "!room:localhost"));
+    REQUIRE(matchDomain("#test:localhost", "#channel:localhost"));
+  }
+
+  SECTION("Non-matching domains") {
+    REQUIRE_FALSE(matchDomain("@test:localhost", "@user:example.com"));
+    REQUIRE_FALSE(matchDomain("!test:localhost", "!room:example.com"));
+    REQUIRE_FALSE(matchDomain("#test:localhost", "#channel:example.com"));
+  }
+
+  SECTION("Different formats with matching domains") {
+    REQUIRE(matchDomain("@test:localhost", "!room:localhost"));
+    REQUIRE(matchDomain("!test:localhost", "#channel:localhost"));
+    REQUIRE(matchDomain("#test:localhost", "@user:localhost"));
+  }
+
+  SECTION("Different formats with non-matching domains") {
+    REQUIRE_FALSE(matchDomain("@test:localhost", "!room:example.com"));
+    REQUIRE_FALSE(matchDomain("!test:localhost", "#channel:example.com"));
+    REQUIRE_FALSE(matchDomain("#test:localhost", "@user:example.com"));
+  }
+
+  SECTION("Empty strings") {
+    REQUIRE_FALSE(matchDomain("", ""));
+    REQUIRE_FALSE(matchDomain("@test:localhost", ""));
+    REQUIRE_FALSE(matchDomain("", "@user:localhost"));
   }
 }
