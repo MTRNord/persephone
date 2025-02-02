@@ -16,6 +16,7 @@
 class MatrixRoomVersionError final : public std::exception {
 private:
   std::string _room_version;
+  std::string full_message;
 
 public:
   /**
@@ -27,7 +28,9 @@ public:
    * @param room_version The unsupported Matrix room version.
    */
   explicit MatrixRoomVersionError(std::string room_version)
-      : _room_version(std::move(room_version)) {}
+      : _room_version(std::move(room_version)) {
+    full_message = "Unsupported room version: " + _room_version;
+  }
 
   /**
    * @brief Returns a pointer to the error message string.
@@ -39,7 +42,7 @@ public:
    * @return A pointer to the error message string.
    */
   [[nodiscard]] const char *what() const noexcept override {
-    return "Unsupported room version";
+    return full_message.c_str();
   }
 };
 

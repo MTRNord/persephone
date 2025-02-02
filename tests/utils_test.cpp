@@ -16,9 +16,11 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
 
   SECTION("Doesn't sign null") {
     auto json_data = json{};
-    REQUIRE_THROWS_AS(
+    REQUIRE_THROWS_MATCHES(
         json_utils::sign_json("test", "test", private_key_vec, json_data),
-        std::runtime_error);
+        std::runtime_error,
+        snitch::matchers::with_what_contains{
+            "Json data is null which is impossible for an event"});
   }
 
   SECTION("Simple signing") {

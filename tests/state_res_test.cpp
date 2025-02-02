@@ -219,7 +219,9 @@ TEST_CASE("EventID", "[event_ids]") {
       }
     )"_json;
 
-    REQUIRE_THROWS_AS(event_id(event, "unknown"), MatrixRoomVersionError);
+    REQUIRE_THROWS_MATCHES(event_id(event, "unknown"), MatrixRoomVersionError,
+                           snitch::matchers::with_what_contains{
+                               "Unsupported room version: unknown"});
   }
 
   SECTION("Different events of the same room_version will not produce the same "

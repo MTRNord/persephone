@@ -66,7 +66,11 @@ rabbitmq:
     file.close();
 
     // Test loading the config
-    REQUIRE_THROWS_AS(Config{}, ConfigError);
+    REQUIRE_THROWS_MATCHES(
+        Config{}, ConfigError,
+        snitch::matchers::with_what_contains{
+            "Missing 'database' field. Unable to start. Make sure you set the "
+            "database configuration."});
 
     // Check that no config was loaded into the struct
     try {
@@ -114,7 +118,11 @@ rabbitmq:
     file.close();
 
     // Test loading the config
-    REQUIRE_THROWS_AS(Config{}, ConfigError);
+    REQUIRE_THROWS_MATCHES(
+        Config{}, ConfigError,
+        snitch::matchers::with_what_contains{
+            "Missing 'matrix' field. Unable to start. Make sure you set the "
+            "Matrix configuration."});
 
     // Check that no config was loaded into the struct except for the database
     try {
@@ -204,9 +212,14 @@ webserver:
     file.close();
 
     // Test loading the config
-    REQUIRE_THROWS_AS(Config{}, ConfigError);
+    REQUIRE_THROWS_MATCHES(
+        Config{}, ConfigError,
+        snitch::matchers::with_what_contains{
+            "Missing 'rabbitmq' field. Unable to start. Make sure you set the "
+            "RabbitMQ configuration."});
 
-    // Check that no config was loaded into the struct except for the rabbitmq
+    // Check that no config was loaded into the struct except for the
+    // rabbitmq
     try {
       Config const config{};
 
@@ -234,6 +247,10 @@ webserver:
     // Ensure the config file does not exist
     std::remove("config.yaml");
 
-    REQUIRE_THROWS_AS(Config{}, ConfigError);
+    REQUIRE_THROWS_MATCHES(
+        Config{}, ConfigError,
+        snitch::matchers::with_what_contains{
+            "Missing or invalid config.yaml file. Make sure to "
+            "create it prior to running persephone"});
   }
 }
