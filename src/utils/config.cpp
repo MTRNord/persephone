@@ -19,6 +19,12 @@ static constexpr unsigned short DEFAULT_POSTGRES_PORT = 5432;
  * not defined in the YAML node.
  */
 void Config::load_db(const YAML::Node &config) {
+  if (!config["database"].IsDefined()) {
+    throw std::runtime_error(
+        "Missing 'database' field. Unable to start. Make sure you set the "
+        "database configuration.");
+  }
+
   db_config.host = config["database"]["host"].as<std::string>();
   // Default to 5432 if not provided
   db_config.port =
@@ -63,6 +69,12 @@ void Config::load_db(const YAML::Node &config) {
  * defined in the YAML node.
  */
 void Config::load_matrix(const YAML::Node &config) {
+  if (!config["matrix"].IsDefined()) {
+    throw std::runtime_error(
+        "Missing 'matrix' field. Unable to start. Make sure you set the "
+        "Matrix configuration.");
+  }
+
   matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
   matrix_config.server_key_location =
       config["matrix"]["server_key_location"].as<std::string>();
