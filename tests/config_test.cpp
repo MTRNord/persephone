@@ -1,6 +1,7 @@
 #include <fstream>
 #include <snitch/snitch.hpp>
 #include <utils/config.hpp>
+#include <utils/errors.hpp>
 TEST_CASE("Loading Config", "[config]") {
   SECTION("Loads valid config file") {
     const auto *const config_file = R"(
@@ -65,7 +66,7 @@ rabbitmq:
     file.close();
 
     // Test loading the config
-    REQUIRE_THROWS_AS(Config{}, std::runtime_error);
+    REQUIRE_THROWS_AS(Config{}, ConfigError);
 
     // Check that no config was loaded into the struct
     try {
@@ -86,7 +87,7 @@ rabbitmq:
       REQUIRE(config.rabbitmq_config.port == 0);
       REQUIRE(!config.rabbitmq_config.user.has_value());
       REQUIRE(!config.rabbitmq_config.password.has_value());
-    } catch (const std::runtime_error &e) {
+    } catch (const ConfigError &e) {
       // No-op
     }
   }
@@ -113,7 +114,7 @@ rabbitmq:
     file.close();
 
     // Test loading the config
-    REQUIRE_THROWS_AS(Config{}, std::runtime_error);
+    REQUIRE_THROWS_AS(Config{}, ConfigError);
 
     // Check that no config was loaded into the struct except for the database
     try {
@@ -134,7 +135,7 @@ rabbitmq:
       REQUIRE(config.rabbitmq_config.port == 0);
       REQUIRE(!config.rabbitmq_config.user.has_value());
       REQUIRE(!config.rabbitmq_config.password.has_value());
-    } catch (const std::runtime_error &e) {
+    } catch (const ConfigError &e) {
       // No-op
     }
   }

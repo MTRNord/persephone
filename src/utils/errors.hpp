@@ -42,3 +42,37 @@ public:
     return "Unsupported room version";
   }
 };
+
+/**
+ * @brief Exception class for configuration errors.
+ *
+ * This class represents an error that occurs when there is a problem with the
+ * configuration. It inherits from the standard exception class.
+ */
+class ConfigError final : public std::exception {
+private:
+  std::string _message; ///< The error message.
+
+public:
+  /**
+   * @brief Constructs a new ConfigError object.
+   *
+   * This constructor initializes the ConfigError object with the provided error
+   * message.
+   *
+   * @param message The error message.
+   */
+  explicit ConfigError(std::string message) : _message(std::move(message)) {}
+
+  /**
+   * @brief Returns a pointer to the error message string.
+   *
+   * This method overrides the "what" method of the standard exception class. It
+   * returns a pointer to a string that describes the error.
+   *
+   * @return A pointer to the error message string.
+   */
+  [[nodiscard]] const char *what() const noexcept override {
+    return _message.c_str();
+  }
+};

@@ -1,6 +1,7 @@
 #include "utils/config.hpp"
+
+#include "errors.hpp"
 #include "yaml-cpp/yaml.h"
-#include <stdexcept>
 #include <yaml-cpp/node/node.h>
 
 static constexpr unsigned short DEFAULT_POSTGRES_PORT = 5432;
@@ -15,12 +16,12 @@ static constexpr unsigned short DEFAULT_POSTGRES_PORT = 5432;
  * defined in the YAML node, it throws a runtime error.
  *
  * @param config The YAML node from which to load the database configuration.
- * @throws std::runtime_error If the password, host, database name, or user is
+ * @throws ConfigError If the password, host, database name, or user is
  * not defined in the YAML node.
  */
 void Config::load_db(const YAML::Node &config) {
   if (!config["database"].IsDefined()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'database' field. Unable to start. Make sure you set the "
         "database configuration.");
   }
@@ -33,26 +34,25 @@ void Config::load_db(const YAML::Node &config) {
       config["database"]["database_name"].as<std::string>();
   db_config.user = config["database"]["user"].as<std::string>();
   if (!config["database"]["password"].IsDefined()) {
-    throw std::runtime_error(
-        "Missing 'database.password' field. Unable "
-        "to start. Make sure you set the database password.");
+    throw ConfigError("Missing 'database.password' field. Unable "
+                      "to start. Make sure you set the database password.");
   }
   db_config.password = config["database"]["password"].as<std::string>();
 
   if (db_config.host.empty()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'database.host' field. Unable to start. Make sure you set "
         "the database host for postgres.");
   }
 
   if (db_config.database_name.empty()) {
-    throw std::runtime_error("Missing 'database.database_name' field. Unable "
-                             "to start. Make sure you set the database name.");
+    throw ConfigError("Missing 'database.database_name' field. Unable "
+                      "to start. Make sure you set the database name.");
   }
 
   if (db_config.user.empty()) {
-    throw std::runtime_error("Missing 'database.user' field. Unable "
-                             "to start. Make sure you set the database user.");
+    throw ConfigError("Missing 'database.user' field. Unable "
+                      "to start. Make sure you set the database user.");
   }
 }
 
@@ -65,12 +65,12 @@ void Config::load_db(const YAML::Node &config) {
  * defined in the YAML node, it throws a runtime error.
  *
  * @param config The YAML node from which to load the Matrix configuration.
- * @throws std::runtime_error If the server name or server key location is not
+ * @throws ConfigError If the server name or server key location is not
  * defined in the YAML node.
  */
 void Config::load_matrix(const YAML::Node &config) {
   if (!config["matrix"].IsDefined()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'matrix' field. Unable to start. Make sure you set the "
         "Matrix configuration.");
   }
@@ -80,14 +80,14 @@ void Config::load_matrix(const YAML::Node &config) {
       config["matrix"]["server_key_location"].as<std::string>();
 
   if (matrix_config.server_name.empty()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'matrix.server_name'. Unable to start. Make sure you set "
         "the server_name of the homeserver. This usually is a domain WITHOUT "
         "the matrix subdomain. It is used in the user id.");
   }
 
   if (matrix_config.server_key_location.empty()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'matrix.server_key_location'. Unable to start. Make sure you "
         "set the location where the server key should be stored. This should "
         "be an absolute path to a file.");
@@ -115,18 +115,18 @@ void Config::load_webserver(const YAML::Node &config) {
 
 void Config::load_rabbitmq(const YAML::Node &config) {
   if (!config["rabbitmq"].IsDefined()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'rabbitmq' field. Unable to start. Make sure you set the "
         "RabbitMQ configuration.");
   }
   if (!config["rabbitmq"]["host"].IsDefined()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'rabbitmq.host' field. Unable to start. Make sure you set "
         "the RabbitMQ host.");
   }
   rabbitmq_config.host = config["rabbitmq"]["host"].as<std::string>();
   if (!config["rabbitmq"]["port"].IsDefined()) {
-    throw std::runtime_error(
+    throw ConfigError(
         "Missing 'rabbitmq.port' field. Unable to start. Make sure you set "
         "the RabbitMQ port.");
   }
