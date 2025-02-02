@@ -106,6 +106,11 @@ void Config::load_matrix(const YAML::Node &config) {
  * @param config The YAML node from which to load the webserver configuration.
  */
 void Config::load_webserver(const YAML::Node &config) {
+  if (!config["webserver"].IsDefined()) {
+    this->webserver_config.ssl = false;
+    return;
+  }
+
   if (config["webserver"]["ssl"]) {
     this->webserver_config.ssl = config["webserver"]["ssl"].as<bool>();
   } else {

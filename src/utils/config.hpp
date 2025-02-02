@@ -4,8 +4,10 @@
 /// @brief The Configuration of the application.
 /// This allows to have a nice structure as a struct instead of using brackets.
 
+#include "errors.hpp"
+
 #include <filesystem>
-#include <stdexcept>
+#include <optional>
 #include <string>
 #include <trantor/utils/Logger.h>
 #include <yaml-cpp/node/node.h>
@@ -17,7 +19,7 @@ struct [[nodiscard]] RabbitMQConfig {
   std::optional<std::string> password;
   unsigned short port{};
 
-  constexpr std::string get_rabbitmq_url() const {
+  [[nodiscard]] constexpr std::string get_rabbitmq_url() const {
     if (user.has_value() && password.has_value()) {
       return "amqp://" + user.value() + ":" + password.value() + "@" + host +
              ":" + std::to_string(port);
@@ -84,6 +86,7 @@ struct [[nodiscard]] MatrixConfig {
  *
  * @note The [[nodiscard]] attribute indicates that the compiler will warn if
  * the return value is discarded.
+ * @throws ConfigError if the config file is missing or invalid.
  */
 struct [[nodiscard]] Config {
   DBConfig db_config{}; // NOLINT(*-non-private-member-variables-in-classes)
@@ -108,8 +111,8 @@ struct [[nodiscard]] Config {
     LOG_INFO << "Loading config file";
     auto constexpr path = "./config.yaml";
     if (!std::filesystem::exists(path)) {
-      throw std::runtime_error("Missing or invalid config.yaml file. Make sure "
-                               "to create it prior to running persephone");
+      throw ConfigError("Missing or invalid config.yaml file. Make sure "
+                        "to create it prior to running persephone");
     }
 
     const YAML::Node config = YAML::LoadFile(path);

@@ -14,8 +14,6 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
   std::vector<unsigned char> private_key_vec(private_key.begin(),
                                              private_key.end());
 
-  std::cout << "test" << '\n';
-
   SECTION("Doesn't sign null") {
     auto json_data = json{};
     REQUIRE_THROWS_AS(
