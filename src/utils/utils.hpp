@@ -358,6 +358,11 @@ drogon_to_string_method(const drogon::HttpMethod &method) {
 
 [[nodiscard]] constexpr std::string
 generate_room_id(const std::string &server_name) {
+  if (server_name.empty()) {
+    throw std::invalid_argument(
+        "Missing server_name when generating room_id. Please contact the "
+        "developers if you see this message.");
+  }
   // Generate a room id which including the server name and the `!` prefix does
   // not exceed 255 bytes in length. The opaque_id between the `!` and the `:`
   // must be random, and should only contain ASCII characters. It is

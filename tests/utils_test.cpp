@@ -2,6 +2,9 @@
 #include "nlohmann/json.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
+
+#include <algorithm>
+#include <fstream>
 #include <snitch/snitch.hpp>
 #include <vector>
 
@@ -166,5 +169,125 @@ TEST_CASE("Generate HTTP Query Parameter String", "[query_param_generation]") {
     std::string result = generateQueryParamString(keyName, values);
 
     REQUIRE(result == expected);
+  }
+}
+
+TEST_CASE("Signing Key", "[signing_keys]") {
+  SECTION("Can ensure there is a signing key") {
+    const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+rabbitmq:
+  host: localhost
+  port: 5672
+  )";
+
+    // Write file to disk for testing
+    std::ofstream file("config.yaml");
+    file << config_file;
+    file.close();
+
+    // Test loading the config
+    const Config config{};
+
+    // Test ensuring the server key exists
+    json_utils::ensure_server_keys(config);
+
+    // Check if the file exists now
+    std::ifstream keyfile(config.matrix_config.server_key_location);
+    REQUIRE(keyfile.good());
+    keyfile.close();
+  }
+}
+
+TEST_CASE("Base64", "[base64]") {
+  SECTION("Can encode and decode base64") {
+    const auto data = std::vector<unsigned char>{'t', 'e', 's', 't'};
+    const auto encoded = json_utils::base64_key(data);
+    const auto decoded = json_utils::unbase64_key(encoded);
+
+    REQUIRE(std::equal(data.begin(), data.end(), decoded.begin()));
+  }
+}
+
+TEST_CASE("Matrix IDs", "[matrix_ids]") {
+  SECTION("Can generate a valid looking room_id") {
+    const auto room_id = generate_room_id("example.com");
+
+    // Check if room_id contains the server name after the ':' character
+    REQUIRE(room_id.find("example.com") != std::string::npos);
+
+    // Check if the room_id starts with '!'
+    REQUIRE(room_id[0] == '!');
+
+    // Check if the string between '!' and ':' is not empty and contains only
+    // alphanumeric characters
+    REQUIRE(room_id.substr(1, room_id.find(':') - 1)
+                .find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                                   "RSTUVWXYZ0123456789") == std::string::npos);
+  }
+
+  SECTION("Ensures a room_id is never exceeding 255 bytes despite "
+          "server_name") {
+    const std::string server_name =
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.com";
+
+    // Require that the server_name is less than 250 bytes
+    REQUIRE(server_name.length() < 253);
+
+    const auto room_id = generate_room_id(server_name);
+
+    REQUIRE(room_id.length() <= 255);
+
+    // Ensure its valid still
+
+    // Check if room_id contains the server name after the ':' character
+    REQUIRE(room_id.find(server_name) != std::string::npos);
+
+    // Check if the room_id starts with '!'
+    REQUIRE(room_id[0] == '!');
+
+    // Check if the string between '!' and ':' is not empty and contains only
+    // alphanumeric characters
+    REQUIRE(room_id.substr(1, room_id.find(':') - 1)
+                .find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+                                   "RSTUVWXYZ0123456789") == std::string::npos);
+  }
+
+  SECTION("Does warn about empty server_name") {
+    REQUIRE_THROWS_MATCHES(
+        generate_room_id(""), std::invalid_argument,
+        snitch::matchers::with_what_contains{
+            "Missing server_name when generating room_id. Please contact the "
+            "developers if you see this message."});
+  }
+
+  SECTION("Can get server_name from various room_ids") {
+    REQUIRE(get_serverpart("!test:example.com") == "example.com");
+    REQUIRE(get_serverpart("!test:127.0.0.1") == "127.0.0.1");
+    REQUIRE(get_serverpart("!test:[::1]") == "[::1]");
+  }
+
+  SECTION("Can remove brackets from IPV6 server_name") {
+    REQUIRE(remove_brackets("[::1]") == "::1");
+  }
+
+  SECTION("Can get localpart of various user IDs") {
+    REQUIRE(localpart("@test:example.com") == "test");
+    REQUIRE(localpart("@test:127.0.0.1") == "test");
+    REQUIRE(localpart("@test:[::1]") == "test");
   }
 }
