@@ -75,6 +75,22 @@ void Config::load_matrix(const YAML::Node &config) {
         "Matrix configuration.");
   }
 
+  // This is a check to make sure we don't crash on weird room id or user id
+  // stuff due to their size limits
+  if (config["matrix"]["server_name"].as<std::string>().length() >= 250) {
+    throw ConfigError(
+        "The server_name is too long. The server_name should be less than 250 "
+        "characters.");
+  }
+
+  // The code can never hit this which is fine. This is just to conform matrix
+  // spec. We run into issues before that
+  if (config["matrix"]["server_name"].as<std::string>().length() >= 255) {
+    throw ConfigError(
+        "The server_name is too long. The server_name should be less than 255 "
+        "characters.");
+  }
+
   matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
   matrix_config.server_key_location =
       config["matrix"]["server_key_location"].as<std::string>();
