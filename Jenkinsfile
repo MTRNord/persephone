@@ -131,10 +131,12 @@ pipeline {
                 stage('Run Complement Tests') {
                     steps {
                         container('fedora') {
-                            sh '''
-                            podman build -t complement-persephone -f complement/Dockerfile .
-                            podman run --rm complement-persephone:latest
-                            '''
+                            catchError {
+                                sh '''
+                                podman build -t complement-persephone -f complement/Dockerfile .
+                                podman run --rm complement-persephone:latest
+                                '''
+                            }
                         }
                     }
                 }
