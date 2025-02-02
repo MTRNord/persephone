@@ -221,6 +221,62 @@ TEST_CASE("EventID", "[event_ids]") {
 
     REQUIRE_THROWS_AS(event_id(event, "unknown"), MatrixRoomVersionError);
   }
+
+  SECTION("Different events of the same room_version will not produce the same "
+          "event_id") {
+    auto event_a = R"(
+      {
+        "auth_events": [],
+        "content": {
+          "join_authorised_via_users_server": "@arbitrary:resident.example.com",
+          "membership": "join"
+        },
+        "depth": 12,
+        "hashes": {
+          "sha256": "thishashcoversallfieldsincasethisisredacted"
+        },
+        "origin": "example.com",
+        "origin_server_ts": 1404838188000,
+        "prev_events": [],
+        "room_id": "!UcYsUzyxTGDxLBEvLy:example.org",
+        "sender": "@alice:example.com",
+        "state_key": "@alice:example.com",
+        "type": "m.room.member",
+        "unsigned": {
+          "age": 4612
+        }
+      }
+    )"_json;
+
+    auto event_b = R"(
+      {
+        "auth_events": [],
+        "content": {
+          "join_authorised_via_users_server": "@another:resident.example.com",
+          "membership": "join"
+        },
+        "depth": 12,
+        "hashes": {
+          "sha256": "thishashcoversallfieldsincasethisisredacted"
+        },
+        "origin": "example.com",
+        "origin_server_ts": 1404838188000,
+        "prev_events": [],
+        "room_id": "!UcYsUzyxTGDxLBEvLy:example.org",
+        "sender": "@alice:example.com",
+        "state_key": "@alice:example.com",
+        "type": "m.room.member",
+        "unsigned": {
+          "age": 4612
+        }
+      }
+    )"_json;
+
+    const json generated_event_id = event_id(event_a, "11");
+    const json generated_event_id_b = event_id(event_b, "11");
+
+    REQUIRE(generated_event_id != generated_event_id_b);
+  }
 }
 
 TEST_CASE("Match Domain") {
