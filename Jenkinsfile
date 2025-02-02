@@ -12,12 +12,7 @@ pipeline {
                 - cat
                 tty: true
                 securityContext:
-                  capabilities:
-                    add:
-                    - SYS_ADMIN
-                    - MKNOD
-                    - SYS_CHROOT
-                    - SETFCAP
+                  privileged: true
             """
         }
     }
