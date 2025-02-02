@@ -88,7 +88,7 @@ pipeline {
                     }
                 }
 
-                stage('Build Container Image') {
+                /*stage('Build Container Image') {
                     steps {
                         container('fedora') {
                             script {
@@ -97,7 +97,7 @@ pipeline {
                             }
                         }
                     }
-                }
+                }*/
             }
         }
 
