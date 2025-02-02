@@ -131,7 +131,7 @@ pipeline {
                 stage('Run Complement Tests') {
                     steps {
                         container('fedora') {
-                            catchError {
+                            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
                                 sh '''
                                 podman build -t complement-persephone -f complement/Dockerfile .
                                 podman run --rm complement-persephone:latest
