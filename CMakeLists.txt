@@ -6,40 +6,24 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
     cmake_policy(SET CMP0135 NEW)
 endif ()
 
-enable_testing()
-include(CTest)
-include(FetchContent)
-include(cmake/CPM.cmake)
-
 # Set C++ and C standards
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# DEV: Set clang-tidy
-# set(CMAKE_CXX_CLANG_TIDY "clang-tidy")
+
+# Set build type if not specified
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif ()
+
+include(FetchContent)
+include(cmake/CPM.cmake)
+
 
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(code-coverage)
-if (DEFINED ENV{CPM_SOURCE_CACHE})
-    # file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS $ENV{CPM_SOURCE_CACHE}/*)
-    set(CCOV_EXCLUDES $ENV{CPM_SOURCE_CACHE}/.* $ENV{CPM_SOURCE_CACHE}/*)
-endif ()
-# file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS ${CMAKE_BINARY_DIR}/*)
-set(CCOV_EXCLUDES ${CMAKE_BINARY_DIR}/.* ${CMAKE_BINARY_DIR}/*)
-
-add_code_coverage_all_targets(EXCLUDE ${CCOV_EXCLUDES})
-
-# nlohmann_json
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
-FetchContent_MakeAvailable(json)
-# amqp-cpp
-CPMAddPackage(
-        NAME amqpcpp
-        GITHUB_REPOSITORY CopernicaMarketingSoftware/AMQP-CPP
-        VERSION 4.3.27
-        OPTIONS "AMQP-CPP_BUILD_SHARED ON" "AMQP-CPP_LINUX_TCP ON"
-)
 
 # Dependencies
 find_package(Drogon 1.9.9 REQUIRED)
@@ -51,9 +35,20 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
 # icu for unicode support
 find_package(ICU COMPONENTS uc REQUIRED)
-
 # libevent
 pkg_check_modules(libevent REQUIRED)
+
+# nlohmann_json
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+
+# amqp-cpp
+CPMAddPackage(
+        NAME amqpcpp
+        GITHUB_REPOSITORY CopernicaMarketingSoftware/AMQP-CPP
+        VERSION 4.3.27
+        OPTIONS "AMQP-CPP_BUILD_SHARED ON" "AMQP-CPP_LINUX_TCP ON"
+)
 
 # Include directories
 include_directories(
@@ -100,10 +95,6 @@ target_compile_options(persephone PRIVATE
         -Wpedantic
         -Wuninitialized
         -Werror
-        # sanitizer options
-        -fsanitize=address
-        -fsanitize=undefined
-        -fsanitize=leak
 )
 target_link_options(persephone PRIVATE
         -fsanitize=address
@@ -112,8 +103,23 @@ target_link_options(persephone PRIVATE
 )
 
 # Tests
-option(DISABLE_TESTS " Disable tests" ON)
+option(DISABLE_TESTS "Disable tests" ON)
 if (NOT DISABLE_TESTS)
+    enable_testing()
+    include(CTest)
+
+    # DEV: Set clang-tidy
+    # set(CMAKE_CXX_CLANG_TIDY "clang-tidy")
+    include(code-coverage)
+    if (DEFINED ENV{CPM_SOURCE_CACHE})
+        # file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS $ENV{CPM_SOURCE_CACHE}/*)
+        set(CCOV_EXCLUDES $ENV{CPM_SOURCE_CACHE}/.* $ENV{CPM_SOURCE_CACHE}/*)
+    endif ()
+    # file(GLOB_RECURSE CCOV_EXCLUDES CONFIGURE_DEPENDS ${CMAKE_BINARY_DIR}/*)
+    set(CCOV_EXCLUDES ${CMAKE_BINARY_DIR}/.* ${CMAKE_BINARY_DIR}/*)
+
+    add_code_coverage_all_targets(EXCLUDE ${CCOV_EXCLUDES})
+
     FetchContent_Declare(snitch
             GIT_REPOSITORY https://github.com/snitch-org/snitch.git
             GIT_TAG v1.3.1)
