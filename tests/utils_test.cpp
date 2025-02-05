@@ -342,3 +342,13 @@ TEST_CASE("Passwords", "[passwords]") {
     REQUIRE(verify_hashed_password(password_hash, original_password));
   }
 }
+
+TEST_CASE("Misc Tests", "[misc]") {
+  SECTION("Basic base62 encoding") {
+    const auto *const expected = "3bj";
+    constexpr unsigned long input = 12233;
+    const auto result = base62_encode(input);
+
+    REQUIRE(expected == result);
+  }
+}

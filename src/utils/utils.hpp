@@ -29,6 +29,9 @@ static constexpr int MATRIX_HTTP_PORT = 8008;
 
 static constexpr auto id_max_length = 255;
 
+static constexpr auto base62_alphabet =
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 struct [[nodiscard]] SRVRecord {
   std::string host;
   unsigned int port;
@@ -136,12 +139,10 @@ migrate_localpart(const std::string &localpart) {
  * @return The base62-encoded string.
  */
 [[nodiscard]] constexpr std::string base62_encode(unsigned long input) {
-  const std::string alphabet =
-      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   std::string output;
 
   while (input > 0) {
-    output.push_back(alphabet[input % 62]);
+    output.insert(0, std::string(1, base62_alphabet[input % 62]));
     input /= 62;
   }
 
