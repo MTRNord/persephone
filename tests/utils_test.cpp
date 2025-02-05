@@ -40,6 +40,23 @@ TEST_CASE("Json signatures are added", "[json_signing]") {
     REQUIRE(signed_json["signatures"]["test"].contains("ed25519:test"));
     REQUIRE(signed_json["signatures"]["test"]["ed25519:test"].is_string());
   }
+
+  SECTION("Preserves unsigned when signing") {
+    auto json_data = json(json::value_t::object);
+    json_data["unsigned"] = {{"test", "test"}};
+    auto signed_json =
+        json_utils::sign_json("test", "test", private_key_vec, json_data);
+    REQUIRE(signed_json.is_object());
+    REQUIRE(signed_json.contains("signatures"));
+    REQUIRE(signed_json["signatures"].is_object());
+    REQUIRE(signed_json["signatures"].contains("test"));
+    REQUIRE(signed_json["signatures"]["test"].is_object());
+    REQUIRE(signed_json["signatures"]["test"].contains("ed25519:test"));
+    REQUIRE(signed_json["signatures"]["test"]["ed25519:test"].is_string());
+    REQUIRE(signed_json.contains("unsigned"));
+    REQUIRE(signed_json["unsigned"].is_object());
+    REQUIRE(signed_json["unsigned"].contains("test"));
+  }
 }
 
 TEST_CASE("Incorrect IDs are properly migrated", "[user_id_migration]") {
