@@ -211,6 +211,9 @@ rabbitmq:
   port: 5672
   )";
 
+    // Delete key to ensure it doesn't exist yet
+    std::filesystem::remove("./server_key.key");
+
     // Write file to disk for testing
     std::ofstream file("config.yaml");
     file << config_file;
