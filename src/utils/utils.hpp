@@ -29,7 +29,7 @@ static constexpr int MATRIX_HTTP_PORT = 8008;
 
 static constexpr auto id_max_length = 255;
 
-static constexpr auto base62_alphabet =
+static constexpr std::string_view base62_alphabet =
     "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 struct [[nodiscard]] SRVRecord {
