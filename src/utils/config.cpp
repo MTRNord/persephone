@@ -26,6 +26,25 @@ void Config::load_db(const YAML::Node &config) {
         "database configuration.");
   }
 
+  if (!config["database"]["host"].IsDefined()) {
+    throw ConfigError(
+        "Missing 'database.host' field. Unable to start. Make sure you set "
+        "the database host for postgres.");
+  }
+
+  if (!config["database"]["database_name"].IsDefined()) {
+    throw ConfigError("Missing 'database.database_name' field. Unable "
+                      "to start. Make sure you set the database name.");
+  }
+
+  if (!config["database"]["user"].IsDefined()) {
+    throw ConfigError("Missing 'database.user' field. Unable "
+                      "to start. Make sure you set the database user.");
+  }
+  if (!config["database"]["password"].IsDefined()) {
+    throw ConfigError("Missing 'database.password' field. Unable "
+                      "to start. Make sure you set the database password.");
+  }
   db_config.host = config["database"]["host"].as<std::string>();
   // Default to 5432 if not provided
   db_config.port =
@@ -33,27 +52,7 @@ void Config::load_db(const YAML::Node &config) {
   db_config.database_name =
       config["database"]["database_name"].as<std::string>();
   db_config.user = config["database"]["user"].as<std::string>();
-  if (!config["database"]["password"].IsDefined()) {
-    throw ConfigError("Missing 'database.password' field. Unable "
-                      "to start. Make sure you set the database password.");
-  }
   db_config.password = config["database"]["password"].as<std::string>();
-
-  if (db_config.host.empty()) {
-    throw ConfigError(
-        "Missing 'database.host' field. Unable to start. Make sure you set "
-        "the database host for postgres.");
-  }
-
-  if (db_config.database_name.empty()) {
-    throw ConfigError("Missing 'database.database_name' field. Unable "
-                      "to start. Make sure you set the database name.");
-  }
-
-  if (db_config.user.empty()) {
-    throw ConfigError("Missing 'database.user' field. Unable "
-                      "to start. Make sure you set the database user.");
-  }
 }
 
 /**
@@ -75,6 +74,13 @@ void Config::load_matrix(const YAML::Node &config) {
         "Matrix configuration.");
   }
 
+  if (!config["matrix"]["server_name"].IsDefined()) {
+    throw ConfigError(
+        "Missing 'matrix.server_name'. Unable to start. Make sure you set "
+        "the server_name of the homeserver. This usually is a domain WITHOUT "
+        "the matrix subdomain. It is used in the user id.");
+  }
+
   // This is a check to make sure we don't crash on weird room id or user id
   // stuff due to their size limits
   if (config["matrix"]["server_name"].as<std::string>().length() >= 250) {
@@ -91,23 +97,16 @@ void Config::load_matrix(const YAML::Node &config) {
         "characters.");
   }
 
-  matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
-  matrix_config.server_key_location =
-      config["matrix"]["server_key_location"].as<std::string>();
-
-  if (matrix_config.server_name.empty()) {
-    throw ConfigError(
-        "Missing 'matrix.server_name'. Unable to start. Make sure you set "
-        "the server_name of the homeserver. This usually is a domain WITHOUT "
-        "the matrix subdomain. It is used in the user id.");
-  }
-
-  if (matrix_config.server_key_location.empty()) {
+  if (!config["matrix"]["server_key_location"].IsDefined()) {
     throw ConfigError(
         "Missing 'matrix.server_key_location'. Unable to start. Make sure you "
         "set the location where the server key should be stored. This should "
         "be an absolute path to a file.");
   }
+
+  matrix_config.server_name = config["matrix"]["server_name"].as<std::string>();
+  matrix_config.server_key_location =
+      config["matrix"]["server_key_location"].as<std::string>();
 }
 
 /**
