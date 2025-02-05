@@ -392,4 +392,12 @@ TEST_CASE("Misc Tests", "[misc]") {
     REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Invalid),
                  snitch::matchers::contains_substring("INVALID"));
   }
+
+  SECTION("CRC32") {
+    const auto *const input = "Test";
+    constexpr auto expected = 2018365746;
+    const auto result = crc32_helper(input);
+
+    REQUIRE_THAT(result, snitch::matchers::is_any_of<int, 1>(expected));
+  }
 }
