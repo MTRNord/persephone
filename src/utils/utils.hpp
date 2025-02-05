@@ -161,6 +161,7 @@ migrate_localpart(const std::string &localpart) {
  * @return The server name with the brackets removed.
  */
 [[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
+  LOG_DEBUG << "Removing brackets from server name: " << server_name;
   std::erase_if(server_name, [](const char character) {
     switch (character) {
     case '[':
@@ -170,6 +171,7 @@ migrate_localpart(const std::string &localpart) {
       return false;
     }
   });
+  LOG_DEBUG << "Server name without brackets: " << server_name;
   return server_name;
 }
 
@@ -228,15 +230,22 @@ is_valid_localpart(const std::string &localpart,
   throw std::runtime_error("Invalid Input");
 }
 
-[[nodiscard]] Task<std::vector<SRVRecord>> get_srv_record(std::string address);
+[[nodiscard]] std::vector<SRVRecord> get_srv_record(const std::string &address);
 
 [[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
 
-[[nodiscard]] std::string generate_ss_authheader(
-    const std::string &server_name, const std::string &key_id,
-    const std::vector<unsigned char> &secret_key, const std::string &method,
-    const std::string &request_uri, const std::string &origin,
-    const std::string &target, const std::optional<json> &content);
+struct [[nodiscard]] AuthheaderData {
+  const std::string &server_name;
+  const std::string &key_id;
+  const std::vector<unsigned char> &secret_key;
+  const std::string &method;
+  const std::string &request_uri;
+  const std::string &origin;
+  const std::string &target;
+  const std::optional<json> &content;
+};
+
+[[nodiscard]] std::string generate_ss_authheader(const AuthheaderData &data);
 
 /**
  * @brief Generates a query parameter string from a key and a list of values.
@@ -381,4 +390,33 @@ generate_room_id(const std::string &server_name) {
   }
 
   return std::format("!{}:{}", opaque_id, server_name);
+}
+
+/**
+ * @brief Checks if the given address is an IP address.
+ *
+ * This function checks if the given address is an IP address. It supports both
+ * IPv4 and IPv6 addresses. It uses the inet_pton function to try to convert the
+ * address into a binary form. If the conversion is successful, the address is
+ * an IP address. The function first checks if the address is an IPv4 address,
+ * and if not, it checks if it's an IPv6 address.
+ *
+ * @param address The address to check.
+ * @return true if the address is an IP address, false otherwise.
+ */
+[[nodiscard]] inline bool check_if_ip_address(const std::string &address) {
+  LOG_DEBUG << "Checking if " << address << " is an IP address";
+  struct sockaddr_in socket_addr;
+  auto is_ipv4 = false;
+  const auto result =
+      inet_pton(AF_INET, address.c_str(), &(socket_addr.sin_addr));
+  is_ipv4 = result == 1;
+
+  const auto result_v6 =
+      inet_pton(AF_INET6, address.c_str(), &(socket_addr.sin_addr));
+
+  LOG_DEBUG << "Is IPv4: " << is_ipv4 << " Is IPv6: " << result_v6
+            << " boolean: " << (is_ipv4 || (result_v6 == 1));
+
+  return (is_ipv4 || (result_v6 == 1));
 }

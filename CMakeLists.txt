@@ -138,6 +138,11 @@ if (NOT DISABLE_TESTS)
             amqpcpp
             event
     )
+    target_link_options(utils_test PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
+    )
 
     add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
     target_link_libraries(state_res_test PRIVATE
@@ -151,6 +156,11 @@ if (NOT DISABLE_TESTS)
             snitch::snitch
             amqpcpp
             event
+    )
+    target_link_options(state_res_test PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
     )
 
     add_executable(config_test tests/config_test.cpp ${SOURCES})
@@ -166,11 +176,37 @@ if (NOT DISABLE_TESTS)
             amqpcpp
             event
     )
+    target_link_options(config_test PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
+    )
+
+
+    add_executable(drogon_tests tests/drogon_tests.cpp ${SOURCES})
+    target_link_libraries(drogon_tests PRIVATE
+            Drogon::Drogon
+            nlohmann_json::nlohmann_json
+            yaml-cpp
+            sodium
+            ZLIB::ZLIB
+            PkgConfig::LDNS
+            ICU::uc
+            snitch::snitch
+            amqpcpp
+            event
+    )
+    target_link_options(drogon_tests PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
+    )
 
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
             COMMAND config_test
+            COMMAND drogon_tests
     )
 
     add_test(
@@ -185,9 +221,14 @@ if (NOT DISABLE_TESTS)
             NAME config_test
             COMMAND config_test
     )
+    add_test(
+            NAME drogon_tests
+            COMMAND drogon_tests
+    )
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
 
 endif ()
 

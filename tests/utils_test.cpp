@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <drogon/HttpTypes.h>
+#include <drogon/utils/coroutine.h>
 #include <fstream>
 #include <snitch/snitch.hpp>
 #include <vector>
@@ -399,5 +400,55 @@ TEST_CASE("Misc Tests", "[misc]") {
     const auto result = crc32_helper(input);
 
     REQUIRE_THAT(result, snitch::matchers::is_any_of<int, 1>(expected));
+  }
+
+  SECTION("server-server auth header") {
+    const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+rabbitmq:
+  host: localhost
+  port: 5672
+  )";
+
+    // Delete key to ensure it doesn't exist yet
+    std::filesystem::remove("./server_key.key");
+
+    // Write file to disk for testing
+    std::ofstream file("config.yaml");
+    file << config_file;
+    file.close();
+
+    // Test loading the config
+    const Config config{};
+
+    // Test ensuring the server key exists
+    json_utils::ensure_server_keys(config);
+
+    const auto key_data = get_verify_key_data(config);
+
+    const auto header =
+        generate_ss_authheader({.server_name = config.matrix_config.server_name,
+                                .key_id = key_data.key_id,
+                                .secret_key = key_data.private_key,
+                                .method = "GET",
+                                .request_uri = "/_matrix/federation/v1/version",
+                                .origin = "localhost",
+                                .target = "example.com",
+                                .content = json{{"test", "test"}}});
+
+    LOG_DEBUG << "FED_HEADER: " << header;
+
+    REQUIRE_THAT(header, snitch::matchers::contains_substring("X-Matrix"));
   }
 }

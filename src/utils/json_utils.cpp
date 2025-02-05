@@ -101,6 +101,9 @@ unbase64_key(const std::string &input) {
     throw std::runtime_error(
         "Json data is null which is impossible for an event");
   }
+  if (secret_key.empty()) {
+    throw std::runtime_error("Secret key is empty");
+  }
 
   // Get existing (or not yet existing) signatures and unsigned fields
   auto signatures = json_data.value("signatures", json(json::value_t::object));
@@ -115,10 +118,12 @@ unbase64_key(const std::string &input) {
                                             canonical_json.size());
   unsigned long long signed_message_len = 0;
 
-  const auto result = crypto_sign(
-      signed_message.data(), &signed_message_len,
-      reinterpret_cast<const unsigned char *>(canonical_json.c_str()),
-      canonical_json.size(), secret_key.data());
+  const auto unsigned_char_canonical_json =
+      reinterpret_cast<const unsigned char *>(canonical_json.c_str());
+
+  const auto result = crypto_sign(signed_message.data(), &signed_message_len,
+                                  unsigned_char_canonical_json,
+                                  canonical_json.size(), secret_key.data());
   if (result < 0) {
     throw std::runtime_error("Signing the json failed");
   }

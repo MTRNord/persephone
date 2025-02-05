@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <coroutine>
 #include <cstddef>
+#include <cstdlib>
 #include <drogon/HttpClient.h>
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
@@ -16,6 +17,7 @@
 #include <functional>
 #include <iterator>
 #include <ldns/ldns.h>
+#include <netinet/in.h>
 #include <optional>
 #include <random>
 #include <sodium/crypto_pwhash.h>
@@ -159,101 +161,86 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
  * @param address The address to query the SRV records for.
  * @return A Task that will eventually contain a vector of SRV records.
  */
-[[nodiscard]] Task<std::vector<SRVRecord>>
-get_srv_record(const std::string address) {
+[[nodiscard]] std::vector<SRVRecord>
+get_srv_record(const std::string &address) {
+  LOG_DEBUG << "Awaiting SRV record for address: " << address;
+
+  ldns_resolver *res = nullptr;
+  ldns_rdf *domain = ldns_dname_new_frm_str(address.c_str());
+  if (!domain) {
+    throw std::runtime_error("Failed to parse domain");
+  }
+  if (!ldns_dname_str_absolute(address.c_str()) &&
+      ldns_dname_absolute(domain)) {
+    ldns_rdf_set_size(domain, ldns_rdf_size(domain) - 1);
+  }
+
+  if (ldns_status const status = ldns_resolver_new_frm_file(&res, nullptr);
+      status != LDNS_STATUS_OK) {
+    throw std::runtime_error(std::format("Failed to create resolver: {}",
+                                         ldns_get_errorstr_by_id(status)));
+  }
+
+  ldns_pkt *record_packet = ldns_resolver_search(res, domain, LDNS_RR_TYPE_SRV,
+                                                 LDNS_RR_CLASS_IN, LDNS_RD);
+  ldns_rdf_deep_free(domain);
+
+  if (!record_packet) {
+    throw std::runtime_error("Failed to resolve SRV record");
+  }
+
+  LOG_DEBUG << "SRV record resolved for address: " << address
+            << " and starting to parse it";
+  ldns_rr_list *srv_record = ldns_pkt_rr_list_by_type(
+      record_packet, LDNS_RR_TYPE_SRV, LDNS_SECTION_ANSWER);
+
+  if (!srv_record) {
+    ldns_pkt_free(record_packet);
+    ldns_resolver_deep_free(res);
+    throw std::runtime_error("Failed to parse SRV record");
+  }
+
+  ldns_rr_list_sort(srv_record);
+
+  LOG_DEBUG << "SRV record parsed successfully for address: " << address;
+  LOG_DEBUG << "Creating SRVRecord objects";
+
   std::vector<SRVRecord> records;
-  struct awaiter : std::suspend_always {
-  private:
-    std::string _address;
-    std::vector<SRVRecord> &_records;
-    std::coroutine_handle<> handle;
 
-  public:
-    awaiter(std::string address, std::vector<SRVRecord> &records)
-        : _address(std::move(address)), _records(records) {}
+  // Create the SRVRecord objects
+  for (size_t i = 0; i < ldns_rr_list_rr_count(srv_record); i++) {
+    const ldns_rr *record_rr = ldns_rr_list_rr(srv_record, i);
 
-    void await_suspend(const std::coroutine_handle<> handle_) {
-      this->handle = handle_;
+    // get record type
+    const auto type = ldns_rr_get_type(record_rr);
 
-      ldns_resolver *res = nullptr;
-      ldns_rdf *domain = ldns_dname_new_frm_str(_address.c_str());
-      if (!domain) {
-        throw std::runtime_error("Failed to parse domain");
-      }
-      if (!ldns_dname_str_absolute(_address.c_str()) &&
-          ldns_dname_absolute(domain)) {
-        ldns_rdf_set_size(domain, ldns_rdf_size(domain) - 1);
-      }
+    char *raw_host = ldns_rdf2str(ldns_rr_rdf(record_rr, 3));
+    LOG_DEBUG << "SRV record host: " << raw_host;
+    const std::string host = raw_host;
+    // Necessary manual free due to how ldns does memory management. We cant
+    // use delete here.
+    free(raw_host);
 
-      if (ldns_status const status = ldns_resolver_new_frm_file(&res, nullptr);
-          status != LDNS_STATUS_OK) {
-        throw std::runtime_error(std::format("Failed to create resolver: {}",
-                                             ldns_get_errorstr_by_id(status)));
-      }
-
-      ldns_pkt *record_packet = ldns_resolver_search(
-          res, domain, LDNS_RR_TYPE_SRV, LDNS_RR_CLASS_IN, LDNS_RD);
-      ldns_rdf_deep_free(domain);
-
-      if (!record_packet) {
-        throw std::runtime_error("Failed to resolve SRV record");
-      }
-
-      ldns_rr_list *srv_record = ldns_pkt_rr_list_by_type(
-          record_packet, LDNS_RR_TYPE_SRV, LDNS_SECTION_ANSWER);
-
-      if (!srv_record) {
-        ldns_pkt_free(record_packet);
-        ldns_resolver_deep_free(res);
-        throw std::runtime_error("Failed to parse SRV record");
-      }
-
-      ldns_rr_list_sort(srv_record);
-
-      // Create the SRVRecord objects
-      for (size_t i = 0; i < ldns_rr_list_rr_count(srv_record); i++) {
-        const ldns_rr *record_rr = ldns_rr_list_rr(srv_record, i);
-        SRVRecord srv;
-        srv.host = ldns_rdf2str(ldns_rr_rdf(record_rr, 0));
-        srv.port = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 1));
-        srv.priority = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 2));
-        srv.weight = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 3));
-        _records.push_back(srv);
-      }
-      ldns_rr_list_deep_free(srv_record);
-
-      ldns_pkt_free(record_packet);
-      ldns_resolver_deep_free(res);
+    SRVRecord srv;
+    // Remove the trailing dot from the host
+    if (host.back() == '.') {
+      srv.host = host.substr(0, host.size() - 1);
+    } else {
+      srv.host = host;
     }
-  };
+    srv.port = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 2));
+    srv.priority = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 0));
+    srv.weight = ldns_rdf2native_int16(ldns_rr_rdf(record_rr, 1));
+    records.push_back(srv);
+  }
+  ldns_rr_list_deep_free(srv_record);
 
-  // TODO: FIXME: We might need to rethrow here
-  co_await awaiter(std::format("_matrix-fed._tcp.{}", address), records);
-  co_return records;
-}
+  ldns_pkt_free(record_packet);
+  ldns_resolver_deep_free(res);
 
-/**
- * @brief Checks if the given address is an IP address.
- *
- * This function checks if the given address is an IP address. It supports both
- * IPv4 and IPv6 addresses. It uses the inet_pton function to try to convert the
- * address into a binary form. If the conversion is successful, the address is
- * an IP address. The function first checks if the address is an IPv4 address,
- * and if not, it checks if it's an IPv6 address.
- *
- * @param address The address to check.
- * @return true if the address is an IP address, false otherwise.
- */
-[[nodiscard]] bool check_if_ip_address(const std::string &address) {
-  struct sockaddr_in socket_addr;
-  auto is_ipv4 = false;
-  const auto result =
-      inet_pton(AF_INET, address.c_str(), &(socket_addr.sin_addr));
-  is_ipv4 = result == 1;
+  LOG_DEBUG << "SRVRecord objects created successfully";
 
-  const auto result_v6 =
-      inet_pton(AF_INET6, address.c_str(), &(socket_addr.sin_addr));
-  return is_ipv4 || result_v6 == 1;
+  return records;
 }
 
 /**
@@ -272,6 +259,8 @@ get_srv_record(const std::string address) {
  * whether the server is reachable or not.
  */
 [[nodiscard]] Task<bool> isServerReachable(const SRVRecord server) {
+  LOG_DEBUG << "Checking if server is reachable: https://" << server.host << ":"
+            << server.port;
   const auto client = HttpClient::newHttpClient(
       std::format("https://{}:{}", server.host, server.port));
   client->setUserAgent(UserAgent);
@@ -280,16 +269,25 @@ get_srv_record(const std::string address) {
   req->setMethod(drogon::Get);
   req->setPath("/_matrix/federation/v1/version");
 
-  auto failure = false;
+  LOG_DEBUG << "Sending request to server: [" << req->methodString()
+            << "] https://" << client->host() << req->path();
+
   try {
     if (const HttpResponsePtr resp = co_await client->sendRequestCoro(req, 10);
-        resp->statusCode() != k200OK) {
-      failure = true;
+        resp->statusCode() == k200OK) {
+      co_return true;
+    } else {
+      LOG_WARN << "Server is unreachable. Status code: " << resp->statusCode()
+               << " body: " << resp->body();
     }
-  } catch ([[maybe_unused]] const std::exception &err) {
-    failure = true;
+  } catch (const drogon::HttpException &err) {
+    LOG_WARN << "Error while checking server reachability: " << err.what();
+  } catch (const std::exception &err) {
+    LOG_WARN << "Error while checking server reachability: " << err.what();
+  } catch (...) {
+    LOG_WARN << "Unknown error while checking server reachability";
   }
-  co_return !failure;
+  co_return false;
 }
 
 /**
@@ -315,6 +313,8 @@ get_srv_record(const std::string address) {
 [[nodiscard]] Task<SRVRecord> pick_srv_server(std::vector<SRVRecord> servers) {
   std::random_device random_device;
   std::mt19937 gen(random_device());
+
+  LOG_DEBUG << "Selecting server from SRV records";
 
   while (!servers.empty()) {
     // Finding the minimum priority using std::min_element and lambda
@@ -344,18 +344,28 @@ get_srv_record(const std::string address) {
                           return sum + srv.weight;
                         });
 
+    LOG_DEBUG << "Total weight: " << totalWeight;
     // Selecting a server based on weighted random distribution
-    std::uniform_int_distribution<unsigned int> dist(1, totalWeight);
-    unsigned int selectedWeight = dist(gen);
+    std::uniform_int_distribution<> dist(1, totalWeight);
+    auto selectedWeight = dist(gen);
+    LOG_DEBUG << "Selected weight: " << selectedWeight;
     for (const auto &server : minPriorityServers) {
+      LOG_DEBUG << "Trying server: " << server.host << ":" << server.port;
       selectedWeight -= server.weight;
+      LOG_DEBUG << "Selected weight: " << selectedWeight;
       if (selectedWeight <= 0) {
         if (co_await isServerReachable(server)) {
           co_return server;
         }
+        LOG_DEBUG << "Server is unreachable";
         // If server is unreachable, continue to the next server
       }
     }
+
+    // Remove the servers with the minimum priority from the list
+    std::erase_if(servers, [minPriorityVal](const SRVRecord &srv) {
+      return srv.priority == minPriorityVal;
+    });
   }
 
   throw std::runtime_error("Error selecting server");
@@ -380,8 +390,7 @@ get_srv_record(const std::string address) {
  * @return A Task that will eventually contain a ResolvedServer object
  * representing the discovered server.
  */
-[[nodiscard]] Task<ResolvedServer>
-discover_server(const std::string server_name) {
+[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name) {
   /*
    * If the hostname is an IP literal, then that IP address should be used,
    * together with the given port number, or 8448 if no port is given. The
@@ -389,15 +398,34 @@ discover_server(const std::string server_name) {
    * header in the request should be set to the server name, including the port
    * if the server name included one.
    */
-  auto port = server_name.substr(server_name.find_last_of(':') + 1,
-                                 server_name.length() -
-                                     (server_name.find_last_of(':') + 1));
-  auto address = server_name.substr(0, server_name.find_last_of(':') + 1);
+  LOG_DEBUG << "Discovering server: " << server_name;
+  // If there is a colon then use the thing after the last colon as the port
+  // otherwise make it an empty optional
+  const std::optional<std::string> port =
+      [&server_name]() -> std::optional<std::string> {
+    if (const auto pos = server_name.find_last_of(':');
+        pos != std::string::npos) {
+      return server_name.substr(pos + 1);
+    }
+    return std::nullopt;
+  }();
+  LOG_DEBUG << "Port: " << port.value_or("None");
+  LOG_DEBUG << "Server name: " << server_name;
+
+  // Server name with the port removed. If no port is given, this is the same as
+  // the server name. Use the port optional to determine if the port should be
+  // removed.
+  auto address = [&server_name, &port]() -> std::string {
+    if (port.has_value()) {
+      return server_name.substr(0, server_name.find_last_of(':'));
+    }
+    return server_name;
+  }();
   if (auto clean_address = remove_brackets(address);
       check_if_ip_address(clean_address)) {
     unsigned long integer_port = MATRIX_SSL_PORT;
-    if (!port.empty()) {
-      integer_port = std::stoul(port);
+    if (port.has_value()) {
+      integer_port = std::stoul(port.value());
     }
     co_return ResolvedServer{
         .address = address,
@@ -413,14 +441,15 @@ discover_server(const std::string server_name) {
    * Host header of the original server name (with port). The target server must
    * present a valid certificate for the hostname.
    */
-  if (!port.empty()) {
+  if (port.has_value()) {
     co_return ResolvedServer{
         .address = address,
-        .port = std::stoul(port),
+        .port = std::stoul(port.value()),
         .server_name = server_name,
     };
   }
 
+  LOG_DEBUG << "Discovering server's well-known endpoint";
   auto client =
       HttpClient::newHttpClient(std::format("https://{}", server_name));
   client->setUserAgent(UserAgent);
@@ -429,69 +458,123 @@ discover_server(const std::string server_name) {
   req->setMethod(drogon::Get);
   req->setPath("/.well-known/matrix/server");
 
-  HttpResponsePtr resp;
-  auto failure = false;
+  LOG_DEBUG << "Initialized well-known request. [" << req->methodString()
+            << "] " << req->path();
+
   try {
-    resp = co_await client->sendRequestCoro(req, DEFAULT_FEDERATION_TIMEOUT);
-    if (resp->statusCode() != k200OK) {
-      failure = true;
-    }
-  } catch ([[maybe_unused]] const std::exception &err) {
-    failure = true;
-  }
+    LOG_DEBUG << "Sending well-known request";
+    const auto http_response =
+        co_await client->sendRequestCoro(req, DEFAULT_FEDERATION_TIMEOUT);
+    LOG_DEBUG << "Well-known response status: " << http_response->statusCode();
+    if (http_response->statusCode() == k200OK) {
+      LOG_DEBUG << "Got well-known response";
 
-  if (!failure) {
-    // Get the response body as json
-    json const body = json::parse(resp->body());
+      LOG_DEBUG << "Well-known response status code: "
+                << http_response->statusCode();
+      // Get the response body as json
+      json const body = json::parse(http_response->body());
 
-    if (auto [m_server] = body.get<server_server_json::well_known>();
-        m_server) {
-      auto delegated_server_name = m_server.value();
-      auto delegated_port = delegated_server_name.substr(
-          delegated_server_name.find_last_of(':') + 1,
-          delegated_server_name.length() -
-              (delegated_server_name.find_last_of(':') + 1));
-      auto delegated_address = delegated_server_name.substr(
-          0, delegated_server_name.find_last_of(':') + 1);
+      if (auto [m_server] = body.get<server_server_json::well_known>();
+          m_server) {
+        auto delegated_server_name = m_server.value();
+        // If there is a colon then use the thing after the last colon as the
+        // port otherwise make it an empty optional
+        const std::optional<std::string> delegated_port =
+            [&delegated_server_name]() -> std::optional<std::string> {
+          if (const auto pos = delegated_server_name.find_last_of(':');
+              pos != std::string::npos) {
+            return delegated_server_name.substr(pos + 1);
+          }
+          return std::nullopt;
+        }();
 
-      if (auto delegated_clean_address = remove_brackets(delegated_address);
-          check_if_ip_address(delegated_clean_address)) {
-        unsigned long integer_port = MATRIX_SSL_PORT;
-        if (!port.empty()) {
-          integer_port = std::stoul(delegated_port);
+        // Server name with the port removed. If no port is given, this is the
+        // same as the server name. Use the port optional to determine if the
+        // port should be removed.
+        auto delegated_address = [&delegated_server_name,
+                                  &delegated_port]() -> std::string {
+          if (delegated_port.has_value()) {
+            return delegated_server_name.substr(
+                0, delegated_server_name.find_last_of(':'));
+          }
+          return delegated_server_name;
+        }();
+        if (auto delegated_clean_address = remove_brackets(delegated_address);
+            check_if_ip_address(delegated_clean_address)) {
+          unsigned long integer_port = MATRIX_SSL_PORT;
+          if (delegated_port.has_value()) {
+            integer_port = std::stoul(delegated_port.value());
+          }
+          co_return ResolvedServer{
+              .address = delegated_address,
+              .port = integer_port,
+              // TODO: Verify this is correct
+              .server_name = server_name,
+          };
         }
+
+        if (delegated_port.has_value()) {
+          co_return ResolvedServer{
+              .address = delegated_address,
+              .port = std::stoul(delegated_port.value()),
+              // TODO: Verify this is correct
+              .server_name = server_name,
+          };
+        }
+
+        try {
+          if (auto srv_resp = get_srv_record(
+                  std::format("_matrix-fed._tcp.{}", server_name));
+              !srv_resp.empty()) {
+            auto server = co_await pick_srv_server(srv_resp);
+            co_return ResolvedServer{
+                .address = server.host,
+                .port = server.port,
+                // TODO: Verify this is correct
+                .server_name = server_name,
+            };
+          }
+        } catch (const std::exception &err) {
+          LOG_WARN << "Failed to fetch srv record: " << err.what();
+        } catch (...) {
+          LOG_WARN << "Failed to fetch srv record";
+        }
+
+        try {
+          if (auto srv_resp =
+                  get_srv_record(std::format("_matrix._tcp.{}", server_name));
+              !srv_resp.empty()) {
+            auto server = co_await pick_srv_server(srv_resp);
+            co_return ResolvedServer{
+                .address = server.host,
+                .port = server.port,
+                // TODO: Verify this is correct
+                .server_name = server_name,
+            };
+          }
+        } catch (const std::exception &err) {
+          LOG_WARN << "Failed to fetch srv record: " << err.what();
+        } catch (...) {
+          LOG_WARN << "Failed to fetch srv record";
+        }
+
         co_return ResolvedServer{
             .address = delegated_address,
-            .port = integer_port,
-            .server_name = delegated_server_name,
+            .port = MATRIX_SSL_PORT,
+            // TODO: Verify this is correct
+            .server_name = server_name,
         };
       }
-
-      if (!delegated_port.empty()) {
-        co_return ResolvedServer{
-            .address = delegated_address,
-            .port = std::stoul(delegated_port),
-            .server_name = delegated_server_name,
-        };
-      }
-
-      if (auto srv_resp = co_await get_srv_record(server_name);
-          !srv_resp.empty()) {
-        auto server = co_await pick_srv_server(srv_resp);
-        co_return ResolvedServer{
-            .address = server.host,
-            .port = server.port,
-            .server_name = delegated_server_name,
-        };
-      }
-
-      co_return ResolvedServer{
-          .address = delegated_address,
-          .port = MATRIX_SSL_PORT,
-          .server_name = delegated_server_name,
-      };
     }
+  } catch (const drogon::HttpException &err) {
+    LOG_WARN << "Failed to send well-known request: " << err.what();
+  } catch (const std::exception &err) {
+    LOG_WARN << "Failed to send well-known request: " << err.what();
+  } catch (...) {
+    LOG_WARN << "Failed to send well-known request";
   }
+
+  LOG_DEBUG << "Discovering server's SRV record";
 
   /*
    *  If the /.well-known request resulted in an error response, a server is
@@ -501,13 +584,38 @@ discover_server(const std::string server_name) {
    * of <hostname>. The target server must present a valid certificate for
    * <hostname>.
    */
-  if (auto srv_resp = co_await get_srv_record(server_name); !srv_resp.empty()) {
-    auto server = co_await pick_srv_server(srv_resp);
-    co_return ResolvedServer{
-        .address = server.host,
-        .port = server.port,
-        .server_name = server_name,
-    };
+  try {
+    if (auto srv_resp =
+            get_srv_record(std::format("_matrix-fed._tcp.{}", server_name));
+        !srv_resp.empty()) {
+      auto server = co_await pick_srv_server(srv_resp);
+      co_return ResolvedServer{
+          .address = server.host,
+          .port = server.port,
+          .server_name = server_name,
+      };
+    }
+  } catch (const std::exception &err) {
+    LOG_WARN << "Failed to fetch srv record: " << err.what();
+  } catch (...) {
+    LOG_WARN << "Failed to fetch srv record";
+  }
+
+  try {
+    if (auto srv_resp =
+            get_srv_record(std::format("_matrix._tcp.{}", server_name));
+        !srv_resp.empty()) {
+      auto server = co_await pick_srv_server(srv_resp);
+      co_return ResolvedServer{
+          .address = server.host,
+          .port = server.port,
+          .server_name = server_name,
+      };
+    }
+  } catch (const std::exception &err) {
+    LOG_WARN << "Failed to fetch srv record: " << err.what();
+  } catch (...) {
+    LOG_WARN << "Failed to fetch srv record";
   }
 
   co_return ResolvedServer{
@@ -530,39 +638,37 @@ discover_server(const std::string server_name) {
  * origin=<origin>,destination=<destination>,key=<key_id>,sig=<signature>". The
  * function returns the first Authorization header in the list of headers.
  *
- * @param server_name The name of the server.
- * @param key_id The ID of the key used for signing the JSON object.
- * @param secret_key The secret key used for signing the JSON object.
- * @param method The HTTP method of the request.
- * @param request_uri The URI of the request.
- * @param origin The origin server.
- * @param target The target server.
- * @param content The content of the request, if any.
+ * @param data The AuthheaderData object containing the details required to
+ * generate the header.
  * @return The Server-Server Authorization header.
  */
-[[nodiscard]] std::string generate_ss_authheader(
-    const std::string &server_name, const std::string &key_id,
-    const std::vector<unsigned char> &secret_key, const std::string &method,
-    const std::string &request_uri, const std::string &origin,
-    const std::string &target, const std::optional<json> &content) {
-  auto request_json = json::object();
-  request_json["method"] = method;
-  request_json["uri"] = request_uri;
-  request_json["origin"] = origin;
-  request_json["destination"] = target;
-
-  if (content) {
-    request_json["content"] = content.value();
+[[nodiscard]] std::string generate_ss_authheader(const AuthheaderData &data) {
+  if (data.secret_key.empty()) {
+    throw std::runtime_error("Secret key is empty");
+  }
+  if (!data.content.has_value()) {
+    throw std::runtime_error("Invalid content");
   }
 
-  auto signed_json =
-      json_utils::sign_json(server_name, key_id, secret_key, request_json);
+  auto request_json = json::object();
+  request_json["method"] = data.method;
+  request_json["uri"] = data.request_uri;
+  request_json["origin"] = data.origin;
+  request_json["destination"] = data.target;
+
+  if (data.content) {
+    request_json["content"] = data.content.value();
+  }
+
+  auto signed_json = json_utils::sign_json(data.server_name, data.key_id,
+                                           data.secret_key, request_json);
 
   std::vector<std::string> authorization_headers;
-  for (const auto &[key, val] : signed_json.items()) {
+  for (const auto &[key, val] :
+       signed_json["signatures"][data.origin].items()) {
     authorization_headers.push_back(std::format(
-        R"(X-Matrix origin="{}",destination="{}",key="{}",sig="{}")", origin,
-        target, key, val.get<std::string>()));
+        R"(X-Matrix origin="{}",destination="{}",key="{}",sig="{}")",
+        data.origin, data.target, key, val.get<std::string>()));
   }
 
   return authorization_headers[0];
@@ -628,10 +734,16 @@ parseQueryParamString(const std::string &queryString) {
  */
 [[nodiscard]] Task<drogon::HttpResponsePtr>
 federation_request(const HTTPRequest request) {
-  const auto auth_header = generate_ss_authheader(
-      request.origin, request.key_id, request.secret_key,
-      drogon_to_string_method(request.method), request.path, request.origin,
-      request.target, request.content);
+  const AuthheaderData authheader_data{
+      .server_name = request.origin,
+      .key_id = request.key_id,
+      .secret_key = request.secret_key,
+      .method = drogon_to_string_method(request.method),
+      .request_uri = request.path,
+      .origin = request.origin,
+      .target = request.target,
+      .content = request.content};
+  const auto auth_header = generate_ss_authheader(authheader_data);
   const auto req = HttpRequest::newHttpRequest();
   req->setMethod(request.method);
   req->setPath(request.path);
