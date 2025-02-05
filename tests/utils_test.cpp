@@ -1,9 +1,11 @@
 // Placeholder for now
 #include "nlohmann/json.hpp"
+#include "snitch/snitch_matcher.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 
 #include <algorithm>
+#include <drogon/HttpTypes.h>
 #include <fstream>
 #include <snitch/snitch.hpp>
 #include <vector>
@@ -51,8 +53,8 @@ TEST_CASE("Incorrect IDs are properly migrated", "[user_id_migration]") {
   }
 
   SECTION("Preserves special chars") {
-    auto user_id = "Test[]";
-    auto expected = "test[]";
+    auto user_id = "Test[]_";
+    auto expected = "test[]__";
 
     auto real = migrate_localpart(user_id);
 
@@ -350,5 +352,24 @@ TEST_CASE("Misc Tests", "[misc]") {
     const auto result = base62_encode(input);
 
     REQUIRE(expected == result);
+  }
+
+  SECTION("Drogon method to string") {
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Get),
+                 snitch::matchers::contains_substring("GET"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Post),
+                 snitch::matchers::contains_substring("POST"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Head),
+                 snitch::matchers::contains_substring("HEAD"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Put),
+                 snitch::matchers::contains_substring("PUT"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Delete),
+                 snitch::matchers::contains_substring("DELETE"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Options),
+                 snitch::matchers::contains_substring("OPTIONS"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Patch),
+                 snitch::matchers::contains_substring("PATCH"));
+    REQUIRE_THAT(drogon_to_string_method(drogon::HttpMethod::Invalid),
+                 snitch::matchers::contains_substring("INVALID"));
   }
 }
