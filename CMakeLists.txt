@@ -66,6 +66,7 @@ set(SOURCES
         src/utils/json_utils.cpp
         src/utils/utils.cpp
         src/utils/state_res.cpp
+        src/utils/room_utils.cpp
         src/webserver/client_server_api/ClientServerCtrl.cpp
         src/webserver/json.cpp
         src/webserver/server_server_api/ServerServerCtrl.cpp

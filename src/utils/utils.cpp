@@ -346,7 +346,7 @@ get_srv_record(const std::string &address) {
 
     LOG_DEBUG << "Total weight: " << totalWeight;
     // Selecting a server based on weighted random distribution
-    std::uniform_int_distribution<> dist(1, totalWeight);
+    std::uniform_int_distribution<> dist(1, static_cast<int>(totalWeight));
     auto selectedWeight = dist(gen);
     LOG_DEBUG << "Selected weight: " << selectedWeight;
     for (const auto &server : minPriorityServers) {

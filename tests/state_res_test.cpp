@@ -1,8 +1,13 @@
 
 #include "nlohmann/json.hpp"
 #include "utils/state_res.hpp"
+
+#include <fstream>
 #include <snitch/snitch.hpp>
 #include <utils/errors.hpp>
+#include <utils/json_utils.hpp>
+#include <utils/room_utils.hpp>
+#include <utils/utils.hpp>
 #include <vector>
 
 using json = nlohmann::json;
@@ -310,5 +315,96 @@ TEST_CASE("Match Domain") {
     REQUIRE_FALSE(matchDomain("", ""));
     REQUIRE_FALSE(matchDomain("@test:localhost", ""));
     REQUIRE_FALSE(matchDomain("", "@user:localhost"));
+  }
+}
+
+TEST_CASE("State res on room creation") {
+  const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+rabbitmq:
+  host: localhost
+  port: 5672
+  )";
+
+  // Write file to disk for testing
+  std::ofstream file("config.yaml");
+  file << config_file;
+  file.close();
+
+  // Test loading the config
+  const Config config{};
+
+  // Generate basic room data
+  const CreateRoomStateBuildData data{
+      .createRoom_body = {.name = "Test Room",
+                          .room_version = "11",
+                          .topic = "Test Topic"},
+      .room_id = "!test:localhost",
+      .user_id = "@test:localhost",
+      .room_version = "11"};
+
+  auto room_state = build_createRoom_state(data);
+
+  // Sign all the state events
+
+  // Prepare loading the signing data
+  const auto key_data = get_verify_key_data(config);
+
+  find_auth_event_for_event_on_create(room_state, "11");
+  for (auto &state_event : room_state) {
+    state_event =
+        json_utils::sign_json(config.matrix_config.server_name, key_data.key_id,
+                              key_data.private_key, state_event);
+  }
+
+  // Convert the solved_state map to a `std::vector<std::vector<StateEvent>>`
+  const std::vector<std::vector<StateEvent>> state_forks = {room_state};
+
+  const std::map<EventType, std::map<StateKey, StateEvent>> state_res_result =
+      stateres_v2(state_forks);
+
+  // Ensure that it matches the expected state
+  REQUIRE(state_res_result.size() == room_state.size());
+
+  // Check we have all the expected state events with the correct content
+  for (const auto &state_event : room_state) {
+    const auto event_type = state_event["type"].get<std::string>();
+    const auto state_key = state_event["state_key"].get<std::string>();
+
+    REQUIRE(state_res_result.contains(event_type));
+    REQUIRE(state_res_result.at(event_type).contains(state_key));
+
+    const auto &state_event_result =
+        state_res_result.at(event_type).at(state_key);
+
+    REQUIRE(state_event_result["event_id"].get<std::string>() ==
+            state_event["event_id"].get<std::string>());
+    REQUIRE(state_event_result["type"].get<std::string>() ==
+            state_event["type"].get<std::string>());
+    REQUIRE(state_event_result["state_key"].get<std::string>() ==
+            state_event["state_key"].get<std::string>());
+    REQUIRE(state_event_result["content"] == state_event["content"]);
+    REQUIRE(state_event_result["room_id"].get<std::string>() ==
+            state_event["room_id"].get<std::string>());
+    REQUIRE(state_event_result["sender"].get<std::string>() ==
+            state_event["sender"].get<std::string>());
+    REQUIRE(state_event_result["origin_server_ts"].get<std::time_t>() ==
+            state_event["origin_server_ts"].get<std::time_t>());
+    REQUIRE(state_event_result["signatures"] == state_event["signatures"]);
+    REQUIRE(state_event_result["auth_events"] == state_event["auth_events"]);
+    if (state_event.contains("unsigned")) {
+      REQUIRE(state_event_result["unsigned"] == state_event["unsigned"]);
+    }
   }
 }
