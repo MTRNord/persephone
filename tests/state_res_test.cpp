@@ -2,6 +2,7 @@
 #include "nlohmann/json.hpp"
 #include "utils/state_res.hpp"
 
+#include <chrono>
 #include <fstream>
 #include <snitch/snitch.hpp>
 #include <utils/errors.hpp>

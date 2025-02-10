@@ -42,62 +42,62 @@ namespace {
   //  We copy here to (if needed) have the original still intact
   json event_copy(event);
 
-  const std::unordered_set<std::string> preserved_keys{
-      "event_id",    "type",        "room_id",    "sender",
-      "state_key",   "hashes",      "signatures", "depth",
-      "prev_events", "auth_events", "content",    "origin_server_ts"};
-
-  for (auto it = event_copy.begin(); it != event_copy.end();) {
-    if (const auto &key = it.key(); !preserved_keys.contains(key)) {
-      it = event_copy.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  // Special events have special allow rules for things in content
-  if (event["type"] == "m.room.member") {
-    for (const auto &[key, val] : event["content"].items()) {
-      if (key != "membership" && key != "join_authorised_via_users_server" &&
-          key != "third_party_invite") {
-        event_copy["content"].erase(key);
+  auto erase_unpreserved_keys = [](json &original_event) {
+    const std::unordered_set<std::string> preserved_keys{
+        "event_id",    "type",        "room_id",    "sender",
+        "state_key",   "hashes",      "signatures", "depth",
+        "prev_events", "auth_events", "content",    "origin_server_ts"};
+    for (auto it = original_event.begin(); it != original_event.end();) {
+      if (!preserved_keys.contains(it.key())) {
+        it = original_event.erase(it);
+      } else {
+        ++it;
       }
     }
+  };
 
-    if (event["content"].contains("third_party_invite")) {
-      for (const auto &[key, val] :
-           event["content"]["third_party_invite"].items()) {
-        if (key != "signed") {
-          event_copy["content"]["third_party_invite"].erase(key);
+  auto redact_content =
+      [](json &content, const std::unordered_set<std::string> &allowed_keys) {
+        for (auto it = content.begin(); it != content.end();) {
+          if (!allowed_keys.contains(it.key())) {
+            it = content.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      };
+
+  auto redact_third_party_invite = [](json &content) {
+    if (content.contains("third_party_invite")) {
+      for (auto it = content["third_party_invite"].begin();
+           it != content["third_party_invite"].end();) {
+        if (it.key() != "signed") {
+          it = content["third_party_invite"].erase(it);
+        } else {
+          ++it;
         }
       }
     }
+  };
+
+  erase_unpreserved_keys(event_copy);
+
+  // Special events have special allow rules for things in content
+  if (event["type"] == "m.room.member") {
+    redact_content(event_copy["content"],
+                   {"membership", "join_authorised_via_users_server",
+                    "third_party_invite"});
+    redact_third_party_invite(event_copy["content"]);
   } else if (event["type"] == "m.room.join_rules") {
-    for (const auto &[key, val] : event["content"].items()) {
-      if (key != "join_rule" && key != "allow") {
-        event_copy["content"].erase(key);
-      }
-    }
+    redact_content(event_copy["content"], {"join_rule", "allow"});
   } else if (event["type"] == "m.room.power_levels") {
-    for (const auto &[key, val] : event["content"].items()) {
-      if (key != "ban" && key != "events" && key != "events_default" &&
-          key != "invite" && key != "kick" && key != "redact" &&
-          key != "state_default" && key != "users" && key != "users_default") {
-        event_copy["content"].erase(key);
-      }
-    }
+    redact_content(event_copy["content"],
+                   {"ban", "events", "events_default", "invite", "kick",
+                    "redact", "state_default", "users", "users_default"});
   } else if (event["type"] == "m.room.history_visibility") {
-    for (const auto &[key, val] : event["content"].items()) {
-      if (key != "history_visibility") {
-        event_copy["content"].erase(key);
-      }
-    }
+    redact_content(event_copy["content"], {"history_visibility"});
   } else if (event["type"] == "m.room.redaction") {
-    for (const auto &[key, val] : event["content"].items()) {
-      if (key != "redacts") {
-        event_copy["content"].erase(key);
-      }
-    }
+    redact_content(event_copy["content"], {"redacts"});
   } else {
     event_copy["content"] = json::object();
   }
