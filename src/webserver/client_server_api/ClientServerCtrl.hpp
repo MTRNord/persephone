@@ -27,6 +27,11 @@ public:
                 FilterChainCallback &&chain_callback) override;
 };
 
+struct UserValidData {
+  bool isValid;
+  std::optional<Database::UserInfo> userInfo;
+};
+
 class ClientServerCtrl final
     : public drogon::HttpController<ClientServerCtrl, false> {
 public:
@@ -44,6 +49,11 @@ public:
                 Options);
   ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
                 Post, Options);
+
+  // Room directory
+  ADD_METHOD_TO(ClientServerCtrl::directoryLookupRoomAlias,
+                "_matrix/client/v3/directory/room/{1:roomAlias}", Get, Options,
+                "client_server_api::AccessTokenFilter");
 
   // Room joining
   ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
@@ -64,6 +74,10 @@ public:
   explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
 
 protected:
+  drogon::Task<UserValidData> getUserInfo(
+      std::string req_auth_header,
+      const std::function<void(const HttpResponsePtr &)> &callback) const;
+
   void versions(const HttpRequestPtr &,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
 
@@ -83,6 +97,11 @@ protected:
   void
   register_user(const HttpRequestPtr &req,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
+
+  void directoryLookupRoomAlias(
+      const HttpRequestPtr &req,
+      std::function<void(const HttpResponsePtr &)> &&callback,
+      const std::string &roomAlias) const;
 
   void
   joinRoomIdOrAlias(const HttpRequestPtr &req,

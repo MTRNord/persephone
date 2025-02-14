@@ -63,6 +63,35 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
   });
 }
 
+drogon::Task<UserValidData> ClientServerCtrl::getUserInfo(
+    std::string req_auth_header,
+    const std::function<void(const HttpResponsePtr &)> &callback) const {
+  if (req_auth_header.empty()) {
+    return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+                 k401Unauthorized);
+    co_return {
+        .isValid = false,
+        .userInfo = std::nullopt,
+    };
+  }
+  // Remove the "Bearer " prefix
+  const auto access_token = req_auth_header.substr(7);
+  // Check if we have the access token in the database
+  const auto user_info = co_await Database::get_user_info(access_token);
+  if (!user_info) {
+    return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                 k401Unauthorized);
+    co_return {
+        .isValid = false,
+        .userInfo = std::nullopt,
+    };
+  }
+  co_return {
+      .isValid = true,
+      .userInfo = user_info,
+  };
+}
+
 void ClientServerCtrl::versions(
     const HttpRequestPtr &,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
@@ -418,27 +447,63 @@ void ClientServerCtrl::register_user(
   });
 }
 
+void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &roomAlias) const {
+  drogon::async_run([req, roomAlias, callback = std::move(callback),
+                     this]() -> drogon::Task<> {
+    // TODO: Cache this data in the db and use it if possible
+
+    // Request the room alias from the server it is registered on
+
+    // split off the server name from the room alias
+    const auto server_name = get_serverpart(roomAlias);
+
+    const auto server_address = co_await discover_server(server_name);
+    auto address = std::format("https://{}", server_address.address);
+    if (server_address.port) {
+      address = std::format("https://{}:{}", server_address.address,
+                            server_address.port);
+    }
+    const auto client = HttpClient::newHttpClient(address);
+    client->setUserAgent(UserAgent);
+
+    const auto key_data = get_verify_key_data(_config);
+
+    LOG_DEBUG << "Requesting room alias \"" << roomAlias
+              << "\" from server: " << server_address.address
+              << " with port: " << server_address.port;
+
+    // Do the request
+    auto resp = co_await federation_request(
+        {.client = client,
+         .method = drogon::Get,
+         .path = std::format(
+             "/_matrix/federation/v1/query/directory?room_alias={}", roomAlias),
+         .key_id = key_data.key_id,
+         .secret_key = key_data.private_key,
+         .origin = _config.matrix_config.server_name,
+         .target = server_address.server_name,
+         .content = nullptr,
+         .timeout = DEFAULT_FEDERATION_TIMEOUT});
+
+    // Pass the response back as the response to the client without
+    // modifications
+    callback(resp);
+    co_return;
+  });
+}
+
 void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const drogon::HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback,
     const std::string &roomIdOrAlias) const {
   drogon::async_run([req, roomIdOrAlias, callback = std::move(callback),
                      this]() -> drogon::Task<> {
-    // Get the access token from the Authorization header
-    auto req_auth_header = req->getHeader("Authorization");
-    if (req_auth_header.empty()) {
-      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   k401Unauthorized);
-      co_return;
-    }
-    // Remove the "Bearer " prefix
-    auto access_token = req_auth_header.substr(7);
-    // Check if we have the access token in the database
-    auto user_info = co_await Database::get_user_info(access_token);
-
-    if (!user_info) {
-      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
-                   k401Unauthorized);
+    const auto [isValid, userInfo] =
+        co_await getUserInfo(req->getHeader("Authorization"), callback);
+    if (!isValid) {
       co_return;
     }
 
@@ -554,7 +619,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     auto version_query =
         generateQueryParamString("ver", {default_room_version});
     auto path = std::format("/_matrix/federation/v1/make_join/{}/{}{}", room_id,
-                            user_info->user_id, version_query);
+                            userInfo->user_id, version_query);
 
     auto make_join_resp = co_await federation_request(
         {.client = client,
@@ -680,7 +745,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const auto resp = HttpResponse::newHttpResponse();
     resp->setStatusCode(k200OK);
     resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
-    // TODO: Generate the response body
+    json json_resp = {{"room_id", room_id}};
+    resp->setBody(json_resp.dump());
     callback(resp);
 
     co_return;
@@ -692,24 +758,13 @@ void ClientServerCtrl::createRoom(
     std::function<void(const HttpResponsePtr &)> &&callback) const {
   drogon::async_run([req, callback = std::move(callback),
                      this]() -> drogon::Task<> {
-    // Get the access token from the Authorization header
-    const auto req_auth_header = req->getHeader("Authorization");
-    if (req_auth_header.empty()) {
-      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   k401Unauthorized);
-      co_return;
-    }
-    // Remove the "Bearer " prefix
-    const auto access_token = req_auth_header.substr(7);
-    // Check if we have the access token in the database
-    const auto user_info = co_await Database::get_user_info(access_token);
-    if (!user_info) {
-      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
-                   k401Unauthorized);
+    const auto [isValid, userInfo] =
+        co_await getUserInfo(req->getHeader("Authorization"), callback);
+    if (!isValid) {
       co_return;
     }
 
-    LOG_DEBUG << "User " << user_info->user_id << " is creating a room";
+    LOG_DEBUG << "User " << userInfo->user_id << " is creating a room";
     // Get the request body as json
     json body;
     try {
@@ -761,7 +816,7 @@ void ClientServerCtrl::createRoom(
     try {
       state_events = build_createRoom_state({.createRoom_body = createRoom_body,
                                              .room_id = room_id,
-                                             .user_id = user_info->user_id,
+                                             .user_id = userInfo->user_id,
                                              .room_version = room_version});
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to build room state: " << e.what();
