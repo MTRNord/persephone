@@ -422,16 +422,387 @@ void ClientServerCtrl::register_user(
       device_id_opt = device_data.device_id;
     }
 
+// Optionals cause diagnostic false positives here
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
     client_server_json::registration_resp const reg_resp = {
         .access_token = access_token,
         .device_id = device_id_opt,
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+        .expires_in_ms = {},
+#pragma clang diagnostic ignored "-Wmissing-field-initializers"
+        .refresh_token = {},
         .user_id = user_id,
     };
-    json json_data = reg_resp;
+#pragma GCC diagnostic pop
+    const json json_data = reg_resp;
     resp->setBody(json_data.dump());
     resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
     callback(resp);
   });
+}
+
+void client_server_api::ClientServerCtrl::getPushrules(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback) const {
+  drogon::async_run(
+      [req, callback = std::move(callback), this]() -> drogon::Task<> {
+        const auto [isValid, userInfo] =
+            co_await getUserInfo(req->getHeader("Authorization"), callback);
+        if (!isValid) {
+          co_return;
+        }
+
+        // TODO: Get pushrules from DB instead of passing just default values
+
+        // Return the default which for now is just the example from the spec:
+        /*
+         ```json
+         {
+          "global": {
+            "content": [
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "sound",
+                    "value": "default"
+                  },
+                  {
+                    "set_tweak": "highlight"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "pattern": "alice",
+                "rule_id": ".m.rule.contains_user_name"
+              }
+            ],
+            "override": [
+              {
+                "actions": [],
+                "conditions": [],
+                "default": true,
+                "enabled": false,
+                "rule_id": ".m.rule.master"
+              },
+              {
+                "actions": [],
+                "conditions": [
+                  {
+                    "key": "content.msgtype",
+                    "kind": "event_match",
+                    "pattern": "m.notice"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.suppress_notices"
+              }
+            ],
+            "room": [],
+            "sender": [],
+            "underride": [
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "sound",
+                    "value": "ring"
+                  },
+                  {
+                    "set_tweak": "highlight",
+                    "value": false
+                  }
+                ],
+                "conditions": [
+                  {
+                    "key": "type",
+                    "kind": "event_match",
+                    "pattern": "m.call.invite"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.call"
+              },
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "sound",
+                    "value": "default"
+                  },
+                  {
+                    "set_tweak": "highlight"
+                  }
+                ],
+                "conditions": [
+                  {
+                    "kind": "contains_display_name"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.contains_display_name"
+              },
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "sound",
+                    "value": "default"
+                  },
+                  {
+                    "set_tweak": "highlight",
+                    "value": false
+                  }
+                ],
+                "conditions": [
+                  {
+                    "is": "2",
+                    "kind": "room_member_count"
+                  },
+                  {
+                    "key": "type",
+                    "kind": "event_match",
+                    "pattern": "m.room.message"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.room_one_to_one"
+              },
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "sound",
+                    "value": "default"
+                  },
+                  {
+                    "set_tweak": "highlight",
+                    "value": false
+                  }
+                ],
+                "conditions": [
+                  {
+                    "key": "type",
+                    "kind": "event_match",
+                    "pattern": "m.room.member"
+                  },
+                  {
+                    "key": "content.membership",
+                    "kind": "event_match",
+                    "pattern": "invite"
+                  },
+                  {
+                    "key": "state_key",
+                    "kind": "event_match",
+                    "pattern": "@alice:example.com"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.invite_for_me"
+              },
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "highlight",
+                    "value": false
+                  }
+                ],
+                "conditions": [
+                  {
+                    "key": "type",
+                    "kind": "event_match",
+                    "pattern": "m.room.member"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.member_event"
+              },
+              {
+                "actions": [
+                  "notify",
+                  {
+                    "set_tweak": "highlight",
+                    "value": false
+                  }
+                ],
+                "conditions": [
+                  {
+                    "key": "type",
+                    "kind": "event_match",
+                    "pattern": "m.room.message"
+                  }
+                ],
+                "default": true,
+                "enabled": true,
+                "rule_id": ".m.rule.message"
+              }
+            ]
+          }
+        }
+        ```
+        */
+
+        const auto user_localpart = localpart(userInfo->user_id);
+
+        const std::vector<json> content_actions{
+            "notify",
+            {{"set_tweak", "sound"}, {"value", "default"}},
+            {{"set_tweak", "highlight"}}};
+        const std::vector<json> content{
+            {{"actions", content_actions},
+             {"default", true},
+             {"enabled", true},
+             {"pattern", user_localpart},
+             {"rule_id", ".m.rule.contains_user_name"}}};
+
+        const std::vector<json> override{
+            {{"actions", std::vector<json>{}},
+             {"conditions", std::vector<json>{}},
+             {"default", true},
+             {"enabled", false},
+             {"rule_id", ".m.rule.master"}},
+            {{"actions", std::vector<json>{}},
+             {"conditions", std::vector<json>{{"key", "content.msgtype"},
+                                              {"kind", "event_match"},
+                                              {"pattern", "m.notice"}}},
+             {"default", true},
+             {"enabled", true},
+             {"rule_id", ".m.rule.suppress_notices"}}};
+
+        constexpr std::vector<json> room{};
+        constexpr std::vector<json> sender{};
+        const std::vector<json> underride_actions_1{
+            "notify",
+            {{"set_tweak", "sound"}, {"value", "ring"}},
+            {{"set_tweak", "highlight"}, {"value", false}}};
+        const std::vector<json> underride_conditions_1{
+            {{"key", "type"},
+             {"kind", "event_match"},
+             {"pattern", "m.call.invite"}}};
+        const std::vector<json> underride_actions_2{
+            "notify",
+            {{"set_tweak", "sound"}, {"value", "default"}},
+            {{"set_tweak", "highlight"}}};
+        const std::vector<json> underride_conditions_2{{
+            {"kind", "contains_display_name"},
+        }};
+        const std::vector<json> underride_actions_3{
+            "notify",
+            {{"set_tweak", "sound"}, {"value", "default"}},
+            {{"set_tweak", "highlight"}, {"value", false}}};
+        const std::vector<json> underride_conditions_3{
+            {
+                {"is", "2"},
+                {"kind", "room_member_count"},
+            },
+            {
+                {"key", "type"},
+                {"kind", "event_match"},
+                {"pattern", "m.room.message"},
+            }};
+        const std::vector<json> underride_actions_4{
+            "notify",
+            {{"set_tweak", "sound"}, {"value", "default"}},
+            {{"set_tweak", "highlight"}, {"value", false}}};
+        const std::vector<json> underride_conditions_4{
+            {
+                {"key", "type"},
+                {"kind", "event_match"},
+                {"pattern", "m.room.member"},
+            },
+            {
+                {"key", "content.membership"},
+                {"kind", "event_match"},
+                {"pattern", "invite"},
+            },
+            {
+                {"key", "state_key"},
+                {"kind", "event_match"},
+                {"pattern", userInfo->user_id},
+            }};
+        const std::vector<json> underride_actions_5{
+            "notify", {{"set_tweak", "highlight"}, {"value", false}}};
+        const std::vector<json> underride_conditions_5{{
+            {"key", "type"},
+            {"kind", "event_match"},
+            {"pattern", "m.room.member"},
+        }};
+        const std::vector<json> underride_actions_6{
+            "notify", {{"set_tweak", "highlight"}, {"value", false}}};
+        const std::vector<json> underride_conditions_6{{
+            {"key", "type"},
+            {"kind", "event_match"},
+            {"pattern", "m.room.message"},
+        }};
+
+        const std::vector<json> underride{
+            {
+                {"actions", underride_actions_1},
+                {"conditions", underride_conditions_1},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.call"},
+            },
+            {
+                {"actions", underride_actions_2},
+                {"conditions", underride_conditions_2},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.contains_display_name"},
+            },
+            {
+                {"actions", underride_actions_3},
+                {"conditions", underride_conditions_3},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.room_one_to_one"},
+            },
+            {
+                {"actions", underride_actions_4},
+                {"conditions", underride_conditions_4},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.invite_for_me"},
+            },
+            {
+                {"actions", underride_actions_5},
+                {"conditions", underride_conditions_5},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.member_event"},
+            },
+            {
+                {"actions", underride_actions_6},
+                {"conditions", underride_conditions_6},
+                {"default", true},
+                {"enabled", true},
+                {"rule_id", ".m.rule.message"},
+            }};
+
+        const json pushrules{{"global",
+                              {{"content", content},
+                               {"override", override},
+                               {"room", room},
+                               {"sender", sender},
+                               {"underride", underride}}}};
+
+        // Respond with the pushrules
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody(pushrules.dump());
+        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+        co_return;
+      });
 }
 
 void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(

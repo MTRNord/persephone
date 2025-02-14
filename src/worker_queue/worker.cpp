@@ -12,7 +12,8 @@ Worker::Worker(const std::string &address, struct event_base *evbase_passed)
   LOG_INFO << "Starting worker queue";
   channel.consume("federation_requests")
       .onReceived([this](const AMQP::Message &message,
-                         const uint64_t deliveryTag, bool redelivered) {
+                         const uint64_t deliveryTag,
+                         [[maybe_unused]] bool redelivered) {
         const nlohmann::json request = nlohmann::json::parse(message.body());
         const std::string &reply_to = message.replyTo();
         process_request(request, reply_to);

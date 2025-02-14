@@ -8,8 +8,8 @@ ReconnectingLibEventHandler::ReconnectingLibEventHandler(
     : AMQP::LibEventHandler(evbase_passed), evbase(evbase_passed),
       address(address_passed), reconnect_event(nullptr, event_free) {}
 
-void ReconnectingLibEventHandler::onError(AMQP::TcpConnection *connection,
-                                          const char *message) {
+void ReconnectingLibEventHandler::onError(
+    [[maybe_unused]] AMQP::TcpConnection *connection, const char *message) {
   LOG_ERROR << "Connection error: " << message;
   scheduleReconnect();
 }
@@ -33,8 +33,9 @@ void ReconnectingLibEventHandler::scheduleReconnect() {
   event_add(reconnect_event.get(), &timeout);
 }
 
-void ReconnectingLibEventHandler::onReconnect(evutil_socket_t fd, short what,
-                                              void *arg) {
+void ReconnectingLibEventHandler::onReconnect(
+    [[maybe_unused]] evutil_socket_t fd, [[maybe_unused]] short what,
+    void *arg) {
   auto *self = static_cast<ReconnectingLibEventHandler *>(arg);
   self->reconnect();
 }

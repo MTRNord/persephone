@@ -50,24 +50,28 @@ public:
   ADD_METHOD_TO(ClientServerCtrl::register_user, "/_matrix/client/v3/register",
                 Post, Options);
 
+  // PushRules
+  ADD_METHOD_TO(ClientServerCtrl::getPushrules, "/_matrix/client/v3/pushrules/",
+                Get, Options, "client_server_api::AccessTokenFilter");
+
   // Room directory
   ADD_METHOD_TO(ClientServerCtrl::directoryLookupRoomAlias,
-                "_matrix/client/v3/directory/room/{1:roomAlias}", Get, Options,
+                "/_matrix/client/v3/directory/room/{1:roomAlias}", Get, Options,
                 "client_server_api::AccessTokenFilter");
 
   // Room joining
   ADD_METHOD_TO(ClientServerCtrl::joinRoomIdOrAlias,
-                "_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
+                "/_matrix/client/v3/join/{1:roomIdOrAlias}", Post, Options,
                 "client_server_api::AccessTokenFilter");
 
   // Room creation
-  ADD_METHOD_TO(ClientServerCtrl::createRoom, "_matrix/client/v3/createRoom",
+  ADD_METHOD_TO(ClientServerCtrl::createRoom, "/_matrix/client/v3/createRoom",
                 Post, Options, "client_server_api::AccessTokenFilter");
 
   // Room state
   ADD_METHOD_TO(
       ClientServerCtrl::state,
-      "_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
+      "/_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
       Get, Options, "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
 
@@ -97,6 +101,10 @@ protected:
   void
   register_user(const HttpRequestPtr &req,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
+
+  void
+  getPushrules(const HttpRequestPtr &req,
+               std::function<void(const HttpResponsePtr &)> &&callback) const;
 
   void directoryLookupRoomAlias(
       const HttpRequestPtr &req,

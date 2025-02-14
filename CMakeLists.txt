@@ -95,6 +95,8 @@ target_compile_options(persephone PRIVATE
         -Wconversion
         -Wpedantic
         -Wuninitialized
+        -Wall
+        -Wextra
         -Werror
 )
 target_link_options(persephone PRIVATE

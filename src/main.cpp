@@ -74,15 +74,19 @@ int main() {
         .addListener("0.0.0.0", MATRIX_HTTP_PORT)
         .setThreadNum(0)
         .setLogLevel(log_level)
-        .addDbClient(orm::PostgresConfig{
-            .host = config.db_config.host,
-            .port = config.db_config.port,
-            .databaseName = config.db_config.database_name,
-            .username = config.db_config.user,
-            .password = config.db_config.password,
-            .connectionNumber = DATABASE_CONNECTIONS,
-            .name = "default",
-        })
+        .addDbClient(
+            orm::PostgresConfig{.host = config.db_config.host,
+                                .port = config.db_config.port,
+                                .databaseName = config.db_config.database_name,
+                                .username = config.db_config.user,
+                                .password = config.db_config.password,
+                                .connectionNumber = DATABASE_CONNECTIONS,
+                                .name = "default",
+                                .isFast = true,
+                                .characterSet = "",
+                                .timeout = 30,
+                                .autoBatch = true,
+                                .connectOptions = {}})
         .enableGzip(true)
         .registerPostHandlingAdvice([](const drogon::HttpRequestPtr &,
                                        const drogon::HttpResponsePtr &resp) {

@@ -213,9 +213,6 @@ get_srv_record(const std::string &address) {
   for (size_t i = 0; i < ldns_rr_list_rr_count(srv_record); i++) {
     const ldns_rr *record_rr = ldns_rr_list_rr(srv_record, i);
 
-    // get record type
-    const auto type = ldns_rr_get_type(record_rr);
-
     char *raw_host = ldns_rdf2str(ldns_rr_rdf(record_rr, 3));
     LOG_DEBUG << "SRV record host: " << raw_host;
     const std::string host = raw_host;

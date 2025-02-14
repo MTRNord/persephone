@@ -56,7 +56,7 @@ void ServerServerCtrl::server_key(
       .verify_keys = {{std::format("{}:{}", _verify_key_data.key_type,
                                    _verify_key_data.key_id),
                        {.key = _verify_key_data.public_key_base64}}},
-  };
+      .signatures = {}};
   const json json_data = keys;
   const auto signed_j =
       json_utils::sign_json(server_name, _verify_key_data.key_id,
