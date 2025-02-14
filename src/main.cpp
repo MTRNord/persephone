@@ -19,6 +19,29 @@
 
 static constexpr int DATABASE_CONNECTIONS = 10;
 
+trantor::Logger::LogLevel logLevelFromStr(const std::string &level) {
+  const auto lowered_level = to_lower(level);
+  if (level == "trace") {
+    return trantor::Logger::LogLevel::kTrace;
+  }
+  if (level == "debug") {
+    return trantor::Logger::LogLevel::kDebug;
+  }
+  if (level == "info") {
+    return trantor::Logger::LogLevel::kInfo;
+  }
+  if (level == "warn") {
+    return trantor::Logger::LogLevel::kWarn;
+  }
+  if (level == "error") {
+    return trantor::Logger::LogLevel::kError;
+  }
+  if (level == "fatal") {
+    return trantor::Logger::LogLevel::kFatal;
+  }
+  throw std::runtime_error("Invalid log level: " + level);
+}
+
 int main() {
   // Libsodium init
   if (sodium_init() < 0) {
@@ -29,6 +52,8 @@ int main() {
   // Actual startup
   try {
     const Config config{};
+
+    const auto log_level = logLevelFromStr(config.log_level);
 
     try {
       json_utils::ensure_server_keys(config);
@@ -48,7 +73,7 @@ int main() {
     drogon::app()
         .addListener("0.0.0.0", MATRIX_HTTP_PORT)
         .setThreadNum(0)
-        .setLogLevel(trantor::Logger::LogLevel::kDebug)
+        .setLogLevel(log_level)
         .addDbClient(orm::PostgresConfig{
             .host = config.db_config.host,
             .port = config.db_config.port,

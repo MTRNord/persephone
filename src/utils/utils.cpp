@@ -26,6 +26,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <unicode/locid.h>
+#include <unicode/unistr.h>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -788,4 +790,20 @@ federation_request(const HTTPRequest request) {
           .public_key_base64 = public_key_base64,
           .key_id = split_data[1],
           .key_type = split_data[0]};
+}
+
+std::string to_lower(const std::string &original) {
+  // Convert the original to a icu compatible char16_t/UChar string
+  icu::UnicodeString original_icu(original.c_str());
+  // Get the english locale
+  const auto locale = icu::Locale::getEnglish();
+
+  // Ensure the original is lowercase using icu library's u_strToLower
+  const auto original_lower_uci = original_icu.toLower(locale);
+
+  // Convert the user id to a std::string again
+  std::string lower;
+  original_lower_uci.toUTF8String(lower);
+
+  return lower;
 }

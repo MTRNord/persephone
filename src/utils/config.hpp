@@ -97,6 +97,8 @@ struct [[nodiscard]] Config {
   RabbitMQConfig
       rabbitmq_config{}; // NOLINT(*-non-private-member-variables-in-classes)
 
+  std::string log_level;
+
   /**
    * @brief Constructs a new Config object.
    *
@@ -117,6 +119,12 @@ struct [[nodiscard]] Config {
 
     const YAML::Node config = YAML::LoadFile(path);
     LOG_DEBUG << "Config file loaded";
+    LOG_DEBUG << "Loading log_level configuration";
+    if (config["log_level"].IsDefined()) {
+      log_level = config["log_level"].as<std::string>();
+    } else {
+      log_level = "info";
+    }
     LOG_DEBUG << "Loading database configuration";
     this->load_db(config);
     LOG_DEBUG << "Database configuration loaded";

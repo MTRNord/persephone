@@ -18,11 +18,8 @@
 #include <map>
 #include <optional>
 #include <ranges>
-#include <stdexcept>
 #include <string>
 #include <trantor/utils/Logger.h>
-#include <unicode/locid.h>
-#include <unicode/unistr.h>
 #include <utils/room_utils.hpp>
 #include <utils/state_res.hpp>
 #include <vector>
@@ -264,17 +261,7 @@ void ClientServerCtrl::login_post(
     // create an access token
     try {
       const auto supplied_user_id = login_body.identifier->user.value();
-      // Convert the user id to a icu compatible char16_t/UChar string
-      icu::UnicodeString user_id_icu(supplied_user_id.c_str());
-      // Get the english locale
-      const auto locale = icu::Locale::getEnglish();
-
-      // Ensure the user id is lowercase using icu library's u_strToLower
-      const auto user_id_lower_uci = user_id_icu.toLower(locale);
-
-      // Convert the user id to a std::string again
-      std::string user_id_lower;
-      user_id_lower_uci.toUTF8String(user_id_lower);
+      const auto user_id_lower = to_lower(supplied_user_id);
       // If the user id does not start with @, we assume it is a localpart
       // and append the server name
       const std::string user_id =

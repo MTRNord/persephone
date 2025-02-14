@@ -420,3 +420,5 @@ generate_room_id(const std::string &server_name) {
 
   return (is_ipv4 || (result_v6 == 1));
 }
+
+[[nodiscard]] std::string to_lower(const std::string &original);
