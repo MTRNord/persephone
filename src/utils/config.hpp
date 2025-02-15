@@ -6,12 +6,12 @@
 
 #include "errors.hpp"
 
+#include "yaml-cpp/yaml.h"
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <trantor/utils/Logger.h>
 #include <yaml-cpp/node/node.h>
-#include <yaml-cpp/node/parse.h>
 
 struct [[nodiscard]] RabbitMQConfig {
   std::string host;

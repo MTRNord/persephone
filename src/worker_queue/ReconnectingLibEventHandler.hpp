@@ -1,12 +1,20 @@
 #pragma once
+#include <string>
+#ifdef __GNUC__
+// Ignore false positives (see https://github.com/nlohmann/json/issues/3808)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
 #include <amqpcpp.h>
+#pragma GCC diagnostic pop
+#else
+#include <amqpcpp.h>
+#endif
 #include <amqpcpp/libevent.h>
 #include <amqpcpp/linux_tcp.h>
 #include <event2/event.h>
 #include <event2/event_struct.h>
 #include <event2/util.h>
 #include <memory>
-#include <string>
 
 class ReconnectingLibEventHandler final : public AMQP::LibEventHandler {
 public:

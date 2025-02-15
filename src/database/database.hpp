@@ -4,7 +4,16 @@
 /// @brief A wrapper for the database operations to ensure they are uniform.
 #include "drogon/drogon.h"
 #include <memory>
+#ifdef __GNUC__
+// Ignore false positives (see https://github.com/nlohmann/json/issues/3808)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#include "nlohmann/json.hpp"
+#pragma GCC diagnostic pop
+#else
 #include <nlohmann/json.hpp>
+#endif
 #include <optional>
 #include <string>
 #include <webserver/json.hpp>
@@ -57,7 +66,7 @@ public:
   validate_access_token(std::string auth_token);
 
   [[nodiscard]] static drogon::Task<client_server_json::login_resp>
-      login(LoginData login_data);
+  login(LoginData login_data);
 
   [[nodiscard]] static drogon::Task<void>
   add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
