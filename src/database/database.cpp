@@ -23,6 +23,10 @@ static constexpr int TOKEN_RANDOM_PART_LENGTH = 20;
 [[nodiscard]] drogon::Task<Database::UserCreationResp>
 Database::create_user(Database::UserCreationData const data) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
 
   const auto transPtr = co_await sql->newTransactionCoro();
   assert(transPtr);
@@ -74,6 +78,10 @@ Database::create_user(Database::UserCreationData const data) {
 
 [[nodiscard]] drogon::Task<bool> Database::user_exists(std::string matrix_id) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   try {
     const auto query = co_await sql->execSqlCoro(
         "select exists(select 1 from users where matrix_id = $1) as exists",
@@ -91,6 +99,10 @@ Database::create_user(Database::UserCreationData const data) {
 [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
 Database::get_user_info(const std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   try {
     const auto result = co_await sql->execSqlCoro(
         "select device_id, matrix_id from devices where access_token = $1",
@@ -125,6 +137,10 @@ Database::get_user_info(const std::string auth_token) {
 [[nodiscard]] drogon::Task<bool>
 Database::validate_access_token(std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   try {
     const auto query =
         co_await sql->execSqlCoro("select exists(select 1 from devices "
@@ -144,6 +160,10 @@ Database::validate_access_token(std::string auth_token) {
 [[nodiscard]] drogon::Task<client_server_json::login_resp>
 Database::login(const LoginData login_data) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   const auto transaction = sql->newTransaction();
   try {
     // Check if user exists, check if password matches the hash we got and
@@ -273,6 +293,10 @@ Database::get_state_event(const std::string room_id,
                           const std::string event_type,
                           const std::string state_key) {
   const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   try {
     // TODO: We do not respect state res ordering yet. We should do that in the
     // future

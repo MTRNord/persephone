@@ -17,7 +17,10 @@ void Migrator::migrate() {
 
 void Migrator::migration_v0() {
   const auto sql = drogon::app().getDbClient("default");
-  assert(sql);
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
   try {
     LOG_DEBUG << "Creating v0 table as needed";
     const auto query =
@@ -33,7 +36,10 @@ void Migrator::migration_v0() {
 void Migrator::migration_v1() {
   LOG_INFO << "Starting database migration v0->v1";
   const auto sql = drogon::app().getDbClient("default");
-  assert(sql);
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
 
   try {
     auto query = sql->execSqlAsyncFuture(
@@ -166,7 +172,10 @@ void Migrator::migration_v1() {
 void Migrator::migration_v2() {
   LOG_INFO << "Starting database migration v1->v2";
   const auto sql = drogon::app().getDbClient();
-  assert(sql);
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
 
   try {
     auto query = sql->execSqlAsyncFuture(
@@ -210,7 +219,10 @@ void Migrator::migration_v2() {
 void Migrator::migration_v3() {
   LOG_INFO << "Starting database migration v2->v3";
   const auto sql = drogon::app().getDbClient();
-  assert(sql);
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
 
   try {
     auto query = sql->execSqlAsyncFuture(

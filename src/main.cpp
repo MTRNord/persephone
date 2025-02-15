@@ -82,7 +82,7 @@ int main() {
                                 .password = config.db_config.password,
                                 .connectionNumber = DATABASE_CONNECTIONS,
                                 .name = "default",
-                                .isFast = true,
+                                .isFast = false,
                                 .characterSet = "",
                                 .timeout = 30,
                                 .autoBatch = true,
