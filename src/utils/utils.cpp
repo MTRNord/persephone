@@ -49,7 +49,8 @@
  * @param status_code The status code to be set for the response.
  */
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
-                  const std::string &errorcode, const std::string &error,
+                  const std::string_view errorcode,
+                  const std::string_view error,
                   const HttpStatusCode status_code) {
   generic_json::generic_json_error const json_error{.errcode = errorcode,
                                                     .error = error};
@@ -389,7 +390,8 @@ get_srv_record(const std::string &address) {
  * @return A Task that will eventually contain a ResolvedServer object
  * representing the discovered server.
  */
-[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name) {
+[[nodiscard]] Task<ResolvedServer>
+discover_server(std::string_view server_name) {
   /*
    * If the hostname is an IP literal, then that IP address should be used,
    * together with the given port number, or 8448 if no port is given. The
@@ -400,8 +402,8 @@ get_srv_record(const std::string &address) {
   LOG_DEBUG << "Discovering server: " << server_name;
   // If there is a colon then use the thing after the last colon as the port
   // otherwise make it an empty optional
-  const std::optional<std::string> port =
-      [&server_name]() -> std::optional<std::string> {
+  const std::optional<std::string_view> port =
+      [&server_name]() -> std::optional<std::string_view> {
     if (const auto pos = server_name.find_last_of(':');
         pos != std::string::npos) {
       return server_name.substr(pos + 1);
@@ -414,22 +416,22 @@ get_srv_record(const std::string &address) {
   // Server name with the port removed. If no port is given, this is the same as
   // the server name. Use the port optional to determine if the port should be
   // removed.
-  auto address = [&server_name, &port]() -> std::string {
+  auto address = [&server_name, &port]() -> std::string_view {
     if (port.has_value()) {
       return server_name.substr(0, server_name.find_last_of(':'));
     }
     return server_name;
   }();
-  if (auto clean_address = remove_brackets(address);
+  if (auto clean_address = remove_brackets(std::string(address));
       check_if_ip_address(clean_address)) {
     unsigned long integer_port = MATRIX_SSL_PORT;
     if (port.has_value()) {
-      integer_port = std::stoul(port.value());
+      integer_port = std::stoul(std::string(port.value()));
     }
     co_return ResolvedServer{
-        .address = address,
+        .address = std::string(address),
         .port = integer_port,
-        .server_name = server_name,
+        .server_name = std::string(server_name),
     };
   }
 
@@ -442,9 +444,9 @@ get_srv_record(const std::string &address) {
    */
   if (port.has_value()) {
     co_return ResolvedServer{
-        .address = address,
-        .port = std::stoul(port.value()),
-        .server_name = server_name,
+        .address = std::string(address),
+        .port = std::stoul(std::string(port.value())),
+        .server_name = std::string(server_name),
     };
   }
 
@@ -478,8 +480,8 @@ get_srv_record(const std::string &address) {
         auto delegated_server_name = m_server.value();
         // If there is a colon then use the thing after the last colon as the
         // port otherwise make it an empty optional
-        const std::optional<std::string> delegated_port =
-            [&delegated_server_name]() -> std::optional<std::string> {
+        const std::optional<std::string_view> delegated_port =
+            [&delegated_server_name]() -> std::optional<std::string_view> {
           if (const auto pos = delegated_server_name.find_last_of(':');
               pos != std::string::npos) {
             return delegated_server_name.substr(pos + 1);
@@ -491,33 +493,34 @@ get_srv_record(const std::string &address) {
         // same as the server name. Use the port optional to determine if the
         // port should be removed.
         auto delegated_address = [&delegated_server_name,
-                                  &delegated_port]() -> std::string {
+                                  &delegated_port]() -> std::string_view {
           if (delegated_port.has_value()) {
             return delegated_server_name.substr(
                 0, delegated_server_name.find_last_of(':'));
           }
           return delegated_server_name;
         }();
-        if (auto delegated_clean_address = remove_brackets(delegated_address);
+        if (auto delegated_clean_address =
+                remove_brackets(std::string(delegated_address));
             check_if_ip_address(delegated_clean_address)) {
           unsigned long integer_port = MATRIX_SSL_PORT;
           if (delegated_port.has_value()) {
-            integer_port = std::stoul(delegated_port.value());
+            integer_port = std::stoul(std::string(delegated_port.value()));
           }
           co_return ResolvedServer{
-              .address = delegated_address,
+              .address = std::string(delegated_address),
               .port = integer_port,
               // TODO: Verify this is correct
-              .server_name = server_name,
+              .server_name = std::string(server_name),
           };
         }
 
         if (delegated_port.has_value()) {
           co_return ResolvedServer{
-              .address = delegated_address,
-              .port = std::stoul(delegated_port.value()),
+              .address = std::string(delegated_address),
+              .port = std::stoul(std::string(delegated_port.value())),
               // TODO: Verify this is correct
-              .server_name = server_name,
+              .server_name = std::string(server_name),
           };
         }
 
@@ -530,7 +533,7 @@ get_srv_record(const std::string &address) {
                 .address = server.host,
                 .port = server.port,
                 // TODO: Verify this is correct
-                .server_name = server_name,
+                .server_name = std::string(server_name),
             };
           }
         } catch (const std::exception &err) {
@@ -548,7 +551,7 @@ get_srv_record(const std::string &address) {
                 .address = server.host,
                 .port = server.port,
                 // TODO: Verify this is correct
-                .server_name = server_name,
+                .server_name = std::string(server_name),
             };
           }
         } catch (const std::exception &err) {
@@ -558,10 +561,10 @@ get_srv_record(const std::string &address) {
         }
 
         co_return ResolvedServer{
-            .address = delegated_address,
+            .address = std::string(delegated_address),
             .port = MATRIX_SSL_PORT,
             // TODO: Verify this is correct
-            .server_name = server_name,
+            .server_name = std::string(server_name),
         };
       }
     }
@@ -591,7 +594,7 @@ get_srv_record(const std::string &address) {
       co_return ResolvedServer{
           .address = server.host,
           .port = server.port,
-          .server_name = server_name,
+          .server_name = std::string(server_name),
       };
     }
   } catch (const std::exception &err) {
@@ -608,7 +611,7 @@ get_srv_record(const std::string &address) {
       co_return ResolvedServer{
           .address = server.host,
           .port = server.port,
-          .server_name = server_name,
+          .server_name = std::string(server_name),
       };
     }
   } catch (const std::exception &err) {
@@ -618,9 +621,9 @@ get_srv_record(const std::string &address) {
   }
 
   co_return ResolvedServer{
-      .address = address,
+      .address = std::string(address),
       .port = MATRIX_SSL_PORT,
-      .server_name = server_name,
+      .server_name = std::string(server_name),
   };
 }
 
@@ -745,10 +748,10 @@ federation_request(const HTTPRequest request) {
   const auto auth_header = generate_ss_authheader(authheader_data);
   const auto req = HttpRequest::newHttpRequest();
   req->setMethod(request.method);
-  req->setPath(request.path);
+  req->setPath(std::string(request.path));
   req->addHeader("Authorization", auth_header);
   req->removeHeader("Host");
-  req->addHeader("Host", request.target);
+  req->addHeader("Host", std::string(request.target));
 
   co_return co_await request.client->sendRequestCoro(req, request.timeout);
 }
@@ -770,7 +773,23 @@ federation_request(const HTTPRequest request) {
  * @return A VerifyKeyData object that contains the server's key data.
  */
 [[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config) {
+  LOG_DEBUG << "Getting server key data from: "
+            << config.matrix_config.server_key_location;
+
   std::ifstream t(config.matrix_config.server_key_location);
+
+  // Check if the file at `config.matrix_config.server_key_location` exists and
+  // fail if it doesn't
+  if (!t.is_open()) {
+    throw std::runtime_error("Failed to open server key file");
+  }
+  if (!t.good()) {
+    throw std::runtime_error("Failed to read server key file");
+  }
+  if (t.peek() == std::ifstream::traits_type::eof()) {
+    throw std::runtime_error("Server key file is empty");
+  }
+
   std::string const server_key((std::istreambuf_iterator<char>(t)),
                                std::istreambuf_iterator<char>());
   std::istringstream buffer(server_key);

@@ -34,7 +34,7 @@ Database::create_user(Database::UserCreationData const data) {
   // TODO: If we have a guest registering we are required to always
   // generate this.
   auto device_id = data.device_id.value_or(random_string(DEVICE_ID_LENGTH));
-  auto password_hash = hash_password(data.password);
+  auto password_hash = hash_password(std::string(data.password));
   auto matrix_id = data.matrix_id;
   auto device_name = data.device_name.value_or(random_string(DEVICE_ID_LENGTH));
 
@@ -76,7 +76,8 @@ Database::create_user(Database::UserCreationData const data) {
   co_return resp_data;
 }
 
-[[nodiscard]] drogon::Task<bool> Database::user_exists(std::string matrix_id) {
+[[nodiscard]] drogon::Task<bool>
+Database::user_exists(std::string_view matrix_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -97,7 +98,7 @@ Database::create_user(Database::UserCreationData const data) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-Database::get_user_info(const std::string auth_token) {
+Database::get_user_info(const std::string_view auth_token) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -135,7 +136,7 @@ Database::get_user_info(const std::string auth_token) {
 }
 
 [[nodiscard]] drogon::Task<bool>
-Database::validate_access_token(std::string auth_token) {
+Database::validate_access_token(std::string_view auth_token) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -179,7 +180,7 @@ Database::login(const LoginData login_data) {
     // Check if the password matches
     if (const auto password_hash =
             query.at(0)["password_hash"].as<std::string>();
-        !verify_hashed_password(password_hash, login_data.password)) {
+        !verify_hashed_password(password_hash, std::string(login_data.password))) {
       throw std::runtime_error("Password does not match");
     }
 
@@ -224,7 +225,7 @@ Database::login(const LoginData login_data) {
 
 [[nodiscard]] drogon::Task<void>
 Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
-                   std::vector<json> events, const std::string room_id) {
+                   std::vector<json> events, const std::string_view room_id) {
   try {
     for (const auto &event : events) {
       co_await Database::add_event(transaction, event, room_id);
@@ -237,7 +238,7 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
 
 [[nodiscard]] drogon::Task<void>
 Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
-                    json event, const std::string room_id) {
+                    json event, const std::string_view room_id) {
   std::string auth_events_str = "{}";
   if (event.contains("auth_events")) {
     // We need the auth_events as TEXT[] so we need to map the json array to a
@@ -289,9 +290,9 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
  * and not as a full PDU
  */
 [[nodiscard]] drogon::Task<json>
-Database::get_state_event(const std::string room_id,
-                          const std::string event_type,
-                          const std::string state_key) {
+Database::get_state_event(const std::string_view room_id,
+                          const std::string_view event_type,
+                          const std::string_view state_key) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";

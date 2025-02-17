@@ -19,9 +19,9 @@ using json = nlohmann::json;
 
 struct [[nodiscard]] CreateRoomStateBuildData {
   client_server_json::CreateRoomBody createRoom_body;
-  std::string room_id;
-  std::string user_id;
-  std::string room_version;
+  std::string_view room_id;
+  std::string_view user_id;
+  std::string_view room_version;
 };
 
 [[nodiscard]] std::vector<json>

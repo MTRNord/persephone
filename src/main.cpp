@@ -19,8 +19,8 @@
 
 static constexpr int DATABASE_CONNECTIONS = 10;
 
-trantor::Logger::LogLevel logLevelFromStr(const std::string &level) {
-  const auto lowered_level = to_lower(level);
+trantor::Logger::LogLevel logLevelFromStr(const std::string_view level) {
+  const auto lowered_level = to_lower(std::string(level));
   if (level == "trace") {
     return trantor::Logger::LogLevel::kTrace;
   }
@@ -39,7 +39,7 @@ trantor::Logger::LogLevel logLevelFromStr(const std::string &level) {
   if (level == "fatal") {
     return trantor::Logger::LogLevel::kFatal;
   }
-  throw std::runtime_error("Invalid log level: " + level);
+  throw std::runtime_error("Invalid log level: " + std::string(level));
 }
 
 int main() {

@@ -58,24 +58,25 @@ struct [[nodiscard]] ResolvedServer {
 struct [[nodiscard]] HTTPRequest {
   drogon::HttpClientPtr client;
   drogon::HttpMethod method;
-  std::string path;
-  std::string key_id;
+  std::string_view path;
+  std::string_view key_id;
   std::vector<unsigned char> secret_key;
-  std::string origin;
-  std::string target;
+  std::string_view origin;
+  std::string_view target;
   std::optional<json> content;
   int timeout;
 };
 
 struct [[nodiscard]] VerifyKeyData {
-  std::vector<unsigned char> private_key;
-  std::string public_key_base64;
-  std::string key_id;
-  std::string key_type;
+  const std::vector<unsigned char> private_key;
+  const std::string public_key_base64;
+  const std::string key_id;
+  const std::string key_type;
 };
 
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
-                  const std::string &errorcode, const std::string &error,
+                  const std::string_view errorcode,
+                  const std::string_view error,
                   const HttpStatusCode status_code);
 
 [[nodiscard]] std::string random_string(const std::size_t len);
@@ -86,7 +87,8 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                                           const std::string &password);
 
 // Get the localpart of a user's matrix id.
-[[nodiscard]] constexpr std::string localpart(const std::string &matrix_id) {
+[[nodiscard]] constexpr std::string_view
+localpart(const std::string_view matrix_id) {
   return matrix_id.substr(1, matrix_id.find(':') - 1);
 }
 
@@ -113,7 +115,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
  * ```
  */
 [[nodiscard]] constexpr std::string
-migrate_localpart(const std::string &localpart) {
+migrate_localpart(const std::string_view localpart) {
   std::string migrated_localpart;
   migrated_localpart.reserve(localpart.size());
 
@@ -203,8 +205,8 @@ migrate_localpart(const std::string &localpart) {
  * @return true if the localpart is valid, false otherwise
  */
 [[nodiscard]] constexpr bool
-is_valid_localpart(const std::string &localpart,
-                   const std::string &server_name) {
+is_valid_localpart(const std::string_view localpart,
+                   const std::string_view server_name) {
   for (auto const &character : localpart) {
     if (std::isdigit(character) || (character >= 'a' && character <= 'z') ||
         (character == '-' || character == '.' || character == '=' ||
@@ -231,7 +233,8 @@ is_valid_localpart(const std::string &localpart,
  * @return The server part of the input string.
  * @throws std::runtime_error If no colon is found in the input string.
  */
-[[nodiscard]] constexpr std::string get_serverpart(const std::string &input) {
+[[nodiscard]] constexpr std::string_view
+get_serverpart(const std::string_view input) {
   if (const size_t pos = input.find(':'); pos != std::string::npos) {
     // Case: Colon found in input string
     return input.substr(pos + 1);
@@ -241,16 +244,17 @@ is_valid_localpart(const std::string &localpart,
 
 [[nodiscard]] std::vector<SRVRecord> get_srv_record(const std::string &address);
 
-[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
+[[nodiscard]] Task<ResolvedServer>
+discover_server(std::string_view server_name);
 
 struct [[nodiscard]] AuthheaderData {
-  const std::string &server_name;
-  const std::string &key_id;
+  const std::string_view server_name;
+  const std::string_view key_id;
   const std::vector<unsigned char> &secret_key;
-  const std::string &method;
-  const std::string &request_uri;
-  const std::string &origin;
-  const std::string &target;
+  const std::string_view method;
+  const std::string_view request_uri;
+  const std::string_view origin;
+  const std::string_view target;
   const std::optional<json> &content;
 };
 
@@ -352,7 +356,7 @@ template <typename... Args> debug(Args &&...) -> debug<Args...>;
  * @param method The drogon::HttpMethod to be converted.
  * @return The string representation of the drogon::HttpMethod.
  */
-[[nodiscard]] constexpr std::string
+[[nodiscard]] constexpr std::string_view
 drogon_to_string_method(const drogon::HttpMethod &method) {
   switch (method) {
   case drogon::HttpMethod::Get:
@@ -376,7 +380,7 @@ drogon_to_string_method(const drogon::HttpMethod &method) {
 }
 
 [[nodiscard]] constexpr std::string
-generate_room_id(const std::string &server_name) {
+generate_room_id(const std::string_view server_name) {
   if (server_name.empty()) {
     throw std::invalid_argument(
         "Missing server_name when generating room_id. Please contact the "
@@ -389,7 +393,7 @@ generate_room_id(const std::string &server_name) {
 
   // Generate a random opaque_id
   constexpr auto opaque_id_start_length = 16;
-  auto opaque_id = random_string(opaque_id_start_length);
+  std::string opaque_id{random_string(opaque_id_start_length)};
 
   // Check if the combined length of the server name, `!`, opaque_id, and `:`
   // exceeds 255 bytes and if it does truncate the opaque_id until it fits

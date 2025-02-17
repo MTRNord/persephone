@@ -3,14 +3,16 @@
 #include <drogon/HttpAppFramework.h>
 #include <drogon/drogon_test.h>
 #include <drogon/utils/coroutine.h>
+#include <string_view>
 #include <utils/utils.hpp>
+using namespace std::string_view_literals;
 
 DROGON_TEST(DiscoveryTest) {
   auto discovery_test = [TEST_CTX]() -> drogon::Task<> {
     const auto *const server_name = "matrix.org";
 
     const auto result = co_await discover_server(server_name);
-    CO_REQUIRE(result.address == "matrix-federation.matrix.org");
+    CO_REQUIRE(result.address == "matrix-federation.matrix.org"sv);
     CO_REQUIRE(result.port == 443);
     CO_REQUIRE(result.server_name == server_name);
 

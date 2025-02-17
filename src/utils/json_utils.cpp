@@ -93,8 +93,8 @@ unbase64_key(const std::string &input) {
  * @return The signed JSON object.
  * @throw std::runtime_error If the signing fails.
  */
-[[nodiscard]] json sign_json(const std::string &server_name,
-                             const std::string &key_id,
+[[nodiscard]] json sign_json(const std::string_view server_name,
+                             const std::string_view key_id,
                              const std::vector<unsigned char> &secret_key,
                              json json_data) {
   if (json_data.is_null()) {

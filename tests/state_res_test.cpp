@@ -5,6 +5,7 @@
 #include <chrono>
 #include <fstream>
 #include <snitch/snitch.hpp>
+#include <string_view>
 #include <utils/errors.hpp>
 #include <utils/json_utils.hpp>
 #include <utils/room_utils.hpp>
@@ -12,6 +13,7 @@
 #include <vector>
 
 using json = nlohmann::json;
+using namespace std::string_view_literals;
 
 TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
   SECTION("Redact Event Based on v11 Rules") {
@@ -48,7 +50,7 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
       }
     )"_json;
 
-    json redacted_event = redact(event, "11");
+    json redacted_event = redact(event, "11"sv);
 
     // Verify the presence of specific keys that should be preserved
     REQUIRE(redacted_event.contains("event_id"));
@@ -143,7 +145,7 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
       }
     )"_json;
 
-    json redacted_event = redact(event, "11");
+    json redacted_event = redact(event, "11"sv);
 
     // Verify the presence of specific keys that should be preserved
     REQUIRE(redacted_event.contains("event_id"));
@@ -194,7 +196,7 @@ TEST_CASE("EventID", "[event_ids]") {
       }
     )"_json;
 
-    const json generated_event_id = event_id(event, "11");
+    const json generated_event_id = event_id(event, "11"sv);
 
     REQUIRE(generated_event_id ==
             "$9ofI-OZYoOSm7YdDRD0uv0UQ5zYsPJw59ffHmPX5jlU");
@@ -280,8 +282,8 @@ TEST_CASE("EventID", "[event_ids]") {
       }
     )"_json;
 
-    const json generated_event_id = event_id(event_a, "11");
-    const json generated_event_id_b = event_id(event_b, "11");
+    const json generated_event_id = event_id(event_a, "11"sv);
+    const json generated_event_id_b = event_id(event_b, "11"sv);
 
     REQUIRE(generated_event_id != generated_event_id_b);
   }
@@ -348,14 +350,17 @@ rabbitmq:
 
   // Generate basic room data
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.name = "Test Room",
-                          .room_version = "11",
-                          .topic = "Test Topic"},
-      .room_id = "!test:localhost",
-      .user_id = "@test:localhost",
-      .room_version = "11"};
+      .createRoom_body = {.name = "Test Room"sv,
+                          .room_version = "11"sv,
+                          .topic = "Test Topic"sv},
+      .room_id = "!test:localhost"sv,
+      .user_id = "@test:localhost"sv,
+      .room_version = "11"sv};
 
   auto room_state = build_createRoom_state(data);
+
+  // ensure the key exists
+  json_utils::ensure_server_keys(config);
 
   // Sign all the state events
 

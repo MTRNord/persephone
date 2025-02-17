@@ -287,7 +287,7 @@ TEST_CASE("Matrix IDs", "[matrix_ids]") {
     const auto room_id = generate_room_id("example.com");
 
     // Check if room_id contains the server name after the ':' character
-    REQUIRE(room_id.find("example.com") != std::string::npos);
+    REQUIRE(room_id.find("example.com") != std::string_view::npos);
 
     // Check if the room_id starts with '!'
     REQUIRE(room_id[0] == '!');

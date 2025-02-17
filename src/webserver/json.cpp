@@ -7,7 +7,7 @@
 namespace server_server_json {
 void from_json(const json &obj, MakeJoinResp &data_type) {
   if (obj.contains("room_version")) {
-    data_type.room_version = obj["room_version"].get<std::string>();
+    data_type.room_version = obj["room_version"].get<std::string_view>();
   }
   data_type.event = obj["event"].get<json::object_t>();
 }
@@ -22,7 +22,7 @@ void to_json(json &obj, const MakeJoinResp &data_type) {
 
 void from_json(const json &obj, well_known &data_type) {
   if (obj.contains("m.server")) {
-    data_type.m_server = obj["m.server"].get<std::string>();
+    data_type.m_server = obj["m.server"].get<std::string_view>();
   }
 }
 
@@ -38,16 +38,16 @@ namespace client_server_json {
 void from_json(const json &obj, StateEvent &data_type) {
   data_type.content = obj["content"].get<json::object_t>();
   if (obj.contains("state_key")) {
-    data_type.state_key = obj["state_key"].get<std::string>();
+    data_type.state_key = obj["state_key"].get<std::string_view>();
   } else {
     data_type.state_key = "";
   }
 
   if (obj.contains("event_id")) {
-    data_type.event_id = obj["event_id"].get<std::string>();
+    data_type.event_id = obj["event_id"].get<std::string_view>();
   }
 
-  data_type.type = obj["type"].get<std::string>();
+  data_type.type = obj["type"].get<std::string_view>();
 }
 
 void to_json(json &obj, const StateEvent &data_type) {
@@ -66,7 +66,7 @@ void from_json(const json &obj, PowerLevelEventContent &data_type) {
     data_type.ban = obj["ban"].get<int>();
   }
   if (obj.contains("events")) {
-    data_type.events = obj["events"].get<std::map<std::string, int>>();
+    data_type.events = obj["events"].get<std::map<std::string_view, int>>();
   }
   if (obj.contains("events_default")) {
     data_type.events_default = obj["events_default"].get<int>();
@@ -79,7 +79,7 @@ void from_json(const json &obj, PowerLevelEventContent &data_type) {
   }
   if (obj.contains("notifications")) {
     data_type.notifications =
-        obj["notifications"].get<std::map<std::string, int>>();
+        obj["notifications"].get<std::map<std::string_view, int>>();
   }
   if (obj.contains("redact")) {
     data_type.redact = obj["redact"].get<int>();
@@ -88,7 +88,7 @@ void from_json(const json &obj, PowerLevelEventContent &data_type) {
     data_type.state_default = obj["state_default"].get<int>();
   }
   if (obj.contains("users")) {
-    data_type.users = obj["users"].get<std::map<std::string, int>>();
+    data_type.users = obj["users"].get<std::map<std::string_view, int>>();
   }
   if (obj.contains("users_default")) {
     data_type.users_default = obj["users_default"].get<int>();
@@ -140,7 +140,7 @@ void from_json(const json &obj, CreateRoomBody &data_type) {
   }
 
   if (obj.contains("invite")) {
-    data_type.invite = obj["invite"].get<std::vector<std::string>>();
+    data_type.invite = obj["invite"].get<std::vector<std::string_view>>();
   }
 
   if (obj.contains("invite_3pid")) {
@@ -152,7 +152,7 @@ void from_json(const json &obj, CreateRoomBody &data_type) {
   }
 
   if (obj.contains("name")) {
-    data_type.name = obj["name"].get<std::string>();
+    data_type.name = obj["name"].get<std::string_view>();
   }
 
   if (obj.contains("power_level_content_override")) {
@@ -161,23 +161,23 @@ void from_json(const json &obj, CreateRoomBody &data_type) {
   }
 
   if (obj.contains("preset")) {
-    data_type.preset = obj["preset"].get<std::string>();
+    data_type.preset = obj["preset"].get<std::string_view>();
   }
 
   if (obj.contains("room_alias_name")) {
-    data_type.room_alias_name = obj["room_alias_name"].get<std::string>();
+    data_type.room_alias_name = obj["room_alias_name"].get<std::string_view>();
   }
 
   if (obj.contains("room_version")) {
-    data_type.room_version = obj["room_version"].get<std::string>();
+    data_type.room_version = obj["room_version"].get<std::string_view>();
   }
 
   if (obj.contains("topic")) {
-    data_type.topic = obj["topic"].get<std::string>();
+    data_type.topic = obj["topic"].get<std::string_view>();
   }
 
   if (obj.contains("visibility")) {
-    data_type.visibility = obj["visibility"].get<std::string>();
+    data_type.visibility = obj["visibility"].get<std::string_view>();
   }
 }
 
@@ -225,9 +225,9 @@ void to_json(json &obj, const CreateRoomBody &data_type) {
 
 void from_json(const json &obj, AuthenticationData &data_type) {
   if (obj.contains("session")) {
-    data_type.session = obj["session"].get<std::string>();
+    data_type.session = obj["session"].get<std::string_view>();
   }
-  data_type.type = obj["type"].get<std::string>();
+  data_type.type = obj["type"].get<std::string_view>();
 }
 
 void to_json(json &obj, const AuthenticationData &data_type) {
@@ -243,23 +243,23 @@ void from_json(const json &obj, registration_body &data_type) {
     data_type.auth = obj["auth"].get<AuthenticationData>();
   }
   if (obj.contains("device_id")) {
-    data_type.device_id = obj["device_id"].get<std::string>();
+    data_type.device_id = obj["device_id"].get<std::string_view>();
   }
   if (obj.contains("inhibit_login")) {
     data_type.inhibit_login = obj["inhibit_login"].get<bool>();
   }
   if (obj.contains("initial_device_display_name")) {
     data_type.initial_device_display_name =
-        obj["initial_device_display_name"].get<std::string>();
+        obj["initial_device_display_name"].get<std::string_view>();
   }
   if (obj.contains("password")) {
-    data_type.password = obj["password"].get<std::string>();
+    data_type.password = obj["password"].get<std::string_view>();
   }
   if (obj.contains("refresh_token")) {
     data_type.refresh_token = obj["refresh_token"].get<bool>();
   }
   if (obj.contains("username")) {
-    data_type.username = obj["username"].get<std::string>();
+    data_type.username = obj["username"].get<std::string_view>();
   }
 }
 
@@ -290,21 +290,21 @@ void to_json(json &obj, const registration_body &data_type) {
 }
 
 void from_json(const json &obj, login_identifier &data_type) {
-  data_type.type = obj["type"].get<std::string>();
+  data_type.type = obj["type"].get<std::string_view>();
   if (obj.contains("user")) {
-    data_type.user = obj["user"].get<std::string>();
+    data_type.user = obj["user"].get<std::string_view>();
   }
   if (obj.contains("medium")) {
-    data_type.medium = obj["medium"].get<std::string>();
+    data_type.medium = obj["medium"].get<std::string_view>();
   }
   if (obj.contains("address")) {
-    data_type.address = obj["address"].get<std::string>();
+    data_type.address = obj["address"].get<std::string_view>();
   }
   if (obj.contains("country")) {
-    data_type.country = obj["country"].get<std::string>();
+    data_type.country = obj["country"].get<std::string_view>();
   }
   if (obj.contains("phone")) {
-    data_type.phone = obj["phone"].get<std::string>();
+    data_type.phone = obj["phone"].get<std::string_view>();
   }
 }
 
@@ -330,33 +330,33 @@ void to_json(json &obj, const login_identifier &data_type) {
 
 void from_json(const json &obj, login_body &data_type) {
   if (obj.contains("address")) {
-    data_type.address = obj["address"].get<std::string>();
+    data_type.address = obj["address"].get<std::string_view>();
   }
   if (obj.contains("device_id")) {
-    data_type.device_id = obj["device_id"].get<std::string>();
+    data_type.device_id = obj["device_id"].get<std::string_view>();
   }
   if (obj.contains("identifier")) {
     data_type.identifier = obj["identifier"].get<login_identifier>();
   }
   if (obj.contains("initial_device_display_name")) {
     data_type.initial_device_display_name =
-        obj["initial_device_display_name"].get<std::string>();
+        obj["initial_device_display_name"].get<std::string_view>();
   }
   if (obj.contains("medium")) {
-    data_type.medium = obj["medium"].get<std::string>();
+    data_type.medium = obj["medium"].get<std::string_view>();
   }
   if (obj.contains("password")) {
-    data_type.password = obj["password"].get<std::string>();
+    data_type.password = obj["password"].get<std::string_view>();
   }
   if (obj.contains("refresh_token")) {
     data_type.refresh_token = obj["refresh_token"].get<bool>();
   }
   if (obj.contains("token")) {
-    data_type.token = obj["token"].get<std::string>();
+    data_type.token = obj["token"].get<std::string_view>();
   }
-  data_type.type = obj["type"].get<std::string>();
+  data_type.type = obj["type"].get<std::string_view>();
   if (obj.contains("user")) {
-    data_type.user = obj["user"].get<std::string>();
+    data_type.user = obj["user"].get<std::string_view>();
   }
 }
 
@@ -410,12 +410,12 @@ void to_json(json &obj, const well_known &data_type) {
 }
 
 void from_json(const json &obj, login_resp &data_type) {
-  data_type.access_token = obj["access_token"].get<std::string>();
-  data_type.device_id = obj["device_id"].get<std::string>();
+  data_type.access_token = obj["access_token"].get<std::string_view>();
+  data_type.device_id = obj["device_id"].get<std::string_view>();
   data_type.expires_in_ms = obj["expires_in_ms"].get<long>();
-  data_type.home_server = obj["home_server"].get<std::string>();
-  data_type.refresh_token = obj["refresh_token"].get<std::string>();
-  data_type.user_id = obj["user_id"].get<std::string>();
+  data_type.home_server = obj["home_server"].get<std::string_view>();
+  data_type.refresh_token = obj["refresh_token"].get<std::string_view>();
+  data_type.user_id = obj["user_id"].get<std::string_view>();
   data_type.well_known = obj["well_known"].get<well_known>();
 }
 
@@ -440,18 +440,18 @@ void to_json(json &obj, const login_resp &data_type) {
 
 void from_json(const json &obj, registration_resp &data_type) {
   if (obj.contains("access_token")) {
-    data_type.access_token = obj["access_token"].get<std::string>();
+    data_type.access_token = obj["access_token"].get<std::string_view>();
   }
   if (obj.contains("device_id")) {
-    data_type.device_id = obj["device_id"].get<std::string>();
+    data_type.device_id = obj["device_id"].get<std::string_view>();
   }
   if (obj.contains("expires_in_ms")) {
     data_type.expires_in_ms = obj["expires_in_ms"].get<long>();
   }
   if (obj.contains("refresh_token")) {
-    data_type.refresh_token = obj["refresh_token"].get<std::string>();
+    data_type.refresh_token = obj["refresh_token"].get<std::string_view>();
   }
-  data_type.user_id = obj["user_id"].get<std::string>();
+  data_type.user_id = obj["user_id"].get<std::string_view>();
 }
 
 void to_json(json &obj, const registration_resp &data_type) {
@@ -472,10 +472,10 @@ void to_json(json &obj, const registration_resp &data_type) {
 }
 
 void from_json(const json &obj, whoami_resp &data_type) {
-  data_type.user_id = obj["user_id"].get<std::string>();
+  data_type.user_id = obj["user_id"].get<std::string_view>();
   data_type.is_guest = obj["is_guest"].get<bool>();
   if (obj.contains("device_id")) {
-    data_type.device_id = obj["device_id"].get<std::string>();
+    data_type.device_id = obj["device_id"].get<std::string_view>();
   }
 }
 
@@ -490,7 +490,7 @@ void to_json(json &obj, const whoami_resp &data_type) {
 
 void from_json(const json &obj, JoinBody &data_type) {
   if (obj.contains("reason")) {
-    data_type.reason = obj["reason"].get<std::string>();
+    data_type.reason = obj["reason"].get<std::string_view>();
   }
   if (obj.contains("third_party_signed")) {
     data_type.third_party_signed =

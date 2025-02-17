@@ -261,10 +261,10 @@ void ClientServerCtrl::login_post(
     // create an access token
     try {
       const auto supplied_user_id = login_body.identifier->user.value();
-      const auto user_id_lower = to_lower(supplied_user_id);
+      const auto user_id_lower = to_lower(std::string(supplied_user_id));
       // If the user id does not start with @, we assume it is a localpart
       // and append the server name
-      const std::string user_id =
+      const std::string_view user_id =
           user_id_lower[0] == '@'
               ? user_id_lower
               : std::format("@{}:{}", user_id_lower,

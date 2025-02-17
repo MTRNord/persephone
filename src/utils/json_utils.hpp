@@ -14,8 +14,8 @@ namespace json_utils {
                          std::array<unsigned char, crypto_sign_SECRETKEYBYTES>>
 generate_server_key();
 
-[[nodiscard]] json sign_json(const std::string &server_name,
-                             const std::string &key_id,
+[[nodiscard]] json sign_json(const std::string_view server_name,
+                             const std::string_view key_id,
                              const std::vector<unsigned char> &secret_key,
                              json json_data);
 

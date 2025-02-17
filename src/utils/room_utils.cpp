@@ -6,8 +6,8 @@
 
 namespace {
 json get_powerlevels_pdu(
-    const std::string &room_version, const std::string &sender,
-    const std::string &room_id,
+    const std::string_view room_version, const std::string_view sender,
+    const std::string_view room_id,
     const std::optional<client_server_json::PowerLevelEventContent>
         &power_level_override) {
   json power_level_event = {

@@ -14,6 +14,7 @@
 #include <sodium/utils.h>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -43,7 +44,7 @@ namespace {
   json event_copy(event);
 
   auto erase_unpreserved_keys = [](json &original_event) {
-    const std::unordered_set<std::string> preserved_keys{
+    const std::unordered_set<std::string_view> preserved_keys{
         "event_id",    "type",        "room_id",    "sender",
         "state_key",   "hashes",      "signatures", "depth",
         "prev_events", "auth_events", "content",    "origin_server_ts"};
@@ -57,7 +58,8 @@ namespace {
   };
 
   auto redact_content =
-      [](json &content, const std::unordered_set<std::string> &allowed_keys) {
+      [](json &content,
+         const std::unordered_set<std::string_view> &allowed_keys) {
         for (auto it = content.begin(); it != content.end();) {
           if (!allowed_keys.contains(it.key())) {
             it = content.erase(it);
@@ -289,7 +291,7 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
     // event_map sorting We do this in a loop to make sure we get the correct
     // power level
     for (const auto &event : event_map | std::views::values) {
-      if (event.at("type").get<std::string>() == "m.room.power_levels") {
+      if (event.at("type").get<std::string_view>() == "m.room.power_levels") {
         const auto content = event.at("content").get<json::object_t>();
         if (content.contains("users")) {
           const auto users = content.at("users").get<json::object_t>();
@@ -481,22 +483,22 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
         &current_partial_state,
     StateEvent &event) {
   // If type is m.room.create
-  if (event["type"].get<std::string>() == "m.room.create") {
+  if (event["type"].get<std::string_view>() == "m.room.create") {
     // If it has any prev_events, reject.
     if (event.contains("prev_events")) {
       return false;
     }
     // If the domain of the room_id does not match the domain of the sender,
     // reject.
-    const auto room_id = event["room_id"].get<std::string>();
-    const auto sender = event["sender"].get<std::string>();
+    const auto room_id = event["room_id"].get<std::string_view>();
+    const auto sender = event["sender"].get<std::string_view>();
     if (!matchDomain(room_id, sender)) {
       return false;
     }
 
     // If content.room_version is present and is not a recognised version,
     // reject.
-    if (event["content"]["room_version"].get<std::string>() != "11") {
+    if (event["content"]["room_version"].get<std::string_view>() != "11") {
       return false;
     }
 
@@ -506,14 +508,16 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   // Considering the event's auth_events:
 
   // If there are duplicate entries for a given type and state_key pair, reject.
-  auto auth_events_ids = event["auth_events"].get<std::vector<std::string>>();
+  auto auth_events_ids =
+      event["auth_events"].get<std::vector<std::string_view>>();
 
   std::map<EventType, std::map<StateKey, StateEvent>> auth_events_map;
   for (const auto &[event_type, inner_map] : current_partial_state) {
     for (const auto &[state_key, state_event] : inner_map) {
       if (auto state_event_pure = state_event;
-          std::ranges::find(auth_events_ids,
-                            state_event_pure["event_id"].get<std::string>()) !=
+          std::ranges::find(
+              auth_events_ids,
+              state_event_pure["event_id"].get<std::string_view>()) !=
           auth_events_ids.end()) {
         // Check if the (event_type, state_key) pair already exists
         if (!auth_events_map[event_type].contains(state_key)) {
@@ -532,7 +536,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   // specification, reject.
 
   // Set of allowed EventType values
-  std::set<std::string> allowedEventTypes = {
+  std::set<std::string_view> allowedEventTypes = {
       "m.room.create", "m.room.power_levels", "m.room.member"};
 
   // Find invalid EventTypes using std::find_if
@@ -573,11 +577,11 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 [[nodiscard]] bool auth_against_partial_state(
     std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
     StateEvent &event) {
-  if (event["type"].get<std::string>() == "m.room.create") {
+  if (event["type"].get<std::string_view>() == "m.room.create") {
     if (!event["content"].contains("room_version")) {
       return false;
     }
-    if (event["content"]["room_version"].get<std::string>() == "11") {
+    if (event["content"]["room_version"].get<std::string_view>() == "11") {
       return auth_against_partial_state_version_11(current_partial_state,
                                                    event);
     }
@@ -586,7 +590,8 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
     if (!create_event["content"].contains("room_version")) {
       return false;
     }
-    if (create_event["content"]["room_version"].get<std::string>() == "11") {
+    if (create_event["content"]["room_version"].get<std::string_view>() ==
+        "11") {
       return auth_against_partial_state_version_11(current_partial_state,
                                                    event);
     }
@@ -622,13 +627,13 @@ void mainline_iterate(
   }
   power_level_mainline.push_back(event);
   for (auto &auth_event_id : event["auth_events"]) {
-    const std::string actual_auth_event_id = auth_event_id.get<std::string>();
+    const auto actual_auth_event_id = auth_event_id.get<std::string_view>();
 
     // Get the actual auth event object from the auth events map
     StateEvent auth_event_obj;
     for (const auto &inner_map : auth_events | std::views::values) {
       for (const auto &state_event : inner_map | std::views::values) {
-        if (state_event["event_id"].get<std::string>() ==
+        if (state_event["event_id"].get<std::string_view>() ==
             actual_auth_event_id) {
           auth_event_obj = state_event;
           break;
@@ -670,7 +675,7 @@ void mainline_iterate(
     // For each auth event of the event if the auth event is of type
     // m.room.powerlevel then call func_closest_iterate recursively
     for (const auto &auth_event_id : inner_event["auth_events"]) {
-      const std::string actual_auth_event_id = auth_event_id.get<std::string>();
+      const auto actual_auth_event_id = auth_event_id.get<std::string_view>();
 
       // Get the actual auth event object from the auth events map
       StateEvent auth_event_obj;
@@ -721,18 +726,18 @@ void mainline_iterate(
 [[nodiscard]] std::vector<StateEvent>
 sorted_normal_state_events(std::vector<StateEvent> normal_events) {
   auto compare_events = [](StateEvent &first, StateEvent &second) {
-    if (first["position_on_mainline"].get<std::string>() !=
-        second["position_on_mainline"].get<std::string>()) {
-      return first["position_on_mainline"].get<std::string>() <
-             second["position_on_mainline"].get<std::string>();
+    if (first["position_on_mainline"].get<std::string_view>() !=
+        second["position_on_mainline"].get<std::string_view>()) {
+      return first["position_on_mainline"].get<std::string_view>() <
+             second["position_on_mainline"].get<std::string_view>();
     }
     if (first["origin_server_ts"].get<time_t>() !=
         second["origin_server_ts"].get<time_t>()) {
       return first["origin_server_ts"].get<time_t>() <
              second["origin_server_ts"].get<time_t>();
     }
-    return first["event_id"].get<std::string>() <
-           second["event_id"].get<std::string>();
+    return first["event_id"].get<std::string_view>() <
+           second["event_id"].get<std::string_view>();
   };
 
   std::ranges::sort(normal_events, compare_events);
@@ -754,11 +759,12 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
  * @return A JSON object redacted according to the specified room version rules.
  * @throw MatrixRoomVersionError If the room version is not "11".
  */
-[[nodiscard]] json redact(const json &event, const std::string &room_version) {
+[[nodiscard]] json redact(const json &event,
+                          const std::string_view room_version) {
   if (room_version == "11") {
     return v11_redact(event);
   }
-  throw MatrixRoomVersionError(room_version);
+  throw MatrixRoomVersionError(std::string(room_version));
 }
 
 /**
@@ -777,12 +783,12 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
  * @throw MatrixRoomVersionError If the room version is not "11".
  */
 [[nodiscard]] std::vector<unsigned char>
-reference_hash(const json &event, const std::string &room_version) {
+reference_hash(const json &event, const std::string_view room_version) {
   if (room_version == "11") {
     return reference_hash_v11(event);
   }
 
-  throw MatrixRoomVersionError(room_version);
+  throw MatrixRoomVersionError(std::string(room_version));
 }
 
 /**
@@ -806,7 +812,7 @@ reference_hash(const json &event, const std::string &room_version) {
  * @throw std::runtime_error If the base64 encoding fails.
  */
 [[nodiscard]] std::string event_id(const json &event,
-                                   const std::string &room_version) {
+                                        const std::string_view room_version) {
   if (event == nullptr) {
     throw std::invalid_argument("Event cannot be null");
   }
@@ -874,34 +880,34 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   // classed as a "control" event for reverse topological sorting. If not then
   // the event will be mainline sorted.
   auto is_control_event = [](StateEvent event) {
-    if (event["type"].get<std::string>() == "m.room.power_levels") {
+    if (event["type"].get<std::string_view>() == "m.room.power_levels") {
       // Power level events with an empty state key are control events.
-      if (event["state_key"].get<std::string>().empty()) {
+      if (event["state_key"].get<std::string_view>().empty()) {
         return true;
       }
     }
-    if (event["type"].get<std::string>() == "m.room.join_rules") {
+    if (event["type"].get<std::string_view>() == "m.room.join_rules") {
       // Join rule events with an empty state key are control events.
-      if (event["state_key"].get<std::string>().empty()) {
+      if (event["state_key"].get<std::string_view>().empty()) {
         return true;
       }
     }
-    if (event["type"].get<std::string>() == "m.room.member") {
+    if (event["type"].get<std::string_view>() == "m.room.member") {
       // Membership events must not have an empty state key.
-      if (event["state_key"].get<std::string>().empty()) {
+      if (event["state_key"].get<std::string_view>().empty()) {
         return false;
       }
       // Membership events are only control events if the sender does not match
       // the state key, i.e. because the event is caused by an admin or
       // moderator.
-      if (event["state_key"].get<std::string>() ==
-          event["sender"].get<std::string>()) {
+      if (event["state_key"].get<std::string_view>() ==
+          event["sender"].get<std::string_view>()) {
         return false;
       }
       // Membership events are only control events if the "membership" key in
       // the content is "leave" or "ban" so we need to extract the content.
-      if (event["content"]["membership"].get<std::string>() == "leave" ||
-          event["content"]["membership"].get<std::string>() == "ban") {
+      if (event["content"]["membership"].get<std::string_view>() == "leave" ||
+          event["content"]["membership"].get<std::string_view>() == "ban") {
         return true;
       }
     }
@@ -940,7 +946,7 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto resolved_power_level_event = partial_state["m.room.power_levels"][""];
   if (resolved_power_level_event.is_null()) {
     for (auto &event : conflicted_control_events_sorted) {
-      if (event["type"].get<std::string>() == "m.room.power_levels") {
+      if (event["type"].get<std::string_view>() == "m.room.power_levels") {
         resolved_power_level_event = event;
         break;
       }

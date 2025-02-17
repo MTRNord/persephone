@@ -14,6 +14,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using json = nlohmann::json;
@@ -43,13 +44,14 @@ struct [[nodiscard]] StateEventSets {
   std::vector<StateEvent> unconflictedEvents;
 };
 
-[[nodiscard]] json redact(const json &event, const std::string &room_version);
+[[nodiscard]] json redact(const json &event,
+                          const std::string_view room_version);
 
 [[nodiscard]] std::vector<unsigned char>
-reference_hash(const json &event, const std::string &room_version);
+reference_hash(const json &event, const std::string_view room_version);
 
 [[nodiscard]] std::string event_id(const json &event,
-                                   const std::string &room_version);
+                                        const std::string_view room_version);
 
 /**
  * @brief Compares the domain parts of two strings.
@@ -64,8 +66,8 @@ reference_hash(const json &event, const std::string &room_version);
  * @return A boolean value indicating whether the domain parts of the two
  * strings are equal.
  */
-[[nodiscard]] constexpr bool matchDomain(const std::string &str1,
-                                         const std::string &str2) {
+[[nodiscard]] constexpr bool matchDomain(const std::string_view str1,
+                                         const std::string_view str2) {
   // If they are empty there is no domain to compare
   if (str1.empty() || str2.empty()) {
     return false;
@@ -76,8 +78,8 @@ reference_hash(const json &event, const std::string &room_version);
   const size_t pos2 = str2.find(':');
 
   // Extract the domain parts after ':'
-  const std::string domain1 = str1.substr(pos1 + 1);
-  const std::string domain2 = str2.substr(pos2 + 1);
+  const std::string_view domain1 = str1.substr(pos1 + 1);
+  const std::string_view domain2 = str2.substr(pos2 + 1);
 
   // Compare the domain parts
   return domain1 == domain2;
@@ -129,7 +131,7 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks);
 // NOTE: THIS ONLY WORKS FOR THE ROOM CREATION CURRENTLY!
 constexpr void
 find_auth_event_for_event_on_create(std::vector<StateEvent> &events,
-                                    const std::string &room_version) {
+                                    const std::string_view room_version) {
   // We need to linearly add events to the known_events. An event can never
   // reference itself or the event after it.
   std::vector<StateEvent> known_events;
