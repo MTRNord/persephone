@@ -14,7 +14,7 @@ BuildRequires:  git
 BuildRequires:  json-devel
 BuildRequires:  uuid-devel
 BuildRequires:  jsoncpp-devel
-BuildRequires:  zlib-ng-devel
+BuildRequires:  zlib-devel
 BuildRequires:  openssl-devel
 BuildRequires:  ldns-devel
 BuildRequires:  libevent-devel
@@ -26,7 +26,7 @@ BuildRequires:  libpq-devel
 Requires:       yaml-cpp
 Requires:       uuid
 Requires:       jsoncpp
-Requires:       zlib-ng
+Requires:       zlib
 Requires:       openssl
 Requires:       ldns
 Requires:       libevent
