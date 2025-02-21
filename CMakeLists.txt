@@ -156,11 +156,15 @@ endif ()
 target_compile_options(persephone PRIVATE
         ${COMPILE_OPTIONS}
 )
-target_link_options(persephone PRIVATE
-        -fsanitize=address
-        -fsanitize=undefined
-        -fsanitize=leak
-)
+
+# if debug building
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_options(persephone PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
+    )
+endif ()
 
 # Install target
 install(TARGETS persephone

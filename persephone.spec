@@ -23,6 +23,10 @@ BuildRequires:  yaml-cpp-devel
 BuildRequires:  libicu-devel
 BuildRequires:  libsodium-devel
 BuildRequires:  libpq-devel
+# Sanitizers since they might be needed when building the debug version
+BuildRequires:  libasan
+BuildRequires:  libubsan
+BuildRequires:  liblsan
 
 Requires:       yaml-cpp
 Requires:       uuid
