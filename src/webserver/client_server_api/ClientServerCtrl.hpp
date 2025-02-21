@@ -14,6 +14,16 @@
 #include <optional>
 #include <utility>
 #include <vector>
+#ifdef __GNUC__
+// Ignore false positives (see https://github.com/nlohmann/json/issues/3808)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#include "nlohmann/json.hpp"
+#pragma GCC diagnostic pop
+#else
+#include <nlohmann/json.hpp>
+#endif
 
 using namespace drogon;
 

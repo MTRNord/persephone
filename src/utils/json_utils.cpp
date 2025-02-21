@@ -7,7 +7,6 @@
 #include <format>
 #include <fstream>
 #include <map>
-#include <nlohmann/json.hpp>
 #include <sodium/crypto_sign.h>
 #include <sodium/utils.h>
 #include <stdexcept>
