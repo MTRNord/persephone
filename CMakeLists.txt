@@ -29,8 +29,8 @@ set(CMAKE_MODULE_PATH
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
-# Define options for amqpcpp
-set(AMQP-CPP_BUILD_SHARED ON)
+# Static linking as we dont have it on our target systems
+set(AMQP-CPP_BUILD_SHARED OFF)
 set(AMQP-CPP_LINUX_TCP ON)
 # amqp-cpp
 FetchContent_Declare(
