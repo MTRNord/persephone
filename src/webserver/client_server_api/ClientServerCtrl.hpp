@@ -79,7 +79,7 @@ public:
 
 protected:
   drogon::Task<UserValidData> getUserInfo(
-      std::string req_auth_header,
+      const std::string &req_auth_header,
       const std::function<void(const HttpResponsePtr &)> &callback) const;
 
   void versions(const HttpRequestPtr &,

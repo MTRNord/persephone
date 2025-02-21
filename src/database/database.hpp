@@ -30,22 +30,22 @@ public:
   static void migrate();
 
   struct [[nodiscard]] UserCreationData {
-    std::string_view matrix_id;
-    std::optional<std::string_view> device_id;
-    std::optional<std::string_view> device_name;
-    std::string_view password;
+    std::string matrix_id;
+    std::optional<std::string> device_id;
+    std::optional<std::string> device_name;
+    std::string password;
   };
 
   struct [[nodiscard]] UserCreationResp {
-    std::string_view access_token;
-    std::string_view device_id;
+    std::string access_token;
+    std::string device_id;
   };
 
   struct [[nodiscard]] UserInfo {
     // Optional for appservices
-    std::optional<std::string_view> device_id;
+    std::optional<std::string> device_id;
     bool is_guest;
-    std::string_view user_id;
+    std::string user_id;
   };
 
   struct [[nodiscard]] LoginData {
@@ -82,4 +82,7 @@ public:
   get_state_event(const std::string_view room_id,
                   const std::string_view event_type,
                   const std::string_view state_key);
+
+  [[nodiscard]] static drogon::Task<json>
+  get_pushrules_for_user(const std::string user_id);
 };

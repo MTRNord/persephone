@@ -11,6 +11,7 @@ void Migrator::migrate() {
   migration_v1();
   migration_v2();
   migration_v3();
+  migration_v4();
 
   LOG_INFO << "Finished database migration";
 }
@@ -51,7 +52,10 @@ void Migrator::migration_v1() {
     }
     LOG_DEBUG << "First time migrating to v1";
     const auto transPtr = sql->newTransaction();
-    assert(transPtr);
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
 
     /* Global events table
        This is meant to be accompanied by various views for per-room data */
@@ -187,7 +191,10 @@ void Migrator::migration_v2() {
     }
     LOG_DEBUG << "First time migrating to v2";
     const auto transPtr = sql->newTransaction();
-    assert(transPtr);
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
 
     /* Used to generate the users table
      These are LOCAL users only.*/
@@ -234,7 +241,10 @@ void Migrator::migration_v3() {
     }
     LOG_DEBUG << "First time migrating to v3\n";
     const auto transPtr = sql->newTransaction();
-    assert(transPtr);
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
 
     /*Create an index for state events*/
     const auto query_1 =
@@ -246,6 +256,52 @@ void Migrator::migration_v3() {
     const auto query_2 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (3);");
     query_2.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v4() {
+  LOG_INFO << "Starting database migration v3->v4";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 4) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v3->v4 already ran\n";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v4\n";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /*Create an account data table*/
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS public.account_data(id SERIAL PRIMARY KEY, "
+        "user_id TEXT NOT NULL references users (matrix_id), type TEXT NOT "
+        "NULL, json TEXT NOT NULL);");
+    query_1.wait();
+
+    /*Create an account data table*/
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS push_rules(id SERIAL PRIMARY KEY, user_id "
+        "TEXT NOT NULL references users (matrix_id), json TEXT NOT NULL);");
+    query_2.wait();
+
+    /* Mark the migration as completed */
+    const auto query_3 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (4);");
+    query_3.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

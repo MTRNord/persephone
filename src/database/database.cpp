@@ -29,7 +29,10 @@ Database::create_user(Database::UserCreationData const data) {
   }
 
   const auto transPtr = co_await sql->newTransactionCoro();
-  assert(transPtr);
+  if (transPtr == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
 
   // TODO: If we have a guest registering we are required to always
   // generate this.
@@ -56,6 +59,17 @@ Database::create_user(Database::UserCreationData const data) {
     co_await transPtr->execSqlCoro(
         "INSERT INTO users(matrix_id, password_hash) VALUES($1, $2)", matrix_id,
         password_hash);
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to create user due to database error");
+  }
+
+  // Create the default pushrules for the user
+  try {
+    const auto default_rules = get_default_pushrules(std::string(matrix_id));
+    co_await transPtr->execSqlCoro(
+        "INSERT INTO push_rules(user_id, json) VALUES($1, $2)", matrix_id,
+        default_rules.dump());
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to create user due to database error");
@@ -151,7 +165,29 @@ Database::validate_access_token(std::string_view auth_token) {
     LOG_DEBUG << "Access token: " << auth_token;
     LOG_DEBUG << "Exists: " << query.at(0)["exists"].as<bool>();
 
-    co_return query.at(0)["exists"].as<bool>();
+    if (query.at(0)["exists"].as<bool>()) {
+      // Check if push_rules has a rule for the user
+      const auto push_rules_query = co_await sql->execSqlCoro(
+          "select exists(select 1 from push_rules where user_id = "
+          "(select matrix_id from devices where access_token = $1)) as exists",
+          auth_token);
+
+      if (!push_rules_query.at(0)["exists"].as<bool>()) {
+        // Create the default pushrules for the user
+        const auto matrix_id_query = co_await sql->execSqlCoro(
+            "select matrix_id from devices where access_token = $1",
+            auth_token);
+        const auto matrix_id =
+            matrix_id_query.at(0)["matrix_id"].as<std::string>();
+        const auto default_rules = get_default_pushrules(matrix_id);
+        co_await sql->execSqlCoro(
+            "INSERT INTO push_rules(user_id, json) VALUES($1, $2)", matrix_id,
+            default_rules.dump());
+      }
+
+      co_return true;
+    }
+    co_return false;
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     co_return false;
@@ -180,7 +216,8 @@ Database::login(const LoginData login_data) {
     // Check if the password matches
     if (const auto password_hash =
             query.at(0)["password_hash"].as<std::string>();
-        !verify_hashed_password(password_hash, std::string(login_data.password))) {
+        !verify_hashed_password(password_hash,
+                                std::string(login_data.password))) {
       throw std::runtime_error("Password does not match");
     }
 
@@ -318,5 +355,28 @@ Database::get_state_event(const std::string_view room_id,
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to get state event due to database error");
+  }
+}
+
+[[nodiscard]] drogon::Task<json>
+Database::get_pushrules_for_user(std::string user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT json FROM push_rules WHERE user_id = $1", user_id);
+
+    if (query.empty()) {
+      throw std::runtime_error("Pushrules not found");
+    }
+
+    auto json_data = json::parse(query.at(0)["json"].as<std::string>());
+    co_return json_data;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to get pushrules due to database error");
   }
 }

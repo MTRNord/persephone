@@ -231,12 +231,12 @@ void to_json(json &obj, const AuthenticationData &data_type);
 
 struct [[nodiscard]] registration_body {
   std::optional<AuthenticationData> auth;
-  std::optional<std::string_view> device_id;
+  std::optional<std::string> device_id;
   std::optional<bool> inhibit_login;
-  std::optional<std::string_view> initial_device_display_name;
-  std::optional<std::string_view> password;
+  std::optional<std::string> initial_device_display_name;
+  std::optional<std::string> password;
   std::optional<bool> refresh_token;
-  std::optional<std::string_view> username;
+  std::optional<std::string> username;
 };
 
 void from_json(const json &obj, registration_body &data_type);
@@ -335,7 +335,7 @@ struct [[nodiscard]] FlowInformation {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FlowInformation, stages)
 
 struct [[nodiscard]] incomplete_registration_resp {
-  std::string_view session;
+  std::string session;
   std::array<FlowInformation, 1> flows;
 };
 

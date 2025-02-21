@@ -143,6 +143,26 @@ pipeline {
                 }
             }
         }
+
+        stage('Package with CPack') {
+            steps {
+                container('fedora') {
+                    sh '''
+                    CC=/usr/bin/gcc CXX=/usr/bin/g++ cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+                    cd cmake-build-release
+                    ninja package
+                    '''
+                }
+            }
+        }
+
+        stage('Publish Artifacts') {
+            steps {
+                container('fedora') {
+                    archiveArtifacts artifacts: 'cmake-build-release/persephone-*.deb, cmake-build-release/persephone-*.rpm, cmake-build-release/persephone-*.tar.gz', allowEmptyArchive: true
+                }
+            }
+        }
     }
 
     post {

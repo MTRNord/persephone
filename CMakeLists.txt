@@ -25,6 +25,8 @@ include(cmake/CPM.cmake)
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
+
 # Dependencies
 find_package(Drogon 1.9.9 REQUIRED)
 find_package(Sodium REQUIRED)
@@ -42,13 +44,17 @@ pkg_check_modules(libevent REQUIRED)
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
 
+# Define options for amqpcpp
+set(AMQP-CPP_BUILD_SHARED ON)
+set(AMQP-CPP_LINUX_TCP ON)
 # amqp-cpp
-CPMAddPackage(
-        NAME amqpcpp
-        GITHUB_REPOSITORY CopernicaMarketingSoftware/AMQP-CPP
-        VERSION 4.3.27
-        OPTIONS "AMQP-CPP_BUILD_SHARED ON" "AMQP-CPP_LINUX_TCP ON"
+FetchContent_Declare(
+        amqpcpp
+        GIT_REPOSITORY https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
+        GIT_TAG v4.3.27
+        EXCLUDE_FROM_ALL
 )
+FetchContent_MakeAvailable(amqpcpp)
 
 # Include directories
 include_directories(
@@ -88,8 +94,8 @@ target_link_libraries(persephone PRIVATE
         amqpcpp
         event
 )
-# Set warning levels and other compiler options
-target_compile_options(persephone PRIVATE
+# Default list of compile options applying to all compilers
+set(COMPILE_OPTIONS
         -DJSON_DIAGNOSTICS=1
         -Wshadow
         -Wconversion
@@ -99,11 +105,66 @@ target_compile_options(persephone PRIVATE
         -Wextra
         -Werror
 )
+
+# If clang we have to ignore the unknown-warning-option check since it gets confused with gcc and werror
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    list(APPEND COMPILE_OPTIONS
+            -Wno-error=unknown-warning-option)
+endif ()
+
+# Set warning levels and other compiler options
+target_compile_options(persephone PRIVATE
+        ${COMPILE_OPTIONS}
+)
 target_link_options(persephone PRIVATE
         -fsanitize=address
         -fsanitize=undefined
         -fsanitize=leak
 )
+
+# Install target
+install(TARGETS persephone
+        RUNTIME DESTINATION bin
+)
+
+# Packaging
+set(CPACK_PACKAGE_NAME "persephone")
+set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Persephone Project")
+set(CPACK_PACKAGE_VENDOR "MTRNord")
+
+# Specify the license file
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+
+# Specify the readme file
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
+set(CPACK_VERBATIM_VARIABLES TRUE)
+set(CPACK_STRIP_FILES TRUE)
+set(CPACK_THREADS 0)
+
+if (WIN32)
+    set(CPACK_GENERATOR ZIP WIX NSIS)
+elseif (APPLE)
+    set(CPACK_GENERATOR TGZ productbuild PACKAGEMAKER DRAGNDROP BUNDLE)
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR TGZ RPM DEB)
+
+    # Deb settings
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "MTRNord")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "uuid, libjsoncpp25, zlib1g, openssl, libldns3t64, libevent-2.1-7t64, libyaml-cpp0.8, libicu74, libsodium23")
+
+
+    set(CPACK_RPM_PACKAGE_AUTOREQPROV no)
+    set(CPACK_RPM_PACKAGE_REQUIRES "uuid, jsoncpp, zlib-ng, openssl, ldns, libevent, yaml-cpp, icu, libsodium")
+
+    # TODO: Make libdrogon work as a subpackage/direct dependency and statically link it
+else ()
+    set(CPACK_GENERATOR TGZ)
+endif ()
+
+include(CPack)
 
 # Tests
 option(DISABLE_TESTS "Disable tests" ON)
@@ -142,9 +203,7 @@ if (NOT DISABLE_TESTS)
             event
     )
     target_link_options(utils_test PRIVATE
-            -fsanitize=address
-            -fsanitize=undefined
-            -fsanitize=leak
+            ${COMPILE_OPTIONS}
     )
 
     add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
@@ -161,9 +220,7 @@ if (NOT DISABLE_TESTS)
             event
     )
     target_link_options(state_res_test PRIVATE
-            -fsanitize=address
-            -fsanitize=undefined
-            -fsanitize=leak
+            ${COMPILE_OPTIONS}
     )
 
     add_executable(config_test tests/config_test.cpp ${SOURCES})
@@ -180,9 +237,7 @@ if (NOT DISABLE_TESTS)
             event
     )
     target_link_options(config_test PRIVATE
-            -fsanitize=address
-            -fsanitize=undefined
-            -fsanitize=leak
+            ${COMPILE_OPTIONS}
     )
 
 
@@ -200,9 +255,7 @@ if (NOT DISABLE_TESTS)
             event
     )
     target_link_options(drogon_tests PRIVATE
-            -fsanitize=address
-            -fsanitize=undefined
-            -fsanitize=leak
+            ${COMPILE_OPTIONS}
     )
 
     add_custom_target(tests
