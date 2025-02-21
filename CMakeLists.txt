@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.25)
 project(persephone VERSION 0.1.0 LANGUAGES CXX C)
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
@@ -25,21 +25,6 @@ include(cmake/CPM.cmake)
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
-
-# Dependencies
-find_package(Drogon 1.9.9 REQUIRED)
-find_package(Sodium REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(yaml-cpp REQUIRED)
-#  ldns
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
-# icu for unicode support
-find_package(ICU COMPONENTS uc REQUIRED)
-# libevent
-pkg_check_modules(libevent REQUIRED)
-
 # nlohmann_json
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
@@ -53,8 +38,41 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
         GIT_TAG v4.3.27
         EXCLUDE_FROM_ALL
+        SYSTEM
 )
 FetchContent_MakeAvailable(amqpcpp)
+unset(AMQP-CPP_BUILD_SHARED)
+unset(AMQP-CPP_LINUX_TCP)
+
+#drogon
+set(BUILD_CTL OFF)
+set(BUILD_EXAMPLES OFF)
+set(BUILD_SHARED_LIBS OFF)
+set(BUILD_BROTLI OFF)
+set(BUILD_YAML_CONFIG OFF)
+set(BUILD_POSTGRESQL ON)
+FetchContent_Declare(
+        drogon
+        GIT_REPOSITORY https://github.com/drogonframework/drogon.git
+        GIT_TAG v1.9.9
+        EXCLUDE_FROM_ALL
+        SYSTEM
+)
+FetchContent_MakeAvailable(drogon)
+
+
+# Dependencies
+find_package(Sodium REQUIRED)
+find_package(ZLIB REQUIRED)
+find_package(yaml-cpp REQUIRED)
+#  ldns
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
+# icu for unicode support
+find_package(ICU COMPONENTS uc REQUIRED)
+# libevent
+pkg_check_modules(libevent REQUIRED)
+
 
 # Include directories
 include_directories(
@@ -84,7 +102,7 @@ set(SOURCES
 # Executable
 add_executable(persephone ${SOURCES} src/main.cpp)
 target_link_libraries(persephone PRIVATE
-        Drogon::Drogon
+        drogon
         nlohmann_json::nlohmann_json
         yaml-cpp
         sodium
@@ -191,7 +209,7 @@ if (NOT DISABLE_TESTS)
 
     add_executable(utils_test tests/utils_test.cpp ${SOURCES})
     target_link_libraries(utils_test PRIVATE
-            Drogon::Drogon
+            drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium
@@ -208,7 +226,7 @@ if (NOT DISABLE_TESTS)
 
     add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
     target_link_libraries(state_res_test PRIVATE
-            Drogon::Drogon
+            drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium
@@ -225,7 +243,7 @@ if (NOT DISABLE_TESTS)
 
     add_executable(config_test tests/config_test.cpp ${SOURCES})
     target_link_libraries(config_test PRIVATE
-            Drogon::Drogon
+            drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium
@@ -243,7 +261,7 @@ if (NOT DISABLE_TESTS)
 
     add_executable(drogon_tests tests/drogon_tests.cpp ${SOURCES})
     target_link_libraries(drogon_tests PRIVATE
-            Drogon::Drogon
+            drogon
             nlohmann_json::nlohmann_json
             yaml-cpp
             sodium

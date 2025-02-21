@@ -20,6 +20,7 @@ BuildRequires:  libevent-devel
 BuildRequires:  yaml-cpp-devel
 BuildRequires:  libicu-devel
 BuildRequires:  libsodium-devel
+BuildRequires:  libpq-devel
 
 Requires:       yaml-cpp
 Requires:       uuid
@@ -31,6 +32,7 @@ Requires:       libevent
 Requires:       yaml-cpp
 Requires:       icu
 Requires:       libsodium
+Requires:       libpq
 
 %description
 %{summary}.
