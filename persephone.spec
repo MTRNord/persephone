@@ -31,14 +31,10 @@ BuildRequires:  liblsan
 Requires:       yaml-cpp
 Requires:       uuid
 Requires:       jsoncpp
-Requires:       zlib
 Requires:       openssl
 Requires:       ldns
-Requires:       libevent
 Requires:       yaml-cpp
 Requires:       icu
-Requires:       libsodium
-Requires:       libpq
 
 %description
 %{summary}.
