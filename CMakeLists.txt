@@ -68,6 +68,28 @@ find_package(yaml-cpp REQUIRED)
 #  ldns
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LDNS REQUIRED IMPORTED_TARGET ldns)
+
+# If the include directory of ldns is `/usr/include/ldns/ldns` we replace it with `/usr/include/ldns`. This is a packaging bug on fedora
+if (LDNS_FOUND AND LDNS_INCLUDE_DIRS MATCHES "/usr/include/ldns/ldns")
+    string(REGEX REPLACE "/usr/include/ldns/ldns" "/usr/include/ldns" LDNS_INCLUDE_DIRS ${LDNS_INCLUDE_DIRS})
+endif ()
+# Also ensure INTERFACE_INCLUDE_DIRECTORIES is fixed
+if (LDNS_FOUND AND TARGET PkgConfig::LDNS)
+    get_target_property(LDNS_INCLUDE_DIRS PkgConfig::LDNS INTERFACE_INCLUDE_DIRECTORIES)
+    if (LDNS_INCLUDE_DIRS MATCHES "/usr/include/ldns/ldns")
+        string(REGEX REPLACE "/usr/include/ldns/ldns" "/usr/include/ldns" LDNS_INCLUDE_DIRS ${LDNS_INCLUDE_DIRS})
+        set_target_properties(PkgConfig::LDNS PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${LDNS_INCLUDE_DIRS})
+    endif ()
+endif ()
+
+get_target_property(VAR PkgConfig::LDNS INTERFACE_INCLUDE_DIRECTORIES)
+message(STATUS "INTERFACE_INCLUDE_DIRECTORIES: ${VAR}")
+get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_LIBRARIES)
+message(STATUS "INTERFACE_LINK_LIBRARIES: ${VAR}")
+get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_DIRECTORIES)
+message(STATUS "INTERFACE_LINK_DIRECTORIES: ${VAR}")
+
+
 # icu for unicode support
 find_package(ICU COMPONENTS uc REQUIRED)
 # libevent
