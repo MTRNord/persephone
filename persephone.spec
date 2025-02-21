@@ -40,6 +40,8 @@ Requires:       libpq
 
 %prep
 %setup -q -n %{name}-%{version}
+# Fix ldns include path
+sed -i 's%includedir=/usr/include/ldns/ldns%includedir=/usr/include/ldns%g' /usr/lib64/pkgconfig/ldns.pc
 
 %build
 %cmake .
