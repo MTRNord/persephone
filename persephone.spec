@@ -10,6 +10,7 @@ Source0:        %{name}-%{version}.tar.gz
 BuildRequires:  cmake
 BuildRequires:  gcc
 BuildRequires:  g++
+BuildRequires:  git
 BuildRequires:  json-devel
 BuildRequires:  uuid-devel
 BuildRequires:  jsoncpp-devel
