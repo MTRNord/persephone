@@ -238,10 +238,10 @@ void Migrator::migration_v3() {
         "select exists(select 1 from migrations where version = 3) as exists");
 
     if (query.get().at(0)["exists"].as<bool>()) {
-      LOG_INFO << "Migration v2->v3 already ran\n";
+      LOG_INFO << "Migration v2->v3 already ran";
       return;
     }
-    LOG_DEBUG << "First time migrating to v3\n";
+    LOG_DEBUG << "First time migrating to v3";
     const auto transPtr = sql->newTransaction();
     if (transPtr == nullptr) {
       LOG_FATAL << "No database connection available";
@@ -277,10 +277,10 @@ void Migrator::migration_v4() {
         "select exists(select 1 from migrations where version = 4) as exists");
 
     if (query.get().at(0)["exists"].as<bool>()) {
-      LOG_INFO << "Migration v3->v4 already ran\n";
+      LOG_INFO << "Migration v3->v4 already ran";
       return;
     }
-    LOG_DEBUG << "First time migrating to v4\n";
+    LOG_DEBUG << "First time migrating to v4";
     const auto transPtr = sql->newTransaction();
     if (transPtr == nullptr) {
       LOG_FATAL << "No database connection available";
@@ -324,10 +324,10 @@ void Migrator::migration_v5() {
         "select exists(select 1 from migrations where version = 5) as exists");
 
     if (query.get().at(0)["exists"].as<bool>()) {
-      LOG_INFO << "Migration v4->v5 already ran\n";
+      LOG_INFO << "Migration v4->v5 already ran";
       return;
     }
-    LOG_DEBUG << "First time migrating to v4\n";
+    LOG_DEBUG << "First time migrating to v4";
     const auto transPtr = sql->newTransaction();
     if (transPtr == nullptr) {
       LOG_FATAL << "No database connection available";
