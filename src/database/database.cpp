@@ -317,7 +317,7 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
 
   // Update materialized views
   try {
-    co_await transaction->execSqlCoro("room_view_update($1);", room_id);
+    co_await transaction->execSqlCoro("SELECT room_view_update($1);", room_id);
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to update materialized view due to "
@@ -328,7 +328,8 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
   if (event.at("type").get<std::string>() == "m.room.member") {
     try {
       co_await transaction->execSqlCoro(
-          "user_view_update($1);", event.at("state_key").get<std::string>());
+          "SELECT user_view_update($1);",
+          event.at("state_key").get<std::string>());
     } catch (const drogon::orm::DrogonDbException &e) {
       LOG_ERROR << e.base().what();
       throw std::runtime_error("Failed to update materialized view due to "
