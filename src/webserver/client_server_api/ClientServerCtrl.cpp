@@ -935,3 +935,54 @@ void ClientServerCtrl::state(
     }
   });
 }
+void ClientServerCtrl::setFilter(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &userId) const {
+  drogon::async_run(
+      [req, callback = std::move(callback), userId]() -> drogon::Task<> {
+        try {
+          // Parse body as filter json
+          const auto filter = json::parse(req->body());
+
+          // Put the data in the db
+          const auto filter_id = co_await Database::set_filter(userId, filter);
+
+          // Return the filter id as json with a single key "filter_id"
+          const auto resp = HttpResponse::newHttpResponse();
+          resp->setBody(json({{"filter_id", filter_id}}).dump());
+          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+          resp->setStatusCode(k200OK);
+          callback(resp);
+          co_return;
+        } catch (const std::exception &e) {
+          return_error(callback, "M_UNKNOWN", "Failed to set filter",
+                       k500InternalServerError);
+          co_return;
+        }
+      });
+}
+
+void ClientServerCtrl::getFilter(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &userId, const std::string &filterId) const {
+  drogon::async_run([req, callback = std::move(callback), userId,
+                     filterId]() -> drogon::Task<> {
+    try {
+      const auto filter = co_await Database::get_filter(userId, filterId);
+
+      // Return the filter as json
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(filter.dump());
+      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setStatusCode(k200OK);
+      callback(resp);
+      co_return;
+    } catch (const std::exception &e) {
+      return_error(callback, "M_NOT_FOUND", "Failed to get filter",
+                   k404NotFound);
+      co_return;
+    }
+  });
+}

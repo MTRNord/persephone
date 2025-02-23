@@ -83,6 +83,14 @@ public:
       ClientServerCtrl::state,
       "/_matrix/client/v3/rooms/{1:roomId}/state/{2:eventType}/{3:stateKey}",
       Get, Options, "client_server_api::AccessTokenFilter");
+
+  // Filters
+  ADD_METHOD_TO(ClientServerCtrl::setFilter,
+                "/_matrix/client/v3/user/{1:userId}/filter", Post, Options,
+                "client_server_api::AccessTokenFilter");
+  ADD_METHOD_TO(ClientServerCtrl::getFilter,
+                "/_matrix/client/v3/user/{1:userId}/filter/{2:filterId}", Get,
+                Options, "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
 
   explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
@@ -134,6 +142,14 @@ protected:
              std::function<void(const HttpResponsePtr &)> &&callback,
              const std::string &roomId, const std::string &eventType,
              const std::optional<std::string> &state_key) const;
+
+  void setFilter(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &userId) const;
+
+  void getFilter(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &userId, const std::string &filterId) const;
 
 private:
   Config _config;

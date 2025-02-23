@@ -3,6 +3,7 @@
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <drogon/HttpAppFramework.h>
@@ -400,5 +401,82 @@ Database::get_pushrules_for_user(std::string user_id) {
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to get pushrules due to database error");
+  }
+}
+
+[[nodiscard]] drogon::Task<std::string>
+Database::set_filter(const std::string &user_id, const json &filter) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get existing filter by content
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT user_ids FROM filters WHERE json = $1", filter.dump());
+
+    if (query.empty()) {
+      // Insert a new filter
+      const auto query_result = co_await sql->execSqlCoro(
+          "INSERT INTO filters(user_ids, json) VALUES(ARRAY [$1], "
+          "$2) RETURNING id",
+          user_id, filter.dump());
+      // Return the id as a string
+      co_return query_result.at(0)["id"].as<std::string>();
+    }
+
+    // Check for all rows found if the user_id is already in the user_ids
+    // array
+    for (const auto &row : query) {
+      const std::vector<std::shared_ptr<std::string>> user_ids =
+          row["user_ids"].asArray<std::string>();
+      const auto it = std::ranges::find_if(
+          user_ids, [&user_id](const auto &id) { return *id == user_id; });
+      if (it != user_ids.end()) {
+        // Update the filter with the new user_id
+        const auto query_result = co_await sql->execSqlCoro(
+            "UPDATE filters SET user_ids = array_append(user_ids, $1) WHERE "
+            "json = $2 RETURNING id",
+            user_id, filter.dump());
+        co_return query_result.at(0)["id"].as<std::string>();
+      }
+    }
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to get filter due to database error");
+  }
+}
+drogon::Task<json> Database::get_filter(const std::string &user_id,
+                                        const std::string &filter_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get filter by id. Also then check if the user id is in the user_ids
+    // array. Otherwise throw.
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT json, user_ids FROM filters WHERE id = $1", filter_id);
+
+    if (query.empty()) {
+      throw std::runtime_error("Filter not found");
+    }
+
+    // Check if the user_id is in the user_ids array
+    const std::vector<std::shared_ptr<std::string>> user_ids =
+        query.at(0)["user_ids"].asArray<std::string>();
+    const auto it = std::ranges::find_if(
+        user_ids, [&user_id](const auto &id) { return *id == user_id; });
+    if (it == user_ids.end()) {
+      throw std::runtime_error("User not allowed to access filter");
+    }
+
+    // Return the json filter
+    co_return json::parse(query.at(0)["json"].as<std::string>());
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    throw std::runtime_error("Failed to get filter due to database error");
   }
 }
