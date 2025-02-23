@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS account_data
 (
     id      SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL references users (matrix_id),
+    user_id TEXT NOT NULL references public.users (matrix_id) UNIQUE,
     type    TEXT NOT NULL,
     json    TEXT NOT NULL
 );
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS account_data
 CREATE TABLE IF NOT EXISTS push_rules
 (
     id      SERIAL PRIMARY KEY,
-    user_id TEXT NOT NULL references users (matrix_id),
+    user_id TEXT NOT NULL references public.users (matrix_id) UNIQUE,
     json    TEXT NOT NULL
 );
 

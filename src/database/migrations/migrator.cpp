@@ -12,6 +12,7 @@ void Migrator::migrate() {
   migration_v2();
   migration_v3();
   migration_v4();
+  migration_v5();
 
   LOG_INFO << "Finished database migration";
 }
@@ -125,7 +126,8 @@ void Migrator::migration_v1() {
         "DECLARE state_key_cleared text; "
         "BEGIN "
         "    CASE "
-        "        WHEN NEW.state_key IS NOT NULL THEN "
+        "        WHEN NEW.state_key IS NOT NULL AND NEW.type = 'm.room.member' "
+        "THEN "
         "            state_key_cleared := "
         "REPLACE(REPLACE(REPLACE(NEW.state_key, '.', '_'), ':', '_'), '@', "
         "''); "
@@ -288,20 +290,82 @@ void Migrator::migration_v4() {
     /*Create an account data table*/
     const auto query_1 = transPtr->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS public.account_data(id SERIAL PRIMARY KEY, "
-        "user_id TEXT NOT NULL references users (matrix_id), type TEXT NOT "
-        "NULL, json TEXT NOT NULL);");
+        "user_id TEXT NOT NULL references public.users (matrix_id) UNIQUE, "
+        "type TEXT NOT NULL, json JSONB NOT NULL);");
     query_1.wait();
 
-    /*Create an account data table*/
+    /*Create a push_rules data table*/
     const auto query_2 = transPtr->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS push_rules(id SERIAL PRIMARY KEY, user_id "
-        "TEXT NOT NULL references users (matrix_id), json TEXT NOT NULL);");
+        "TEXT NOT NULL references public.users (matrix_id) UNIQUE, json JSONB "
+        "NOT NULL);");
     query_2.wait();
 
     /* Mark the migration as completed */
     const auto query_3 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (4);");
     query_3.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v5() {
+  LOG_INFO << "Starting database migration v4->v5";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 5) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v4->v5 already ran\n";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v4\n";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Migrate the events table */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD COLUMN json2 JSONB;");
+    query_1.wait();
+
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "UPDATE events SET json2 = to_json(json) WHERE LEFT(json, 1) = 'p' OR "
+        "LEFT(json, 1) = '{';");
+    query_2.wait();
+
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "UPDATE events SET json2 = to_json(json::numeric) WHERE LEFT(json, 1) "
+        "!= 'p' AND LEFT(json, 1) != '{';");
+    query_3.wait();
+
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("ALTER TABLE events DROP COLUMN json;");
+    query_4.wait();
+
+    const auto query_5 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events RENAME COLUMN json2 TO json;");
+    query_5.wait();
+
+    const auto query_6 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS filters(id SERIAL PRIMARY KEY, user_ids "
+        "TEXT[] NOT NULL UNIQUE, json JSONB NOT NULL UNIQUE);");
+    query_6.wait();
+
+    /* Mark the migration as completed */
+    const auto query_7 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (5);");
+    query_7.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

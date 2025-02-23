@@ -12,11 +12,14 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-
 # Set build type if not specified
 if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
+
+# LTO
+include(CheckIPOSupported)
+check_ipo_supported(RESULT supported OUTPUT error)
 
 include(FetchContent)
 include(cmake/CPM.cmake)
@@ -157,13 +160,30 @@ target_compile_options(persephone PRIVATE
         ${COMPILE_OPTIONS}
 )
 
+option(SANITIZERS_ENABLED "Enable sanitizers" OFF)
+
 # if debug building
-if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+if (SANITIZERS_ENABLED)
     target_compile_options(persephone PRIVATE
+            ${COMPILE_OPTIONS}
             -fsanitize=address
             -fsanitize=undefined
             -fsanitize=leak
     )
+    target_link_options(
+            persephone PRIVATE
+            -fsanitize=address
+            -fsanitize=undefined
+            -fsanitize=leak
+    )
+endif ()
+
+# LTO
+if (supported)
+    message(STATUS "IPO / LTO enabled")
+    set_property(TARGET persephone PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else ()
+    message(STATUS "IPO / LTO not supported: <${error}>")
 endif ()
 
 # Install target
