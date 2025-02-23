@@ -57,7 +57,7 @@ set(BUILD_POSTGRESQL ON)
 FetchContent_Declare(
         drogon
         GIT_REPOSITORY https://github.com/drogonframework/drogon.git
-        GIT_TAG v1.9.9
+        GIT_TAG v1.9.10
         EXCLUDE_FROM_ALL
         SYSTEM
 )
@@ -183,6 +183,26 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
             -fhardened
             -Wno-error=hardened
     )
+else ()
+    if (CMAKE_BUILD_TYPE STREQUAL "Release")
+        target_compile_options(persephone PRIVATE
+                -D_FORTIFY_SOURCE=3
+        )
+    endif ()
+
+    target_compile_options(persephone PRIVATE
+            -D_GLIBCXX_ASSERTIONS
+            -ftrivial-auto-var-init=zero
+            -fPIE
+            -fstack-protector-strong
+            -fstack-clash-protection
+    )
+    # if x86 gnu/linux we add -fcf-protection=full
+    if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_options(persephone PRIVATE
+                -fcf-protection=full
+        )
+    endif ()
 endif ()
 
 # LTO
