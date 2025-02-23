@@ -165,7 +165,6 @@ option(SANITIZERS_ENABLED "Enable sanitizers" OFF)
 # if debug building
 if (SANITIZERS_ENABLED)
     target_compile_options(persephone PRIVATE
-            ${COMPILE_OPTIONS}
             -fsanitize=address
             -fsanitize=undefined
             -fsanitize=leak
@@ -175,6 +174,14 @@ if (SANITIZERS_ENABLED)
             -fsanitize=address
             -fsanitize=undefined
             -fsanitize=leak
+    )
+endif ()
+
+# if gcc we add -fhardened
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(persephone PRIVATE
+            -fhardened
+            -Wno-error=hardened
     )
 endif ()
 
