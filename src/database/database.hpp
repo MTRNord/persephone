@@ -86,9 +86,9 @@ public:
   [[nodiscard]] static drogon::Task<json>
   get_pushrules_for_user(const std::string user_id);
 
-  [[nodiscard]] static drogon::Task<std::string>
-  set_filter(const std::string &user_id, const json &filter);
+  [[nodiscard]] static drogon::Task<std::string> set_filter(std::string user_id,
+                                                            json filter);
 
-  [[nodiscard]] static drogon::Task<json>
-  get_filter(const std::string &user_id, const std::string &filter_id);
+  [[nodiscard]] static drogon::Task<json> get_filter(std::string user_id,
+                                                     std::string filter_id);
 };

@@ -405,7 +405,7 @@ Database::get_pushrules_for_user(std::string user_id) {
 }
 
 [[nodiscard]] drogon::Task<std::string>
-Database::set_filter(const std::string &user_id, const json &filter) {
+Database::set_filter(std::string user_id, json filter) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -447,8 +447,8 @@ Database::set_filter(const std::string &user_id, const json &filter) {
     throw std::runtime_error("Failed to get filter due to database error");
   }
 }
-drogon::Task<json> Database::get_filter(const std::string &user_id,
-                                        const std::string &filter_id) {
+drogon::Task<json> Database::get_filter(std::string user_id,
+                                        std::string filter_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
