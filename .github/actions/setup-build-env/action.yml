@@ -1,0 +1,97 @@
+name: "Setup Build Environment"
+description: "Install dependencies, LLVM/Clang, and build Drogon for Persephone"
+
+inputs:
+  install-lcov:
+    description: "Whether to install lcov for coverage"
+    required: false
+    default: "false"
+  install-rpm:
+    description: "Whether to install rpm for packaging"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Restore cached Drogon
+      id: cache-drogon-restore
+      uses: actions/cache/restore@v4
+      with:
+        path: /tmp/drogon
+        key: ${{ runner.os }}-drogon-v1.9.12
+
+    - name: Install LLVM/Clang
+      shell: bash
+      run: |
+        sudo ${{ github.workspace }}/.github/llvm.sh 19 all
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        PACKAGES=(
+          ninja-build
+          nlohmann-json3-dev
+          libpq-dev
+          libsodium-dev
+          libjsoncpp-dev
+          uuid-dev
+          zlib1g-dev
+          openssl
+          libssl-dev
+          cmake
+          libyaml-cpp-dev
+          libldns-dev
+          libstdc++-11-dev
+          libevent-dev
+          libicu-dev
+        )
+        if [[ "${{ inputs.install-lcov }}" == "true" ]]; then
+          PACKAGES+=(lcov)
+        fi
+        if [[ "${{ inputs.install-rpm }}" == "true" ]]; then
+          PACKAGES+=(rpm)
+        fi
+        sudo apt-get install -y "${PACKAGES[@]}"
+        # jsoncpp is a bit weird on ubuntu vs fedora
+        sudo ln -sf /usr/include/jsoncpp/json/ /usr/include/json
+
+    - name: Build Drogon
+      shell: bash
+      run: |
+        pushd /tmp
+        if [ ! -d /tmp/drogon ]; then
+          git clone https://github.com/drogonframework/drogon
+        fi
+        pushd drogon
+        git fetch
+        git checkout v1.9.12 || git checkout origin/master
+        git submodule update --init
+        if [ ! -d /tmp/drogon/build ]; then
+          mkdir build
+        fi
+        pushd build
+        cmake -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_EXAMPLES=OFF \
+              -DBUILD_CTL=OFF \
+              -DBUILD_POSTGRESQL=ON \
+              -DBUILD_REDIS=OFF \
+              -DBUILD_SQLITE=OFF \
+              -DBUILD_MYSQL=OFF \
+              -DBUILD_ORM=ON \
+              -DBUILD_SHARED_LIBS=ON ..
+        make -j$(nproc)
+        sudo make install
+        sudo ln -sf /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
+        sudo ln -sf /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+        popd
+        popd
+        popd
+
+    - name: Save Drogon cache
+      uses: actions/cache/save@v4
+      if: steps.cache-drogon-restore.outputs.cache-hit != 'true'
+      with:
+        path: /tmp/drogon
+        key: ${{ runner.os }}-drogon-v1.9.12

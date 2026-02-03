@@ -1,0 +1,225 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKER_BUILDKIT: "1"
+  SERVER_NAME: "localhost"
+
+jobs:
+  # Build and run unit tests with code coverage
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          install-lcov: "true"
+
+      - name: Configure
+        run: |
+          cp ./.lcovrc ~/.lcovrc
+          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-debug \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DDISABLE_TESTS=OFF \
+            -DCODE_COVERAGE=ON
+
+      - name: Build and run tests with coverage
+        run: |
+          cd cmake-build-debug
+          make -j$(nproc) ccov-all
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: cmake-build-debug/ccov/all-merged/
+          retention-days: 30
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          directory: cmake-build-debug/ccov/all-merged/
+          fail_ci_if_error: false
+        continue-on-error: true
+
+  # Build with sanitizers (ASAN/UBSAN) to catch memory issues
+  sanitizers:
+    name: Build with Sanitizers
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      - name: Configure with Sanitizers
+        run: |
+          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-asan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DDISABLE_TESTS=OFF \
+            -DSANITIZERS_ENABLED=ON
+
+      - name: Build
+        run: |
+          cmake --build cmake-build-asan -j$(nproc)
+
+      - name: Run tests with sanitizers
+        run: |
+          cd cmake-build-asan
+          ctest --output-on-failure --timeout 120
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:abort_on_error=1
+
+  # Gate for initial tests before running heavier integration tests
+  initial-tests-done:
+    name: Initial tests passed
+    needs: [build-and-test, sanitizers]
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Check initial tests passed
+        uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+
+  # Run Complement integration tests
+  complement:
+    name: "Complement Tests"
+    timeout-minutes: 60
+    needs: initial-tests-done
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache: false
+
+      - name: Install gotestfmt
+        run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+
+      # Attempt to check out the same branch of Complement as the PR. If it
+      # doesn't exist, fallback to main.
+      - name: Checkout Complement
+        shell: bash
+        run: |
+          mkdir -p complement
+          # Attempt to use the version of complement which best matches the current
+          # build. Depending on whether this is a PR or release, etc. we need to
+          # use different fallbacks.
+          #
+          # 1. First check if there's a similarly named branch (GITHUB_HEAD_REF
+          #    for pull requests, otherwise GITHUB_REF).
+          # 2. Attempt to use the base branch, e.g. when merging into release-vX.Y
+          #    (GITHUB_BASE_REF for pull requests).
+          # 3. Use the default complement branch ("main").
+          for BRANCH_NAME in "$GITHUB_HEAD_REF" "$GITHUB_BASE_REF" "${GITHUB_REF#refs/heads/}" "main"; do
+            # Skip empty branch names and merge commits.
+            if [[ -z "$BRANCH_NAME" || $BRANCH_NAME =~ ^refs/pull/.* ]]; then
+              continue
+            fi
+            echo "Trying to fetch Complement branch: $BRANCH_NAME"
+            (wget -O - "https://github.com/matrix-org/complement/archive/$BRANCH_NAME.tar.gz" | tar -xz --strip-components=1 -C complement) && break
+          done
+
+      - name: Build Complement homeserver image
+        run: |
+          docker build -t complement-persephone -f complement/Dockerfile .
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Run Complement Tests
+        run: |
+          set -o pipefail
+          cd complement
+          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi 2>&1 | tee results.json | gotestfmt -hide all || true
+        env:
+          COMPLEMENT_BASE_IMAGE: complement-persephone
+        continue-on-error: true
+
+      - name: Upload Complement logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Complement Logs - ${{ job.status }}
+          path: |
+            complement/results.json
+          retention-days: 14
+
+  # Package with CPack
+  package:
+    name: Package with CPack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: initial-tests-done
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+        with:
+          install-rpm: "true"
+
+      - name: Configure Release build
+        run: |
+          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-release \
+            -DCMAKE_BUILD_TYPE=Release \
+            -G Ninja
+
+      - name: Build Release
+        run: |
+          cmake --build cmake-build-release --config Release
+
+      - name: Create packages
+        run: |
+          cd cmake-build-release
+          cpack -G "TGZ;DEB;RPM" || cpack -G "TGZ;DEB"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            cmake-build-release/persephone-*.deb
+            cmake-build-release/persephone-*.rpm
+            cmake-build-release/persephone-*.tar.gz
+          retention-days: 30
+          if-no-files-found: warn
+
+  # Final gate for all tests
+  all-tests-done:
+    name: All tests passed
+    needs: [initial-tests-done, complement, package]
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Check all tests passed
+        uses: re-actors/alls-green@release/v1
+        with:
+          allowed-failures: complement
+          jobs: ${{ toJSON(needs) }}
