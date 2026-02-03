@@ -1,5 +1,5 @@
-FROM debian:trixie
-RUN apt-get update && apt-get install -y libevent-dev clang-19 python3 python3-pip postgresql pkg-config cmake nlohmann-json3-dev libpq-dev libsodium23 libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget gnupg libyaml-cpp-dev libldns-dev && apt-get upgrade -y
+FROM debian:forky
+RUN apt-get update && apt-get install -y libevent-dev clang-21 python3 python3-pip postgresql pkg-config cmake nlohmann-json3-dev libpq-dev libsodium23 libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev git lsb-release wget gnupg libyaml-cpp-dev libldns-dev && apt-get upgrade -y
 # jsoncpp is a bit weird on ubuntu vs fedora
 RUN ln -s /usr/include/jsoncpp/json/ /usr/include/json
 WORKDIR /build

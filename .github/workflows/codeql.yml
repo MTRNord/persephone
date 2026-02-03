@@ -36,9 +36,9 @@ jobs:
           key: ${{ runner.os }}-drogon
       - name: Install dependencies
         run: |
-          sudo ./.github/llvm.sh 19 all
-          which clang-19
-          which clang++-19
+          sudo ./.github/llvm.sh 21 all
+          which clang-21
+          which clang++-21
           sudo apt update
           sudo apt install -y ninja-build nlohmann-json3-dev libpq-dev libsodium-dev libjsoncpp-dev uuid-dev zlib1g-dev openssl libssl-dev cmake libyaml-cpp-dev libldns-dev libstdc++-11-dev
           sudo apt upgrade -y
@@ -51,7 +51,7 @@ jobs:
           git submodule update --init
           [ ! -d /tmp/drogon/build ] && mkdir build
           pushd build
-          cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
+          CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -DCMAKE_BUILD_TYPE=Debug -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON ..
           make && sudo make install
           sudo ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
           sudo ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
@@ -73,9 +73,9 @@ jobs:
 
       - name: Build
         run: |
-          /usr/bin/clang++-19 --version
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
-          CC=/usr/bin/clang-19 CXX=/usr/bin/clang++-19 cmake --build cmake-build-release --config Release
+          /usr/bin/clang++-21 --version
+          CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -S . -B cmake-build-release -DCMAKE_BUILD_TYPE=Release
+          CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake --build cmake-build-release --config Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
