@@ -16,6 +16,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 void Database::migrate() { Migrator::migrate(); }
@@ -52,11 +53,11 @@ Database::create_user(Database::UserCreationData const data) {
                                                  localpart_str.end());
 
   auto random_component = random_string(TOKEN_RANDOM_PART_LENGTH);
-  auto access_token =
-      std::format("persephone_{}_{}_{}", json_utils::base64_key(localpart_vec),
-                  random_component,
-                  base62_encode(crc32_helper(
-                      std::format("{}_{}", matrix_id, random_component))));
+  auto access_token = std::format(
+      "persephone_{}_{}_{}", json_utils::base64_urlencoded(localpart_vec),
+      random_component,
+      base62_encode(
+          crc32_helper(std::format("{}_{}", matrix_id, random_component))));
 
   try {
     co_await transPtr->execSqlCoro(
@@ -236,11 +237,11 @@ Database::login(const LoginData login_data) {
                                                    localpart_str.end());
 
     auto random_component = random_string(TOKEN_RANDOM_PART_LENGTH);
-    auto access_token =
-        std::format("persephone_{}_{}_{}",
-                    json_utils::base64_key(localpart_vec), random_component,
-                    base62_encode(crc32_helper(std::format(
-                        "{}_{}", login_data.matrix_id, random_component))));
+    auto access_token = std::format(
+        "persephone_{}_{}_{}", json_utils::base64_urlencoded(localpart_vec),
+        random_component,
+        base62_encode(crc32_helper(
+            std::format("{}_{}", login_data.matrix_id, random_component))));
 
     const auto safe_device_id = login_data.device_id.value_or(random_string(7));
     // Insert the device into the database

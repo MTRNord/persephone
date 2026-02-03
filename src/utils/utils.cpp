@@ -809,7 +809,7 @@ federation_request(const HTTPRequest request) {
   auto private_key = json_utils::unbase64_key(split_data[2]);
   std::vector<unsigned char> public_key(crypto_sign_PUBLICKEYBYTES);
   crypto_sign_ed25519_sk_to_pk(public_key.data(), private_key.data());
-  auto public_key_base64 = json_utils::base64_key(public_key);
+  auto public_key_base64 = json_utils::base64_std_unpadded(public_key);
 
   return {.private_key = private_key,
           .public_key_base64 = public_key_base64,

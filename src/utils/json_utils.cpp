@@ -58,7 +58,8 @@ unbase64_key(const std::string &input) {
  * @return The encoded base64 string.
  * @throw std::runtime_error If the encoding fails.
  */
-[[nodiscard]] std::string base64_key(const std::vector<unsigned char> &input) {
+[[nodiscard]] std::string
+base64_urlencoded(const std::vector<unsigned char> &input) {
   const unsigned long long private_key_len = input.size();
   const size_t base64_max_len = sodium_base64_encoded_len(
       private_key_len, sodium_base64_VARIANT_URLSAFE_NO_PADDING);
@@ -67,6 +68,23 @@ unbase64_key(const std::string &input) {
   const auto *encoded_str_char = sodium_bin2base64(
       base64_str.data(), base64_max_len, input.data(), private_key_len,
       sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+  if (encoded_str_char == nullptr) {
+    throw std::runtime_error("Base64 Error: Failed to encode string");
+  }
+
+  return base64_str;
+}
+
+[[nodiscard]] std::string
+base64_std_unpadded(const std::vector<unsigned char> &input) {
+  const unsigned long long private_key_len = input.size();
+  const size_t base64_max_len = sodium_base64_encoded_len(
+      private_key_len, sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+
+  std::string base64_str(base64_max_len - 1, 0);
+  const auto *encoded_str_char = sodium_bin2base64(
+      base64_str.data(), base64_max_len, input.data(), private_key_len,
+      sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
   if (encoded_str_char == nullptr) {
     throw std::runtime_error("Base64 Error: Failed to encode string");
   }
@@ -128,7 +146,7 @@ unbase64_key(const std::string &input) {
   }
 
   // Encode signature as UNPADDED base64
-  auto base64_str = json_utils::base64_key(signed_message);
+  auto base64_str = json_utils::base64_urlencoded(signed_message);
   // Add signature to json
   signatures[server_name][std::format("ed25519:{}", key_id)] = base64_str;
   json_data["signatures"] = signatures;
@@ -180,7 +198,7 @@ void write_server_key(const Config &config,
                       const std::vector<unsigned char> &private_key) {
   const std::string algo = "ed25519";
 
-  auto base64_str = json_utils::base64_key(private_key);
+  auto base64_str = json_utils::base64_urlencoded(private_key);
 
   auto version = std::format("a_{}", random_string(4));
   if (std::ofstream keyfile(config.matrix_config.server_key_location);

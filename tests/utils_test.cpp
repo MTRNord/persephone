@@ -269,7 +269,7 @@ webserver:
 TEST_CASE("Base64", "[base64]") {
   SECTION("Can encode and decode base64") {
     const auto data = std::vector<unsigned char>{'t', 'e', 's', 't'};
-    const auto encoded = json_utils::base64_key(data);
+    const auto encoded = json_utils::base64_urlencoded(data);
     const auto decoded = json_utils::unbase64_key(encoded);
 
     REQUIRE(std::equal(data.begin(), data.end(), decoded.begin()));
