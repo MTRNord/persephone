@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -101,7 +101,7 @@ jobs:
   # Gate for initial tests before running heavier integration tests
   initial-tests-done:
     name: Initial tests passed
-    needs: [ build-and-test, sanitizers ]
+    needs: [build-and-test, sanitizers]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
@@ -172,7 +172,7 @@ jobs:
         run: |
           set -o pipefail
           cd complement
-          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi | ../.github/gotestfmt
+          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi # | ../.github/gotestfmt
         env:
           COMPLEMENT_BASE_IMAGE: complement-persephone
         continue-on-error: true
@@ -235,7 +235,7 @@ jobs:
   # Final gate for all tests
   all-tests-done:
     name: All tests passed
-    needs: [ initial-tests-done, complement, package ]
+    needs: [initial-tests-done, complement, package]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
