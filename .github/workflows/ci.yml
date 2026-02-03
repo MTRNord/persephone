@@ -132,7 +132,11 @@ jobs:
           cache: false
 
       - name: Install gotestfmt
-        run: go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+        run: |
+          go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+          mkdir .gotestfmt/github -p
+          cp .github/complement_package.gotpl .gotestfmt/github/package.gotpl
+          gotestfmt -help
 
       # Attempt to check out the same branch of Complement as the PR. If it
       # doesn't exist, fallback to main.
