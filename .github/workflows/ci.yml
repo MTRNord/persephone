@@ -204,7 +204,9 @@ jobs:
         run: |
           CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -S . -B cmake-build-release \
             -DCMAKE_BUILD_TYPE=Release \
-            -G Ninja
+            -G Ninja \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
 
       - name: Build Release
         run: |
