@@ -370,6 +370,13 @@ void ClientServerCtrl::register_user(
 
     auto server_name = _config.matrix_config.server_name;
 
+    if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
+      return_error(callback, "M_UNKNOWN",
+                   "Invalid input. You are missing either username or password",
+                   k500InternalServerError);
+      co_return;
+    }
+
     // Check if the username is valid. Note that `username` means localpart in
     // matrix terms.
     // TODO: Add a comment why we do a random string fallback?!
@@ -397,13 +404,6 @@ void ClientServerCtrl::register_user(
     // device_id
     if (!initial_device_display_name) {
       initial_device_display_name = device_id;
-    }
-
-    if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
-      return_error(callback, "M_UNKNOWN",
-                   "Invalid input. You are missing either username or password",
-                   k500InternalServerError);
-      co_return;
     }
 
     // Try to register the user
