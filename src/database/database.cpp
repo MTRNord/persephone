@@ -10,10 +10,12 @@
 #include <drogon/orm/DbClient.h>
 #include <drogon/orm/Exception.h>
 #include <drogon/utils/coroutine.h>
+#include <exception>
 #include <format>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 void Database::migrate() { Migrator::migrate(); }
@@ -404,7 +406,7 @@ Database::get_pushrules_for_user(std::string user_id) {
   }
 }
 
-[[nodiscard]] drogon::Task<std::string>
+[[nodiscard]] drogon::Task<std::optional<std::string>>
 Database::set_filter(std::string user_id, json filter) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
@@ -442,11 +444,14 @@ Database::set_filter(std::string user_id, json filter) {
         co_return query_result.at(0)["id"].as<std::string>();
       }
     }
+    // If we reach here, the user_id is not in any of the user_ids arrays
+    co_return std::nullopt;
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to get filter due to database error");
   }
 }
+
 drogon::Task<json> Database::get_filter(std::string user_id,
                                         std::string filter_id) {
   const auto sql = drogon::app().getDbClient();
