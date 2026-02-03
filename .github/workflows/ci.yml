@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -39,7 +39,9 @@ jobs:
           CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -S . -B cmake-build-debug \
             -DCMAKE_BUILD_TYPE=Debug \
             -DDISABLE_TESTS=OFF \
-            -DCODE_COVERAGE=ON
+            -DCODE_COVERAGE=ON \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
 
       - name: Build and run tests with coverage
         run: |
@@ -80,7 +82,9 @@ jobs:
           CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -S . -B cmake-build-asan \
             -DCMAKE_BUILD_TYPE=Debug \
             -DDISABLE_TESTS=OFF \
-            -DSANITIZERS_ENABLED=ON
+            -DSANITIZERS_ENABLED=ON \
+            -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
 
       - name: Build
         run: |
@@ -97,7 +101,7 @@ jobs:
   # Gate for initial tests before running heavier integration tests
   initial-tests-done:
     name: Initial tests passed
-    needs: [ build-and-test, sanitizers ]
+    needs: [build-and-test, sanitizers]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
@@ -225,7 +229,7 @@ jobs:
   # Final gate for all tests
   all-tests-done:
     name: All tests passed
-    needs: [ initial-tests-done, complement, package ]
+    needs: [initial-tests-done, complement, package]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
