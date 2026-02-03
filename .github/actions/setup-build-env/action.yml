@@ -25,6 +25,11 @@ runs:
       shell: bash
       run: |
         sudo ${{ github.workspace }}/.github/llvm.sh 19 all
+        # Ensure llvm tools are in PATH
+        echo "/usr/lib/llvm-19/bin" >> $GITHUB_PATH
+        # Create symlinks for llvm tools without version suffix
+        sudo ln -sf /usr/bin/llvm-cov-19 /usr/bin/llvm-cov
+        sudo ln -sf /usr/bin/llvm-profdata-19 /usr/bin/llvm-profdata
 
     - name: Install dependencies
       shell: bash

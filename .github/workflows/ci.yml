@@ -21,6 +21,8 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -63,6 +65,8 @@ jobs:
     name: Build with Sanitizers
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -96,6 +100,8 @@ jobs:
     needs: [build-and-test, sanitizers]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
+    permissions:
+      contents: read
     steps:
       - name: Check initial tests passed
         uses: re-actors/alls-green@release/v1
@@ -108,6 +114,8 @@ jobs:
     timeout-minutes: 60
     needs: initial-tests-done
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -176,6 +184,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: initial-tests-done
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -218,6 +228,8 @@ jobs:
     needs: [initial-tests-done, complement, package]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
+    permissions:
+      contents: read
     steps:
       - name: Check all tests passed
         uses: re-actors/alls-green@release/v1
