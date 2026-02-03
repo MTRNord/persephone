@@ -282,7 +282,6 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   return result;
 }
 
-constexpr int DEFAULT_STATE_POWERLEVEL = 50;
 constexpr int DEFAULT_USERS_POWERLEVEL = 0;
 
 /**
