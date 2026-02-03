@@ -172,9 +172,11 @@ jobs:
         run: |
           set -o pipefail
           cd complement
-          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi # | ../.github/gotestfmt
+          go test -v -tags persephone_blacklist ./tests ./tests/csapi
+          # go test -v -json -tags persephone_blacklist ./tests ./tests/csapi # | ../.github/gotestfmt
         env:
           COMPLEMENT_BASE_IMAGE: complement-persephone
+          COMPLEMENT_ENABLE_DIRTY_RUNS: true
         continue-on-error: true
 
       - name: Upload Complement logs
@@ -183,7 +185,7 @@ jobs:
         with:
           name: Complement Logs - ${{ job.status }}
           path: |
-            complement/results.json
+            complement/complement.log
           retention-days: 14
 
   # Package with CPack
