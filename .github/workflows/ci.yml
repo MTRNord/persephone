@@ -172,7 +172,7 @@ jobs:
         run: |
           set -o pipefail
           cd complement
-          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi | .github/gotestfmt
+          go test -v -json -tags persephone_blacklist ./tests ./tests/csapi | ../.github/gotestfmt
         env:
           COMPLEMENT_BASE_IMAGE: complement-persephone
         continue-on-error: true
