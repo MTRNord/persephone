@@ -146,7 +146,7 @@ base64_std_unpadded(const std::vector<unsigned char> &input) {
   }
 
   // Encode signature as UNPADDED base64
-  auto base64_str = json_utils::base64_urlencoded(signed_message);
+  auto base64_str = json_utils::base64_std_unpadded(signed_message);
   // Add signature to json
   signatures[server_name][std::format("ed25519:{}", key_id)] = base64_str;
   json_data["signatures"] = signatures;
