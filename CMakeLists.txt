@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.10)
 project(persephone VERSION 0.1.0 LANGUAGES CXX C)
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
@@ -10,7 +10,9 @@ endif ()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_EXTENSIONS OFF)
 
 # Set build type if not specified
 if (NOT CMAKE_BUILD_TYPE)
@@ -22,30 +24,17 @@ include(CheckIPOSupported)
 check_ipo_supported(RESULT supported OUTPUT error)
 
 include(FetchContent)
-include(cmake/CPM.cmake)
-
 
 set(CMAKE_MODULE_PATH
         "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # nlohmann_json
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
-FetchContent_MakeAvailable(json)
-
-# Static linking as we dont have it on our target systems
-set(AMQP-CPP_BUILD_SHARED OFF)
-set(AMQP-CPP_LINUX_TCP ON)
-# amqp-cpp
-FetchContent_Declare(
-        amqpcpp
-        GIT_REPOSITORY https://github.com/CopernicaMarketingSoftware/AMQP-CPP.git
-        GIT_TAG v4.3.27
+FetchContent_Declare(json
+        URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
         EXCLUDE_FROM_ALL
         SYSTEM
 )
-FetchContent_MakeAvailable(amqpcpp)
-unset(AMQP-CPP_BUILD_SHARED)
-unset(AMQP-CPP_LINUX_TCP)
+FetchContent_MakeAvailable(json)
 
 #drogon
 set(BUILD_CTL OFF)
@@ -57,7 +46,7 @@ set(BUILD_POSTGRESQL ON)
 FetchContent_Declare(
         drogon
         GIT_REPOSITORY https://github.com/drogonframework/drogon.git
-        GIT_TAG v1.9.10
+        GIT_TAG v1.9.12
         EXCLUDE_FROM_ALL
         SYSTEM
 )
@@ -85,27 +74,21 @@ if (LDNS_FOUND AND TARGET PkgConfig::LDNS)
     endif ()
 endif ()
 
-get_target_property(VAR PkgConfig::LDNS INTERFACE_INCLUDE_DIRECTORIES)
-message(STATUS "INTERFACE_INCLUDE_DIRECTORIES: ${VAR}")
-get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_LIBRARIES)
-message(STATUS "INTERFACE_LINK_LIBRARIES: ${VAR}")
-get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_DIRECTORIES)
-message(STATUS "INTERFACE_LINK_DIRECTORIES: ${VAR}")
+# Debug output for LDNS (enable with -DCMAKE_DEBUG_OUTPUT=ON)
+option(CMAKE_DEBUG_OUTPUT "Enable debug output during configuration" OFF)
+if (CMAKE_DEBUG_OUTPUT)
+    get_target_property(VAR PkgConfig::LDNS INTERFACE_INCLUDE_DIRECTORIES)
+    message(STATUS "INTERFACE_INCLUDE_DIRECTORIES: ${VAR}")
+    get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_LIBRARIES)
+    message(STATUS "INTERFACE_LINK_LIBRARIES: ${VAR}")
+    get_target_property(VAR PkgConfig::LDNS INTERFACE_LINK_DIRECTORIES)
+    message(STATUS "INTERFACE_LINK_DIRECTORIES: ${VAR}")
+endif ()
 
 
 # icu for unicode support
 find_package(ICU COMPONENTS uc REQUIRED)
-# libevent
-pkg_check_modules(libevent REQUIRED)
 
-
-# Include directories
-include_directories(
-        PUBLIC
-        ${sodium_INCLUDE_DIR}
-        PRIVATE
-        src
-)
 
 # Source files
 set(SOURCES
@@ -119,14 +102,15 @@ set(SOURCES
         src/webserver/client_server_api/ClientServerCtrl.cpp
         src/webserver/json.cpp
         src/webserver/server_server_api/ServerServerCtrl.cpp
-        src/worker_queue/producer.cpp
-        src/worker_queue/worker.cpp
-        src/worker_queue/ReconnectingLibEventHandler.cpp
 )
 
-# Executable
-add_executable(persephone ${SOURCES} src/main.cpp)
-target_link_libraries(persephone PRIVATE
+# Create a static library to avoid recompiling sources for each target
+add_library(persephone_lib STATIC ${SOURCES})
+target_include_directories(persephone_lib
+        PUBLIC ${sodium_INCLUDE_DIR}
+        PUBLIC src
+)
+target_link_libraries(persephone_lib PUBLIC
         drogon
         nlohmann_json::nlohmann_json
         yaml-cpp
@@ -134,9 +118,8 @@ target_link_libraries(persephone PRIVATE
         ZLIB::ZLIB
         PkgConfig::LDNS
         ICU::uc
-        amqpcpp
-        event
 )
+
 # Default list of compile options applying to all compilers
 set(COMPILE_OPTIONS
         -DJSON_DIAGNOSTICS=1
@@ -149,28 +132,34 @@ set(COMPILE_OPTIONS
         -Werror
 )
 
+# Test compile options - less strict to avoid issues with test frameworks
+set(TEST_COMPILE_OPTIONS
+        -DJSON_DIAGNOSTICS=1
+        -Wall
+        -Wextra
+)
+
 # If clang we have to ignore the unknown-warning-option check since it gets confused with gcc and werror
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     list(APPEND COMPILE_OPTIONS
             -Wno-error=unknown-warning-option)
 endif ()
 
-# Set warning levels and other compiler options
-target_compile_options(persephone PRIVATE
+# Set warning levels and other compiler options on the library
+target_compile_options(persephone_lib PRIVATE
         ${COMPILE_OPTIONS}
 )
 
 option(SANITIZERS_ENABLED "Enable sanitizers" OFF)
 
-# if debug building
+# if sanitizers enabled
 if (SANITIZERS_ENABLED)
-    target_compile_options(persephone PRIVATE
+    target_compile_options(persephone_lib PRIVATE
             -fsanitize=address
             -fsanitize=undefined
             -fsanitize=leak
     )
-    target_link_options(
-            persephone PRIVATE
+    target_link_options(persephone_lib PUBLIC
             -fsanitize=address
             -fsanitize=undefined
             -fsanitize=leak
@@ -179,18 +168,14 @@ endif ()
 
 # if gcc we add -fhardened
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(persephone PRIVATE
+    target_compile_options(persephone_lib PRIVATE
             -fhardened
             -Wno-error=hardened
     )
 else ()
-    if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        target_compile_options(persephone PRIVATE
-                -D_FORTIFY_SOURCE=3
-        )
-    endif ()
-
-    target_compile_options(persephone PRIVATE
+    # Use generator expression for build-type specific flags
+    target_compile_options(persephone_lib PRIVATE
+            $<$<CONFIG:Release>:-D_FORTIFY_SOURCE=3>
             -D_GLIBCXX_ASSERTIONS
             -ftrivial-auto-var-init=zero
             -fPIE
@@ -199,15 +184,20 @@ else ()
     )
     # if x86 gnu/linux we add -fcf-protection=full
     if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        target_compile_options(persephone PRIVATE
+        target_compile_options(persephone_lib PRIVATE
                 -fcf-protection=full
         )
     endif ()
 endif ()
 
+# Executable
+add_executable(persephone src/main.cpp)
+target_link_libraries(persephone PRIVATE persephone_lib)
+
 # LTO
 if (supported)
     message(STATUS "IPO / LTO enabled")
+    set_property(TARGET persephone_lib PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
     set_property(TARGET persephone PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 else ()
     message(STATUS "IPO / LTO not supported: <${error}>")
@@ -220,7 +210,7 @@ install(TARGETS persephone
 
 # Packaging
 set(CPACK_PACKAGE_NAME "persephone")
-set(CPACK_PACKAGE_VERSION "0.1.0")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Persephone Project")
 set(CPACK_PACKAGE_VENDOR "MTRNord")
 
@@ -280,73 +270,41 @@ if (NOT DISABLE_TESTS)
             GIT_TAG v1.3.1)
     FetchContent_MakeAvailable(snitch)
 
-    add_executable(utils_test tests/utils_test.cpp ${SOURCES})
+    add_executable(utils_test tests/utils_test.cpp)
     target_link_libraries(utils_test PRIVATE
-            drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
-            ICU::uc
+            persephone_lib
             snitch::snitch
-            amqpcpp
-            event
     )
-    target_link_options(utils_test PRIVATE
-            ${COMPILE_OPTIONS}
+    target_compile_options(utils_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
     )
 
-    add_executable(state_res_test tests/state_res_test.cpp ${SOURCES})
+    add_executable(state_res_test tests/state_res_test.cpp)
     target_link_libraries(state_res_test PRIVATE
-            drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
-            ICU::uc
+            persephone_lib
             snitch::snitch
-            amqpcpp
-            event
     )
-    target_link_options(state_res_test PRIVATE
-            ${COMPILE_OPTIONS}
+    target_compile_options(state_res_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
     )
 
-    add_executable(config_test tests/config_test.cpp ${SOURCES})
+    add_executable(config_test tests/config_test.cpp)
     target_link_libraries(config_test PRIVATE
-            drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
-            ICU::uc
+            persephone_lib
             snitch::snitch
-            amqpcpp
-            event
     )
-    target_link_options(config_test PRIVATE
-            ${COMPILE_OPTIONS}
+    target_compile_options(config_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
     )
 
 
-    add_executable(drogon_tests tests/drogon_tests.cpp ${SOURCES})
+    add_executable(drogon_tests tests/drogon_tests.cpp)
     target_link_libraries(drogon_tests PRIVATE
-            drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
-            ICU::uc
+            persephone_lib
             snitch::snitch
-            amqpcpp
-            event
     )
-    target_link_options(drogon_tests PRIVATE
-            ${COMPILE_OPTIONS}
+    target_compile_options(drogon_tests PRIVATE
+            ${TEST_COMPILE_OPTIONS}
     )
 
     add_custom_target(tests
@@ -382,20 +340,12 @@ endif ()
 # Fuzz targets
 option(BUILD_FUZZ_TARGETS "Build fuzz targets" OFF)
 if (BUILD_FUZZ_TARGETS)
-    add_executable(fuzz_json_sign src/fuzz_targets/json_sign.cpp ${SOURCES})
+    add_executable(fuzz_json_sign src/fuzz_targets/json_sign.cpp)
 
     target_link_libraries(fuzz_json_sign PRIVATE
-            drogon
-            nlohmann_json::nlohmann_json
-            yaml-cpp
-            sodium
-            ZLIB::ZLIB
-            PkgConfig::LDNS
+            persephone_lib
             trantor
             jsoncpp
-            ICU::uc
-            amqpcpp
-            event
     )
     add_custom_target(fuzz_targets
             COMMAND fuzz_json_sign

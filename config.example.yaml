@@ -9,8 +9,5 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: false
-rabbitmq:
-  host: localhost
-  port: 5672
 
 log_level: debug

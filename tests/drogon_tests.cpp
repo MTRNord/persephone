@@ -30,7 +30,7 @@ DROGON_TEST(DiscoveryTest) {
     const auto srv_result = co_await discover_server(srv_test_server_name);
     // This is a little hacky on the dns side due to cloudflare but this is
     // correct and expected.
-    CO_REQUIRE(srv_result.address == "matrix.midnightthoughts.space");
+    CO_REQUIRE(srv_result.address == "matrix.mtrnord.blog");
     CO_REQUIRE(srv_result.port == 443);
     CO_REQUIRE(srv_result.server_name == srv_test_server_name);
 

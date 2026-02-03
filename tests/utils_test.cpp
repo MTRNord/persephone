@@ -107,7 +107,7 @@ TEST_CASE("Parse Query Parameter String into Map", "[query_param_parsing]") {
     std::string queryString = "key=1&key=2&key=3";
     auto paramMap = parseQueryParamString(queryString);
 
-    REQUIRE(paramMap["key"].size() == static_cast<const unsigned long>(3));
+    REQUIRE(paramMap["key"].size() == static_cast<unsigned long>(3));
     REQUIRE(paramMap["key"][0] == "1");
     REQUIRE(paramMap["key"][1] == "2");
     REQUIRE(paramMap["key"][2] == "3");
@@ -117,9 +117,9 @@ TEST_CASE("Parse Query Parameter String into Map", "[query_param_parsing]") {
     std::string queryString = "id=123&name=John&age=30";
     auto paramMap = parseQueryParamString(queryString);
 
-    REQUIRE(paramMap["id"].size() == static_cast<const unsigned long>(1));
-    REQUIRE(paramMap["name"].size() == static_cast<const unsigned long>(1));
-    REQUIRE(paramMap["age"].size() == static_cast<const unsigned long>(1));
+    REQUIRE(paramMap["id"].size() == static_cast<unsigned long>(1));
+    REQUIRE(paramMap["name"].size() == static_cast<unsigned long>(1));
+    REQUIRE(paramMap["age"].size() == static_cast<unsigned long>(1));
     REQUIRE(paramMap["id"][0] == "123");
     REQUIRE(paramMap["name"][0] == "John");
     REQUIRE(paramMap["age"][0] == "30");
@@ -136,16 +136,16 @@ TEST_CASE("Parse Query Parameter String into Map", "[query_param_parsing]") {
     std::string queryString = "key1=&key2=";
     auto paramMap = parseQueryParamString(queryString);
 
-    REQUIRE(paramMap["key1"].size() == static_cast<const unsigned long>(0));
-    REQUIRE(paramMap["key2"].size() == static_cast<const unsigned long>(0));
+    REQUIRE(paramMap["key1"].size() == static_cast<unsigned long>(0));
+    REQUIRE(paramMap["key2"].size() == static_cast<unsigned long>(0));
   }
 
   SECTION("Single key-value pair") {
     std::string queryString = "key=value";
     auto paramMap = parseQueryParamString(queryString);
 
-    REQUIRE(paramMap.size() == static_cast<const unsigned long>(1));
-    REQUIRE(paramMap["key"].size() == static_cast<const unsigned long>(1));
+    REQUIRE(paramMap.size() == static_cast<unsigned long>(1));
+    REQUIRE(paramMap["key"].size() == static_cast<unsigned long>(1));
     REQUIRE(paramMap["key"][0] == "value");
   }
 }
@@ -207,9 +207,6 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: false
-rabbitmq:
-  host: localhost
-  port: 5672
   )";
 
     // Delete key to ensure it doesn't exist yet
@@ -246,9 +243,6 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: false
-rabbitmq:
-  host: localhost
-  port: 5672
   )";
 
     // Write file to disk for testing
@@ -416,9 +410,6 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: false
-rabbitmq:
-  host: localhost
-  port: 5672
   )";
 
     // Delete key to ensure it doesn't exist yet

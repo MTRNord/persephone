@@ -180,16 +180,25 @@ get_srv_record(const std::string &address) {
 
   if (ldns_status const status = ldns_resolver_new_frm_file(&res, nullptr);
       status != LDNS_STATUS_OK) {
+    ldns_rdf_deep_free(domain);
     throw std::runtime_error(std::format("Failed to create resolver: {}",
                                          ldns_get_errorstr_by_id(status)));
   }
 
-  ldns_pkt *record_packet = ldns_resolver_search(res, domain, LDNS_RR_TYPE_SRV,
-                                                 LDNS_RR_CLASS_IN, LDNS_RD);
+  ldns_pkt *record_packet = ldns_resolver_query(res, domain, LDNS_RR_TYPE_SRV,
+                                                LDNS_RR_CLASS_IN, LDNS_RD);
   ldns_rdf_deep_free(domain);
 
   if (!record_packet) {
+    ldns_resolver_deep_free(res);
     throw std::runtime_error("Failed to resolve SRV record");
+  }
+
+  // Check if the response has an error (NXDOMAIN, SERVFAIL, etc.)
+  if (ldns_pkt_get_rcode(record_packet) != LDNS_RCODE_NOERROR) {
+    ldns_pkt_free(record_packet);
+    ldns_resolver_deep_free(res);
+    throw std::runtime_error("DNS query returned error");
   }
 
   LOG_DEBUG << "SRV record resolved for address: " << address

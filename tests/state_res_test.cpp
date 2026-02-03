@@ -319,6 +319,12 @@ TEST_CASE("Match Domain") {
     REQUIRE_FALSE(matchDomain("@test:localhost", ""));
     REQUIRE_FALSE(matchDomain("", "@user:localhost"));
   }
+
+  SECTION("Missing colon in strings") {
+    REQUIRE_FALSE(matchDomain("testlocalhost", "@user:localhost"));
+    REQUIRE_FALSE(matchDomain("@test:localhost", "userlocalhost"));
+    REQUIRE_FALSE(matchDomain("nocolon", "alsonocolon"));
+  }
 }
 
 TEST_CASE("State res on room creation") {
@@ -335,9 +341,6 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: false
-rabbitmq:
-  host: localhost
-  port: 5672
   )";
 
   // Write file to disk for testing

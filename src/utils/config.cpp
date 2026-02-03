@@ -132,30 +132,3 @@ void Config::load_webserver(const YAML::Node &config) {
     this->webserver_config.ssl = false;
   }
 }
-
-void Config::load_rabbitmq(const YAML::Node &config) {
-  if (!config["rabbitmq"].IsDefined()) {
-    throw ConfigError(
-        "Missing 'rabbitmq' field. Unable to start. Make sure you set the "
-        "RabbitMQ configuration.");
-  }
-  if (!config["rabbitmq"]["host"].IsDefined()) {
-    throw ConfigError(
-        "Missing 'rabbitmq.host' field. Unable to start. Make sure you set "
-        "the RabbitMQ host.");
-  }
-  rabbitmq_config.host = config["rabbitmq"]["host"].as<std::string>();
-  if (!config["rabbitmq"]["port"].IsDefined()) {
-    throw ConfigError(
-        "Missing 'rabbitmq.port' field. Unable to start. Make sure you set "
-        "the RabbitMQ port.");
-  }
-  rabbitmq_config.port = config["rabbitmq"]["port"].as<unsigned short>();
-  // Optional username password
-  if (config["rabbitmq"]["username"].IsDefined()) {
-    rabbitmq_config.user = config["rabbitmq"]["username"].as<std::string>();
-  }
-  if (config["rabbitmq"]["password"].IsDefined()) {
-    rabbitmq_config.password = config["rabbitmq"]["password"].as<std::string>();
-  }
-}

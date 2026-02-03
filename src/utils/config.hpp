@@ -13,21 +13,6 @@
 #include <trantor/utils/Logger.h>
 #include <yaml-cpp/node/node.h>
 
-struct [[nodiscard]] RabbitMQConfig {
-  std::string host;
-  std::optional<std::string> user;
-  std::optional<std::string> password;
-  unsigned short port{};
-
-  [[nodiscard]] constexpr std::string get_rabbitmq_url() const {
-    if (user.has_value() && password.has_value()) {
-      return "amqp://" + user.value() + ":" + password.value() + "@" + host +
-             ":" + std::to_string(port);
-    }
-    return "amqp://" + host + ":" + std::to_string(port);
-  }
-};
-
 /**
  * @brief A struct representing the database configuration.
  *
@@ -94,8 +79,6 @@ struct [[nodiscard]] Config {
       matrix_config{}; // NOLINT(*-non-private-member-variables-in-classes)
   WebserverConfig
       webserver_config{}; // NOLINT(*-non-private-member-variables-in-classes)
-  RabbitMQConfig
-      rabbitmq_config{}; // NOLINT(*-non-private-member-variables-in-classes)
 
   std::string log_level;
 
@@ -134,9 +117,6 @@ struct [[nodiscard]] Config {
     LOG_DEBUG << "Loading webserver configuration";
     this->load_webserver(config);
     LOG_DEBUG << "Webserver configuration loaded";
-    LOG_DEBUG << "Loading RabbitMQ configuration";
-    this->load_rabbitmq(config);
-    LOG_DEBUG << "RabbitMQ configuration loaded";
   }
 
 private:
@@ -145,6 +125,4 @@ private:
   void load_matrix(const YAML::Node &config);
 
   void load_webserver(const YAML::Node &config);
-
-  void load_rabbitmq(const YAML::Node &config);
 };

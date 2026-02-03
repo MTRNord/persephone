@@ -51,7 +51,7 @@ struct [[nodiscard]] StateEventSets {
 reference_hash(const json &event, const std::string_view room_version);
 
 [[nodiscard]] std::string event_id(const json &event,
-                                        const std::string_view room_version);
+                                   const std::string_view room_version);
 
 /**
  * @brief Compares the domain parts of two strings.
@@ -76,6 +76,11 @@ reference_hash(const json &event, const std::string_view room_version);
   // Find the position of ':' in the strings
   const size_t pos1 = str1.find(':');
   const size_t pos2 = str2.find(':');
+
+  // If either string doesn't contain a ':', there's no valid domain to compare
+  if (pos1 == std::string_view::npos || pos2 == std::string_view::npos) {
+    return false;
+  }
 
   // Extract the domain parts after ':'
   const std::string_view domain1 = str1.substr(pos1 + 1);

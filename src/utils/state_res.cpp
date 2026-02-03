@@ -90,6 +90,8 @@ namespace {
                    {"membership", "join_authorised_via_users_server",
                     "third_party_invite"});
     redact_third_party_invite(event_copy["content"]);
+  } else if (event["type"] == "m.room.create") {
+    // m.room.create allows all keys in content - do nothing
   } else if (event["type"] == "m.room.join_rules") {
     redact_content(event_copy["content"], {"join_rule", "allow"});
   } else if (event["type"] == "m.room.power_levels") {
@@ -197,47 +199,82 @@ createPartialState(const std::vector<StateEvent> &unconflictedEvents) {
 [[nodiscard]] StateEventSets
 splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   StateEventSets result;
-  std::vector<std::map<std::pair<EventType, StateKey>, int>> stateTuples(
-      forks.size());
 
-  // Count occurrences of state tuples for each fork
+  // Build a map from (type, state_key) -> event_id for each fork
+  // This allows us to check if the same event appears in all forks
+  std::vector<std::map<std::pair<EventType, StateKey>, EventID>>
+      fork_state_maps(forks.size());
+
   for (size_t i = 0; i < forks.size(); ++i) {
     for (const auto &event : forks[i]) {
       auto event_type = event.at("type").get<EventType>();
       auto state_key = event.at("state_key").get<StateKey>();
-      stateTuples[i][{event_type, state_key}]++;
+      auto event_id = event.at("event_id").get<EventID>();
+      fork_state_maps[i][{event_type, state_key}] = event_id;
     }
   }
 
-  // Iterate through events in each fork
-  for (size_t i = 0; i < forks.size(); ++i) {
-    for (const auto &event : forks[i]) {
+  // Collect all unique (type, state_key) pairs across all forks
+  std::set<std::pair<EventType, StateKey>> all_state_keys;
+  for (const auto &fork_map : fork_state_maps) {
+    for (const auto &[key, _] : fork_map) {
+      all_state_keys.insert(key);
+    }
+  }
+
+  // For each state key, check if it's unconflicted (same event_id in ALL forks)
+  // or conflicted (different event_ids or missing from some forks)
+  std::set<std::pair<EventType, StateKey>> unconflicted_keys;
+
+  for (const auto &state_key : all_state_keys) {
+    bool is_unconflicted = true;
+    std::optional<EventID> common_event_id = std::nullopt;
+
+    for (const auto &fork_map : fork_state_maps) {
+      auto it = fork_map.find(state_key);
+      if (it == fork_map.end()) {
+        // Key not present in this fork - conflicted
+        is_unconflicted = false;
+        break;
+      }
+
+      if (!common_event_id.has_value()) {
+        common_event_id = it->second;
+      } else if (common_event_id.value() != it->second) {
+        // Different event_id in this fork - conflicted
+        is_unconflicted = false;
+        break;
+      }
+    }
+
+    if (is_unconflicted) {
+      unconflicted_keys.insert(state_key);
+    }
+  }
+
+  // Now iterate through all events and classify them
+  std::set<EventID> added_unconflicted;
+  std::set<EventID> added_conflicted;
+
+  for (const auto &fork : forks) {
+    for (const auto &event : fork) {
       auto event_type = event.at("type").get<EventType>();
       auto state_key = event.at("state_key").get<StateKey>();
+      auto event_id = event.at("event_id").get<EventID>();
+      std::pair<EventType, StateKey> key = {event_type, state_key};
 
-      bool isConflicted = false;
-
-      // Check if the state tuple exists in another fork only once
-      int appearingInOtherForks = 0;
-      for (size_t j = 0; j < forks.size(); ++j) {
-        if (j != i && stateTuples[j][{event_type, state_key}] == 1) {
-          appearingInOtherForks++;
+      if (unconflicted_keys.contains(key)) {
+        // Unconflicted - only add once (same event appears in all forks)
+        if (!added_unconflicted.contains(event_id)) {
+          result.unconflictedEvents.push_back(event);
+          added_unconflicted.insert(event_id);
         }
-      }
-
-      if ((stateTuples[i][{event_type, state_key}] > 1 ||
-           appearingInOtherForks > 1) ||
-          (stateTuples[i][{event_type, state_key}] == 1 &&
-           appearingInOtherForks == 0)) {
-        isConflicted = true; // State tuple is conflicted in either fork or
-        // State tuple exists in only one other fork
-      }
-
-      // Add events to conflicted or unconflicted sets
-      if (isConflicted) {
-        result.conflictedEvents.push_back(event); // Add to conflicted set
       } else {
-        result.unconflictedEvents.push_back(event); // Add to unconflicted set
+        // Conflicted - add each unique event
+        if (!added_conflicted.contains(event_id)) {
+          result.conflictedEvents.push_back(event);
+          added_conflicted.insert(event_id);
+        }
       }
     }
   }
@@ -246,6 +283,68 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
 }
 
 constexpr int DEFAULT_STATE_POWERLEVEL = 50;
+constexpr int DEFAULT_USERS_POWERLEVEL = 0;
+
+/**
+ * @brief Gets the power level of a sender from a power_levels event.
+ *
+ * @param power_levels_event The m.room.power_levels event to look up from.
+ * @param sender The user ID of the sender.
+ * @return The power level of the sender.
+ */
+[[nodiscard]] int get_sender_power_level(const StateEvent &power_levels_event,
+                                         const std::string &sender) {
+  if (power_levels_event.is_null() || !power_levels_event.contains("content")) {
+    return DEFAULT_USERS_POWERLEVEL;
+  }
+
+  const auto &content = power_levels_event.at("content");
+
+  // Check if the sender is explicitly listed in users
+  if (content.contains("users") && content.at("users").contains(sender)) {
+    return content.at("users").at(sender).get<int>();
+  }
+
+  // Fall back to users_default
+  if (content.contains("users_default")) {
+    return content.at("users_default").get<int>();
+  }
+
+  return DEFAULT_USERS_POWERLEVEL;
+}
+
+/**
+ * @brief Finds the power_levels event from an event's auth_events.
+ *
+ * According to the Matrix spec, power levels should be determined by looking
+ * at the event's respective auth_events.
+ *
+ * @param event The event to find the power_levels auth event for.
+ * @param event_map A map of all events by event_id.
+ * @return The power_levels event if found, or a null json object.
+ */
+[[nodiscard]] StateEvent
+find_power_levels_in_auth(const StateEvent &event,
+                          const std::map<EventID, StateEvent> &event_map) {
+  if (!event.contains("auth_events")) {
+    return json();
+  }
+
+  for (const auto &auth_event_id :
+       event.at("auth_events").get<std::vector<std::string>>()) {
+    auto it = event_map.find(auth_event_id);
+    if (it != event_map.end()) {
+      const auto &auth_event = it->second;
+      if (auth_event.contains("type") &&
+          auth_event.at("type").get<std::string_view>() ==
+              "m.room.power_levels") {
+        return auth_event;
+      }
+    }
+  }
+
+  return json();
+}
 
 /**
  * @brief Sorts the incoming edges of events based on certain criteria.
@@ -257,6 +356,14 @@ constexpr int DEFAULT_STATE_POWERLEVEL = 50;
  * the comparator function. The function then creates a new map of sorted edges
  * by iterating over the sorted keys and adding the corresponding values from
  * the incoming edges map. The function returns the map of sorted edges.
+ *
+ * According to the Matrix spec, for comparing events x and y:
+ * - x's sender has greater power level than y's sender, when looking at their
+ *   respective auth_events
+ * - the senders have the same power level, but x's origin_server_ts is less
+ *   than y's origin_server_ts
+ * - the senders have the same power level and the events have the same
+ *   origin_server_ts, but x's event_id is less than y's event_id
  *
  * @param incoming_edges A map of incoming edges, where the key is the event ID
  * and the value is the number of incoming edges.
@@ -279,81 +386,20 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
     const StateEvent &state_event_x = event_map.at(first);
     const StateEvent &state_event_y = event_map.at(second);
 
-    // Get the powerlevels of each sender in for each event so we then can
-    // compare them
-    std::optional<int> sender_x_power_level = std::nullopt;
-    std::optional<int> sender_y_power_level = std::nullopt;
-
     const auto sender_x = state_event_x.at("sender").get<std::string>();
     const auto sender_y = state_event_y.at("sender").get<std::string>();
 
-    // Find the given power level of the sender at this time with the current
-    // event_map sorting We do this in a loop to make sure we get the correct
-    // power level
-    for (const auto &event : event_map | std::views::values) {
-      if (event.at("type").get<std::string_view>() == "m.room.power_levels") {
-        const auto content = event.at("content").get<json::object_t>();
-        if (content.contains("users")) {
-          const auto users = content.at("users").get<json::object_t>();
-          if (users.contains(sender_x)) {
-            sender_x_power_level = users.at(sender_x).get<int>();
-          }
-          if (users.contains(sender_y)) {
-            sender_y_power_level = users.at(sender_y).get<int>();
-          }
-        }
+    // Find power level events from each event's auth_events per Matrix spec
+    const auto power_levels_x =
+        find_power_levels_in_auth(state_event_x, event_map);
+    const auto power_levels_y =
+        find_power_levels_in_auth(state_event_y, event_map);
 
-        // Check if we have event specific power levels otherwise use the state
-        // default.
-        if (content.contains("events")) {
-          if (content.at("events").contains("m.room.power_levels")) {
-            if (!sender_x_power_level.has_value()) {
-              sender_x_power_level =
-                  content.at("events").at("m.room.power_levels").get<int>();
-            }
-            if (!sender_y_power_level.has_value()) {
-              sender_y_power_level =
-                  content.at("events").at("m.room.power_levels").get<int>();
-            }
-          } else if (content.contains("state_default")) {
-            if (!sender_x_power_level.has_value()) {
-              sender_x_power_level = content.at("state_default").get<int>();
-            }
-            if (!sender_y_power_level.has_value()) {
-              sender_y_power_level = content.at("state_default").get<int>();
-            }
-          } else {
-            if (!sender_x_power_level.has_value()) {
-              sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
-            }
-            if (!sender_y_power_level.has_value()) {
-              sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
-            }
-          }
-        } else if (content.contains("state_default")) {
-          if (!sender_x_power_level.has_value()) {
-            sender_x_power_level = content.at("state_default").get<int>();
-          }
-          if (!sender_y_power_level.has_value()) {
-            sender_y_power_level = content.at("state_default").get<int>();
-          }
-        } else {
-          if (!sender_x_power_level.has_value()) {
-            sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
-          }
-          if (!sender_y_power_level.has_value()) {
-            sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
-          }
-        }
-      } else {
-        if (!sender_x_power_level.has_value()) {
-          sender_x_power_level = DEFAULT_STATE_POWERLEVEL;
-        }
-        if (!sender_y_power_level.has_value()) {
-          sender_y_power_level = DEFAULT_STATE_POWERLEVEL;
-        }
-      }
-    }
+    // Get power levels for each sender from their respective auth events
+    const int sender_x_power_level =
+        get_sender_power_level(power_levels_x, sender_x);
+    const int sender_y_power_level =
+        get_sender_power_level(power_levels_y, sender_y);
 
     const time_t origin_server_ts_x =
         state_event_x.at("origin_server_ts").get<time_t>();
@@ -363,9 +409,15 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
     const auto event_id_x = state_event_x.at("event_id").get<std::string>();
     const auto event_id_y = state_event_y.at("event_id").get<std::string>();
 
-    return (sender_x_power_level > sender_y_power_level) ||
-           (origin_server_ts_x < origin_server_ts_y) ||
-           (event_id_x < event_id_y);
+    // Cascading comparison: first by power level (greater is "less" in order),
+    // then by timestamp, then by event_id
+    if (sender_x_power_level != sender_y_power_level) {
+      return sender_x_power_level > sender_y_power_level;
+    }
+    if (origin_server_ts_x != origin_server_ts_y) {
+      return origin_server_ts_x < origin_server_ts_y;
+    }
+    return event_id_x < event_id_y;
   };
 
   std::map<EventID, int> sorted_edges;
@@ -408,43 +460,73 @@ sorted_incoming_edges(const std::map<EventID, int> &incoming_edges,
 [[nodiscard]] std::vector<StateEvent>
 kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   std::vector<StateEvent> output_events;
-  std::map<EventID, int> incoming_edges;
+  std::map<EventID, int> incoming_edge_count;
   std::map<EventID, StateEvent> event_map;
+  // Map from event_id to list of events that depend on it (have it in their
+  // auth_events)
+  std::map<EventID, std::vector<EventID>> dependents;
 
+  // Build the event map and initialize edge counts to 0
   for (const auto &event : full_conflicted_set) {
-    auto event_id = event["event_id"].get<std::string>();
+    auto event_id = event.at("event_id").get<std::string>();
     event_map[event_id] = event;
-    incoming_edges[event_id] = 0;
+    incoming_edge_count[event_id] = 0;
   }
 
-  auto incoming_edges_sorted = sorted_incoming_edges(incoming_edges, event_map);
-
+  // Count incoming edges: for each event, increment count for each auth_event
+  // that is in our set. Also build the dependents map.
   for (const auto &event : full_conflicted_set) {
+    auto event_id = event.at("event_id").get<std::string>();
     for (const auto &auth_event_id :
          event.at("auth_events").get<std::vector<std::string>>()) {
-      incoming_edges_sorted[auth_event_id] += 1;
+      // Only count edges within our set of events
+      if (incoming_edge_count.contains(auth_event_id)) {
+        // This event depends on auth_event_id, so increment this event's
+        // incoming count
+        incoming_edge_count[event_id] += 1;
+        // Record that auth_event_id has this event as a dependent
+        dependents[auth_event_id].push_back(event_id);
+      }
     }
   }
 
-  while (!incoming_edges_sorted.empty()) {
-    for (auto &[event_id, count] : incoming_edges_sorted) {
+  // Sort edges for deterministic ordering when selecting among candidates
+  auto sorted_edges = sorted_incoming_edges(incoming_edge_count, event_map);
+
+  // Process events with no incoming edges
+  while (!sorted_edges.empty()) {
+    // Find the first event with zero incoming edges (sorted_edges maintains
+    // order)
+    EventID next_event_id;
+    bool found = false;
+    for (const auto &[event_id, count] : sorted_edges) {
       if (count == 0) {
-        // Prepend (NOT append/push_back) the event with the given id to the
-        // output events
-        output_events.insert(output_events.begin(), event_map[event_id]);
-
-        auto auth_events = event_map[event_id]
-                               .at("auth_events")
-                               .get<std::vector<std::string>>();
-
-        for (const auto &auth_event_id : auth_events) {
-          // Reduce the count of the event with the given id by 1
-          incoming_edges_sorted[auth_event_id] -= 1;
-        }
-
-        incoming_edges_sorted.erase(event_id);
+        next_event_id = event_id;
+        found = true;
+        break;
       }
     }
+
+    if (!found) {
+      // No event with zero incoming edges - there's a cycle or we're done
+      break;
+    }
+
+    // Add the event to output (append for forward topological order)
+    output_events.push_back(event_map.at(next_event_id));
+
+    // For all events that depend on this event, decrement their incoming edge
+    // count
+    if (dependents.contains(next_event_id)) {
+      for (const auto &dependent_id : dependents.at(next_event_id)) {
+        if (sorted_edges.contains(dependent_id)) {
+          sorted_edges[dependent_id] -= 1;
+        }
+      }
+    }
+
+    // Remove processed event from the map
+    sorted_edges.erase(next_event_id);
   }
 
   return output_events;
@@ -535,9 +617,11 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
   // by the auth events selection algorithm described in the server
   // specification, reject.
 
-  // Set of allowed EventType values
+  // Set of allowed EventType values according to the auth events selection
+  // algorithm in the Matrix spec
   std::set<std::string_view> allowedEventTypes = {
-      "m.room.create", "m.room.power_levels", "m.room.member"};
+      "m.room.create", "m.room.power_levels", "m.room.member",
+      "m.room.join_rules", "m.room.third_party_invite"};
 
   // Find invalid EventTypes using std::find_if
   const auto invalidEventType = std::ranges::find_if(
@@ -616,33 +700,39 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  * @param power_level_mainline A reference to a vector of StateEvent objects
  * representing the power level mainline.
  * @param event The StateEvent object to be processed.
- * @param auth_events A vector of StateEvent objects representing the
- * authorization events.
+ * @param event_id_map A map from event_id to StateEvent for O(1) lookups.
+ * @param visited A set of visited event IDs for cycle detection.
  */
-void mainline_iterate(
-    std::vector<StateEvent> &power_level_mainline, StateEvent &event,
-    const std::map<EventType, std::map<StateKey, StateEvent>> &auth_events) {
+void mainline_iterate(std::vector<StateEvent> &power_level_mainline,
+                      StateEvent &event,
+                      const std::map<EventID, StateEvent> &event_id_map,
+                      std::set<std::string> &visited) {
   if (event.is_null()) {
     throw std::invalid_argument("Event cannot be null");
   }
+
+  // Cycle detection: check if we've already visited this event
+  auto event_id = event.at("event_id").get<std::string>();
+  if (visited.contains(event_id)) {
+    return;
+  }
+  visited.insert(event_id);
+
   power_level_mainline.push_back(event);
   for (auto &auth_event_id : event["auth_events"]) {
-    const auto actual_auth_event_id = auth_event_id.get<std::string_view>();
+    const auto actual_auth_event_id = auth_event_id.get<std::string>();
 
-    // Get the actual auth event object from the auth events map
-    StateEvent auth_event_obj;
-    for (const auto &inner_map : auth_events | std::views::values) {
-      for (const auto &state_event : inner_map | std::views::values) {
-        if (state_event["event_id"].get<std::string_view>() ==
-            actual_auth_event_id) {
-          auth_event_obj = state_event;
-          break;
-        }
-      }
+    // O(1) lookup using event_id_map
+    auto it = event_id_map.find(actual_auth_event_id);
+    if (it == event_id_map.end()) {
+      continue;
     }
 
-    if (auth_event_obj["type"] == "m.room.powerlevel") {
-      mainline_iterate(power_level_mainline, auth_event_obj, auth_events);
+    const auto &auth_event_obj = it->second;
+    if (auth_event_obj["type"] == "m.room.power_levels") {
+      StateEvent auth_event_copy = auth_event_obj;
+      mainline_iterate(power_level_mainline, auth_event_copy, event_id_map,
+                       visited);
     }
   }
 }
@@ -653,18 +743,30 @@ void mainline_iterate(
  * @param power_level_mainline A reference to a vector of StateEvent objects
  * representing the power level mainline.
  * @param event The StateEvent object to be processed.
- * @param auth_events A map of event types to maps of state keys to StateEvents
- * representing the authorization events. In this case use the partial state.
+ * @param event_id_map A map from event_id to StateEvent for O(1) lookups.
  * @return The closest mainline event to the given event.
  */
-[[nodiscard]] StateEvent get_closest_mainline_event(
-    std::vector<StateEvent> &power_level_mainline, const StateEvent &event,
-    const std::map<EventType, std::map<StateKey, StateEvent>> &auth_events) {
+[[nodiscard]] StateEvent
+get_closest_mainline_event(std::vector<StateEvent> &power_level_mainline,
+                           const StateEvent &event,
+                           const std::map<EventID, StateEvent> &event_id_map) {
   auto closest_mainline_event = event;
+
+  // Track visited events to prevent infinite recursion from cycles
+  std::set<std::string> visited;
 
   std::function<void(const StateEvent &)> func_closest_iterate;
 
   func_closest_iterate = [&](const StateEvent &inner_event) {
+    // Cycle detection
+    if (inner_event.contains("event_id")) {
+      auto event_id = inner_event.at("event_id").get<std::string>();
+      if (visited.contains(event_id)) {
+        return;
+      }
+      visited.insert(event_id);
+    }
+
     // Check if event is in power level mainline
     if (const auto search_iter =
             std::ranges::find(power_level_mainline, inner_event);
@@ -673,23 +775,18 @@ void mainline_iterate(
       return;
     }
     // For each auth event of the event if the auth event is of type
-    // m.room.powerlevel then call func_closest_iterate recursively
+    // m.room.power_levels then call func_closest_iterate recursively
     for (const auto &auth_event_id : inner_event["auth_events"]) {
-      const auto actual_auth_event_id = auth_event_id.get<std::string_view>();
+      const auto actual_auth_event_id = auth_event_id.get<std::string>();
 
-      // Get the actual auth event object from the auth events map
-      StateEvent auth_event_obj;
-      for (const auto &inner_map : auth_events | std::views::values) {
-        for (const auto &state_event : inner_map | std::views::values) {
-          if (state_event["event_id"].get<std::string>() ==
-              actual_auth_event_id) {
-            auth_event_obj = state_event;
-            break;
-          }
-        }
+      // O(1) lookup using event_id_map
+      auto it = event_id_map.find(actual_auth_event_id);
+      if (it == event_id_map.end()) {
+        continue;
       }
 
-      if (auth_event_obj["type"] == "m.room.powerlevel") {
+      const auto &auth_event_obj = it->second;
+      if (auth_event_obj["type"] == "m.room.power_levels") {
         func_closest_iterate(auth_event_obj);
       }
     }
@@ -812,7 +909,7 @@ reference_hash(const json &event, const std::string_view room_version) {
  * @throw std::runtime_error If the base64 encoding fails.
  */
 [[nodiscard]] std::string event_id(const json &event,
-                                        const std::string_view room_version) {
+                                   const std::string_view room_version) {
   if (event == nullptr) {
     throw std::invalid_argument("Event cannot be null");
   }
@@ -929,8 +1026,64 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
       std::make_move_iterator(partition_point),
       std::make_move_iterator(full_conflicted_set_copy.end()));
 
-  auto conflicted_control_events_sorted = kahns_algorithm(full_conflicted_set);
+  // Step 1 of state resolution algorithm:
+  // Select the set X of all power events that appear in the full conflicted
+  // set. For each such power event P, enlarge X by adding the events in the
+  // auth chain of P which also belong to the full conflicted set. Sort X into a
+  // list using the reverse topological power ordering.
 
+  // Build a set of event IDs in the full conflicted set for quick lookup
+  std::set<EventID> full_conflicted_event_ids;
+  for (const auto &event : full_conflicted_set) {
+    full_conflicted_event_ids.insert(event.at("event_id").get<EventID>());
+  }
+
+  // Build event map for auth chain lookups
+  std::map<EventID, StateEvent> full_conflicted_event_map;
+  for (const auto &event : full_conflicted_set) {
+    full_conflicted_event_map[event.at("event_id").get<EventID>()] = event;
+  }
+
+  // Expand power events with their auth chain events that are also in the full
+  // conflicted set
+  std::set<EventID> power_events_expanded_ids;
+  std::function<void(const EventID &)> expand_auth_chain =
+      [&](const EventID &event_id) {
+        if (!full_conflicted_event_ids.contains(event_id) ||
+            power_events_expanded_ids.contains(event_id)) {
+          return;
+        }
+        power_events_expanded_ids.insert(event_id);
+
+        // Recursively add auth events that are in the full conflicted set
+        const auto &event = full_conflicted_event_map.at(event_id);
+        if (event.contains("auth_events")) {
+          for (const auto &auth_event_id :
+               event.at("auth_events").get<std::vector<std::string>>()) {
+            if (full_conflicted_event_ids.contains(auth_event_id)) {
+              expand_auth_chain(auth_event_id);
+            }
+          }
+        }
+      };
+
+  // Start with power events (control events) and expand their auth chains
+  for (const auto &event : conflicted_control_events) {
+    expand_auth_chain(event.at("event_id").get<EventID>());
+  }
+
+  // Build the expanded power events vector
+  std::vector<StateEvent> power_events_for_sorting;
+  for (const auto &event_id : power_events_expanded_ids) {
+    power_events_for_sorting.push_back(full_conflicted_event_map.at(event_id));
+  }
+
+  // Sort power events using reverse topological power ordering (Kahn's
+  // algorithm)
+  auto conflicted_control_events_sorted =
+      kahns_algorithm(power_events_for_sorting);
+
+  // Step 2: Apply iterative auth checks to get partially resolved state
   for (auto &event : conflicted_control_events_sorted) {
     if (auth_against_partial_state(partial_state, event)) {
       auto event_type = event["type"].get<EventType>();
@@ -960,14 +1113,26 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   }
   std::vector<StateEvent> power_level_mainline = {resolved_power_level_event};
 
+  // Build event_id -> StateEvent map for O(1) lookups in mainline functions
+  std::map<EventID, StateEvent> event_id_lookup_map;
+  for (const auto &[event_type, inner_map] : partial_state) {
+    for (const auto &[state_key, state_event] : inner_map) {
+      if (state_event.contains("event_id")) {
+        event_id_lookup_map[state_event.at("event_id").get<EventID>()] =
+            state_event;
+      }
+    }
+  }
+
+  std::set<std::string> mainline_visited;
   mainline_iterate(power_level_mainline, resolved_power_level_event,
-                   partial_state);
+                   event_id_lookup_map, mainline_visited);
 
   // Call get_closest_mainline_event for each event in conflicted_others so we
   // have the data required for the next step.
   for (auto &event : conflicted_others) {
-    auto closest_mainline_event =
-        get_closest_mainline_event(power_level_mainline, event, partial_state);
+    auto closest_mainline_event = get_closest_mainline_event(
+        power_level_mainline, event, event_id_lookup_map);
 
     // Get the position of the closest mainline event on the mainline (partial
     // state) by using the distance to the create event from the closest
