@@ -330,6 +330,7 @@ if (NOT DISABLE_TESTS)
             NAME drogon_tests
             COMMAND drogon_tests
     )
+    target_code_coverage(persephone_lib AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
