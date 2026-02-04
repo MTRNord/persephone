@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch:
 
 concurrency:
@@ -47,6 +47,18 @@ jobs:
         run: |
           cd cmake-build-debug
           make -j$(nproc) ccov-all
+
+      - name: Report results to DeepSource
+        run: |
+          # Tests have finished and a test coverage report is available
+          
+          # Install deepsource CLI
+          curl https://deepsource.io/cli | sh
+          
+          # From the root directory, run the report coverage command
+          ./bin/deepsource report --analyzer test-coverage --key cxx --value-file cmake-build-debug/ccov/all-merged/lcov.info
+        env:
+          DEEPSOURCE_DSN: ${{ secrets.DEEPSOURCE_DSN }}
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -101,7 +113,7 @@ jobs:
   # Gate for initial tests before running heavier integration tests
   initial-tests-done:
     name: Initial tests passed
-    needs: [build-and-test, sanitizers]
+    needs: [ build-and-test, sanitizers ]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
@@ -238,7 +250,7 @@ jobs:
   # Final gate for all tests
   all-tests-done:
     name: All tests passed
-    needs: [initial-tests-done, complement, package]
+    needs: [ initial-tests-done, complement, package ]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
