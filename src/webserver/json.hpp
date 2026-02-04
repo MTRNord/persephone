@@ -101,7 +101,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(version, server)
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
 struct [[nodiscard]] old_verify_key {
-  std::string_view key;
+  std::string key;
   int expired_ts;
 };
 
@@ -113,7 +113,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(old_verify_key, key, expired_ts)
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
 struct [[nodiscard]] verify_key {
-  std::string_view key;
+  std::string key;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(verify_key, key)
@@ -124,14 +124,12 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(verify_key, key)
  * See: https://spec.matrix.org/v1.8/server-server-api/#publishing-keys
  */
 struct [[nodiscard]] keys {
-  std::string_view server_name;
+  std::string server_name;
   long valid_until_ts;
-  std::map<std::string_view, server_server_json::old_verify_key>
-      old_verify_keys;
-  std::map<std::string_view, server_server_json::verify_key> verify_keys;
+  std::map<std::string, server_server_json::old_verify_key> old_verify_keys;
+  std::map<std::string, server_server_json::verify_key> verify_keys;
   // Optional as we init it later
-  std::map<std::string_view, std::map<std::string_view, std::string_view>>
-      signatures;
+  std::map<std::string, std::map<std::string, std::string>> signatures;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
