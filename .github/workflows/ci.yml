@@ -47,8 +47,8 @@ jobs:
         run: |
           cd cmake-build-debug
           make -j$(nproc) ccov-all
-          cat cmake-build-debug/ccov/binaries.list | xargs llvm-cov export -instr-profile=cmake-build-debug/ccov/all-merged.profdata -format=lcov > cmake-build-debug/ccov/all-merged/lcov.info
-
+          cat ccov/binaries.list | xargs llvm-cov export -instr-profile=ccov/all-merged.profdata -format=lcov > ccov/all-merged/lcov.info
+          cd ..
       - name: Report results to DeepSource
         run: |
           # Tests have finished and a test coverage report is available
