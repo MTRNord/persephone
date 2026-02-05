@@ -118,10 +118,10 @@ sub _start_persephone {
     $output->diag("Working directory: $hs_dir") if $self->{print_output};
 
     return $self->_start_process_and_await_connectable(
-        setup => sub {
-            chdir $hs_dir or die "Cannot chdir to $hs_dir: $!";
-        },
-        command => \@command,
+        setup => [
+            chdir => $hs_dir,
+        ],
+        command => [ @command ],
         connect_host => $self->{bind_host},
         connect_port => $self->{ports}{client},
         name => "persephone-$idx",
