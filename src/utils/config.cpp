@@ -109,26 +109,34 @@ void Config::load_matrix(const YAML::Node &config) {
       config["matrix"]["server_key_location"].as<std::string>();
 }
 
+static constexpr unsigned short DEFAULT_HTTP_PORT = 8008;
+static constexpr unsigned short DEFAULT_FEDERATION_PORT = 8448;
+
 /**
  * @brief Loads the webserver configuration from a YAML node.
  *
  * This function takes a YAML node as input and extracts the webserver
- * configuration from it. The webserver configuration includes the SSL setting.
- * If the SSL setting is defined in the YAML node, it is set to the provided
- * value. If the SSL setting is not defined in the YAML node, it defaults to
- * false.
+ * configuration from it. The webserver configuration includes the SSL setting,
+ * port, federation_port, and bind_host. Default values are used if not
+ * specified.
  *
  * @param config The YAML node from which to load the webserver configuration.
  */
 void Config::load_webserver(const YAML::Node &config) {
   if (!config["webserver"].IsDefined()) {
     this->webserver_config.ssl = false;
+    this->webserver_config.port = DEFAULT_HTTP_PORT;
+    this->webserver_config.federation_port = DEFAULT_FEDERATION_PORT;
+    this->webserver_config.bind_host = "0.0.0.0";
     return;
   }
 
-  if (config["webserver"]["ssl"]) {
-    this->webserver_config.ssl = config["webserver"]["ssl"].as<bool>();
-  } else {
-    this->webserver_config.ssl = false;
-  }
+  this->webserver_config.ssl =
+      config["webserver"]["ssl"].as<bool>(false);
+  this->webserver_config.port =
+      config["webserver"]["port"].as<unsigned short>(DEFAULT_HTTP_PORT);
+  this->webserver_config.federation_port =
+      config["webserver"]["federation_port"].as<unsigned short>(DEFAULT_FEDERATION_PORT);
+  this->webserver_config.bind_host =
+      config["webserver"]["bind_host"].as<std::string>("0.0.0.0");
 }

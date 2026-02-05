@@ -60,9 +60,11 @@ int main() {
     }
     auto verify_key_data = get_verify_key_data(config);
 
-    LOG_INFO << "Server running on 127.0.0.1:8008";
+    LOG_INFO << "Server running on " << config.webserver_config.bind_host << ":"
+             << config.webserver_config.port;
     drogon::app()
-        .addListener("0.0.0.0", MATRIX_HTTP_PORT)
+        .addListener(config.webserver_config.bind_host,
+                     config.webserver_config.port)
         .setThreadNum(0)
         .setLogLevel(log_level)
         .addDbClient(
@@ -103,7 +105,8 @@ int main() {
         .registerController(srv_srv_ctrlPtr);
 
     if (config.webserver_config.ssl) {
-      drogon::app().addListener("0.0.0.0", MATRIX_SSL_PORT, true,
+      drogon::app().addListener(config.webserver_config.bind_host,
+                                config.webserver_config.federation_port, true,
                                 "./server.crt", "./server.key", false);
     }
 

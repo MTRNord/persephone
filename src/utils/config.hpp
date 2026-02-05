@@ -36,14 +36,17 @@ struct [[nodiscard]] DBConfig {
  * @brief A struct representing the webserver configuration.
  *
  * This struct holds the configuration for the webserver. It includes the SSL
- * setting. The SSL setting is represented as a boolean. If true, SSL is enabled
- * for the webserver. If false, SSL is disabled.
+ * setting and port configuration. The SSL setting is represented as a boolean.
+ * If true, SSL is enabled for the webserver. If false, SSL is disabled.
  *
  * @note The [[nodiscard]] attribute indicates that the compiler will warn if
  * the return value is discarded.
  */
 struct [[nodiscard]] WebserverConfig {
   bool ssl;
+  unsigned short port{8008};            // Client-Server API port
+  unsigned short federation_port{8448}; // Server-Server API (federation) port
+  std::string bind_host{"0.0.0.0"};     // Address to bind to
 };
 
 /**

@@ -69,6 +69,7 @@ webserver:
   ssl: false
   port: $client_port
   federation_port: $fed_port
+  bind_host: "$bind_host"
 
 log_level: "debug"
 YAML
