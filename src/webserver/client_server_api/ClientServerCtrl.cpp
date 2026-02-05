@@ -26,6 +26,31 @@
 using namespace client_server_api;
 using json = nlohmann::json;
 
+/// Extract access token from Authorization header or deprecated query parameter.
+/// The query parameter method (?access_token=...) was deprecated in Matrix v1.11.
+/// @return The access token if found, or empty string if not present.
+[[nodiscard]] static std::string
+extract_access_token(const HttpRequestPtr &req) {
+  // First, try the Authorization header (preferred method)
+  const auto auth_header = req->getHeader("Authorization");
+  if (!auth_header.empty() && auth_header.starts_with("Bearer ")) {
+    return auth_header.substr(7);
+  }
+
+  // Fall back to deprecated query parameter (deprecated in v1.11)
+  // See: https://spec.matrix.org/v1.11/client-server-api/#using-access-tokens
+  const auto &query_token = req->getParameter("access_token");
+  if (!query_token.empty()) {
+    const auto user_agent = req->getHeader("User-Agent");
+    LOG_WARN << "Client using deprecated access_token query parameter "
+             << "(deprecated in Matrix v1.11). User-Agent: "
+             << (user_agent.empty() ? "(not provided)" : user_agent);
+    return query_token;
+  }
+
+  return "";
+}
+
 void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
                                  FilterCallback &&callback,
                                  FilterChainCallback &&chain_callback) {
@@ -37,19 +62,20 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
       co_return;
     }
 
-    // Get the access token from the Authorization header
-    const auto auth_header = req->getHeader("Authorization");
-    if (auth_header.empty()) {
-      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+    // Get the access token from header or query parameter
+    const auto access_token = extract_access_token(req);
+    if (access_token.empty()) {
+      return_error(callback, "M_MISSING_TOKEN",
+                   "Missing access token. Provide via Authorization header "
+                   "(Bearer token) or access_token query parameter.",
                    k401Unauthorized);
       co_return;
     }
-    // TMP loging for complement debugging
-    LOG_DEBUG << "Access token: " << auth_header;
 
-    // Remove the "Bearer " prefix and check if the token is valid;
-    if (const auto access_token = auth_header.substr(7);
-        co_await Database::validate_access_token(access_token)) {
+    LOG_DEBUG << "Access token: " << access_token;
+
+    // Check if the token is valid
+    if (co_await Database::validate_access_token(access_token)) {
       chain_callback();
       co_return;
     }
@@ -60,18 +86,19 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
 }
 
 drogon::Task<UserValidData> ClientServerCtrl::getUserInfo(
-    const std::string &req_auth_header,
+    const HttpRequestPtr &req,
     const std::function<void(const HttpResponsePtr &)> &callback) const {
-  if (req_auth_header.empty()) {
-    return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
+  const auto access_token = extract_access_token(req);
+  if (access_token.empty()) {
+    return_error(callback, "M_MISSING_TOKEN",
+                 "Missing access token. Provide via Authorization header "
+                 "(Bearer token) or access_token query parameter.",
                  k401Unauthorized);
     co_return {
         .isValid = false,
         .userInfo = std::nullopt,
     };
   }
-  // Remove the "Bearer " prefix
-  const auto access_token = req_auth_header.substr(7);
   // Check if we have the access token in the database
   const auto user_info = co_await Database::get_user_info(access_token);
   if (!user_info) {
@@ -448,7 +475,7 @@ void client_server_api::ClientServerCtrl::getPushrules(
   drogon::async_run(
       [req, callback = std::move(callback), this]() -> drogon::Task<> {
         const auto [isValid, userInfo] =
-            co_await getUserInfo(req->getHeader("Authorization"), callback);
+            co_await getUserInfo(req, callback);
         if (!isValid) {
           co_return;
         }
@@ -522,7 +549,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
   drogon::async_run([req, roomIdOrAlias, callback = std::move(callback),
                      this]() -> drogon::Task<> {
     const auto [isValid, userInfo] =
-        co_await getUserInfo(req->getHeader("Authorization"), callback);
+        co_await getUserInfo(req, callback);
     if (!isValid) {
       co_return;
     }
@@ -779,7 +806,7 @@ void ClientServerCtrl::createRoom(
   drogon::async_run([req, callback = std::move(callback),
                      this]() -> drogon::Task<> {
     const auto [isValid, userInfo] =
-        co_await getUserInfo(req->getHeader("Authorization"), callback);
+        co_await getUserInfo(req, callback);
     if (!isValid) {
       co_return;
     }

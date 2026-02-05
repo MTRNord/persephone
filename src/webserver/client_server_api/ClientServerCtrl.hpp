@@ -96,8 +96,10 @@ public:
   explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
 
 protected:
+  /// Get user info from access token in Authorization header or query parameter.
+  /// Supports deprecated ?access_token= query parameter (deprecated in v1.11).
   drogon::Task<UserValidData> getUserInfo(
-      const std::string &req_auth_header,
+      const HttpRequestPtr &req,
       const std::function<void(const HttpResponsePtr &)> &callback) const;
 
   void versions(const HttpRequestPtr &,
