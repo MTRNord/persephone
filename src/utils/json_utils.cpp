@@ -230,4 +230,64 @@ void ensure_server_keys(const Config &config) {
     write_server_key(config, private_key_vector);
   }
 }
+
+[[nodiscard]] std::optional<std::vector<unsigned char>>
+decode_base64(const std::string &input) {
+  if (input.empty()) {
+    return std::nullopt;
+  }
+
+  const size_t b64_str_len = input.size();
+  // Allocate max possible size (base64 expands by ~4/3)
+  size_t bin_len = b64_str_len * 3 / 4 + 4;
+  std::vector<unsigned char> bin_str(bin_len);
+
+  // Try URL-safe variant first
+  int status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
+                                 b64_str_len, nullptr, &bin_len, nullptr,
+                                 sodium_base64_VARIANT_URLSAFE_NO_PADDING);
+
+  if (status < 0) {
+    // Try standard variant
+    bin_len = b64_str_len * 3 / 4 + 4;
+    status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
+                               b64_str_len, nullptr, &bin_len, nullptr,
+                               sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
+  }
+
+  if (status < 0) {
+    return std::nullopt;
+  }
+
+  bin_str.resize(bin_len);
+  return bin_str;
+}
+
+[[nodiscard]] bool verify_signature(std::string_view public_key_base64,
+                                    std::string_view signature_base64,
+                                    std::string_view message) {
+  // Decode the public key
+  auto public_key_opt = decode_base64(std::string(public_key_base64));
+  if (!public_key_opt.has_value() ||
+      public_key_opt->size() != crypto_sign_PUBLICKEYBYTES) {
+    return false;
+  }
+
+  // Decode the signature
+  auto signature_opt = decode_base64(std::string(signature_base64));
+  if (!signature_opt.has_value() ||
+      signature_opt->size() != crypto_sign_BYTES) {
+    return false;
+  }
+
+  // Verify the signature using Ed25519
+  // crypto_sign creates: signature || message
+  // crypto_sign_verify_detached verifies just the detached signature
+  const auto result = crypto_sign_verify_detached(
+      signature_opt->data(),
+      reinterpret_cast<const unsigned char *>(message.data()), message.size(),
+      public_key_opt->data());
+
+  return result == 0;
+}
 } // namespace json_utils

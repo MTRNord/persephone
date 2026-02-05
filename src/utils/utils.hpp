@@ -297,6 +297,21 @@ generateQueryParamString(const std::string &keyName,
 [[nodiscard]] std::unordered_map<std::string, std::vector<std::string>>
 parseQueryParamString(const std::string &queryString);
 
+/// Parsed X-Matrix Authorization header
+struct [[nodiscard]] XMatrixAuth {
+  std::string origin;      // The origin server that sent the request
+  std::string destination; // The destination server (our server)
+  std::string key_id;      // The key id (e.g., "ed25519:abc123")
+  std::string signature;   // The signature (base64-encoded)
+};
+
+/// Parse an X-Matrix Authorization header
+/// Format: X-Matrix origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
+/// @param header The Authorization header value (including "X-Matrix " prefix)
+/// @return Parsed header, or nullopt if parsing failed
+[[nodiscard]] std::optional<XMatrixAuth>
+parse_xmatrix_header(std::string_view header);
+
 [[nodiscard]] Task<drogon::HttpResponsePtr>
 federation_request(HTTPRequest request);
 

@@ -5,6 +5,7 @@
 #include "webserver/json.hpp"
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <drogon/HttpAppFramework.h>
 #include <drogon/orm/DbClient.h>
@@ -277,28 +278,80 @@ Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
   }
 }
 
+/// Helper to format auth_events array for PostgreSQL TEXT[] insertion
+static std::string format_auth_events_array(const json &event) {
+  if (!event.contains("auth_events")) {
+    return "{}";
+  }
+  const auto auth_events =
+      event.at("auth_events").get<std::vector<std::string>>();
+  std::string result = "{";
+  for (const auto &auth_event : auth_events) {
+    result += "\"" + auth_event + "\",";
+  }
+  if (!auth_events.empty()) {
+    result.pop_back(); // Remove trailing comma
+  }
+  result += "}";
+  return result;
+}
+
+/// SECURITY: Calculate depth locally from prev_events.
+/// NEVER trust the depth field from external events to prevent depth-bomb
+/// attacks.
+static drogon::Task<int64_t> calculate_event_depth(
+    const std::shared_ptr<drogon::orm::Transaction> &transaction,
+    const json &event) {
+  // Default depth for events with no prev_events (e.g., m.room.create)
+  constexpr int64_t default_depth = 1;
+
+  if (!event.contains("prev_events") || !event["prev_events"].is_array() ||
+      event["prev_events"].empty()) {
+    co_return default_depth;
+  }
+
+  // Extract prev_event IDs
+  std::vector<std::string> prev_event_ids;
+  for (const auto &prev : event["prev_events"]) {
+    if (prev.is_string()) {
+      prev_event_ids.push_back(prev.get<std::string>());
+    }
+  }
+
+  if (prev_event_ids.empty()) {
+    co_return default_depth;
+  }
+
+  // Build PostgreSQL array string for parameterized query
+  std::string prev_events_array = "{";
+  for (size_t i = 0; i < prev_event_ids.size(); i++) {
+    if (i > 0) {
+      prev_events_array += ",";
+    }
+    prev_events_array += "\"" + prev_event_ids[i] + "\"";
+  }
+  prev_events_array += "}";
+
+  try {
+    const auto depth_query = co_await transaction->execSqlCoro(
+        "SELECT COALESCE(MAX(depth), 0) AS max_depth FROM events "
+        "WHERE event_id = ANY($1::text[])",
+        prev_events_array);
+    if (!depth_query.empty()) {
+      co_return depth_query.at(0)["max_depth"].as<int64_t>() + 1;
+    }
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_WARN << "Could not query prev_events depths, using default: "
+             << e.base().what();
+  }
+
+  co_return default_depth;
+}
+
 [[nodiscard]] drogon::Task<void>
 Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
                     json event, const std::string_view room_id) {
-  std::string auth_events_str = "{}";
-  if (event.contains("auth_events")) {
-    // We need the auth_events as TEXT[] so we need to map the json array to a
-    // string array
-    const auto auth_events =
-        event.at("auth_events").get<std::vector<std::string>>();
-    // We also need to form a single string from it which is of form
-    // '{"a","b","c"}'. We only store the event_id of the auth events
-    auth_events_str = "{";
-    for (const auto &auth_event : auth_events) {
-      auth_events_str += "\"" + auth_event + "\",";
-    }
-    // Remove the trailing comma if present
-    if (!auth_events.empty()) {
-      auth_events_str.pop_back();
-    }
-    auth_events_str += "}";
-  }
-
+  const std::string auth_events_str = format_auth_events_array(event);
   LOG_DEBUG << "Auth events: " << auth_events_str;
 
   // If we got a state_key set it in the db otherwise use NULL
@@ -307,13 +360,17 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
     state_key = event.at("state_key").get<std::string>();
   }
 
+  const int64_t calculated_depth =
+      co_await calculate_event_depth(transaction, event);
+
   try {
     co_await transaction->execSqlCoro(
         "INSERT INTO events(event_id, room_id, depth, auth_events, "
-        "rejected, state_key, type, json) VALUES($1, $2, 0, $3::text[], $4, "
-        "$5, $6, $7)",
-        event.at("event_id").get<std::string>(), room_id, auth_events_str,
-        false, state_key, event.at("type").get<std::string>(), event.dump());
+        "rejected, state_key, type, json) VALUES($1, $2, $3, $4::text[], $5, "
+        "$6, $7, $8)",
+        event.at("event_id").get<std::string>(), room_id, calculated_depth,
+        auth_events_str, false, state_key, event.at("type").get<std::string>(),
+        event.dump());
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to add event due to database error");
@@ -485,4 +542,311 @@ drogon::Task<json> Database::get_filter(std::string user_id,
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to get filter due to database error");
   }
+}
+
+[[nodiscard]] drogon::Task<bool>
+Database::room_exists(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Check if any events exist for this room (the room exists if we have its
+    // create event)
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT EXISTS(SELECT 1 FROM events WHERE room_id = $1 AND type = "
+        "'m.room.create') AS exists",
+        room_id);
+
+    co_return query.at(0)["exists"].as<bool>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return false;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<std::string>>
+Database::get_room_version(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get the m.room.create event and extract room_version from content
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.create' "
+        "LIMIT 1",
+        room_id);
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    const auto create_event =
+        json::parse(query.at(0)["json"].as<std::string>());
+
+    // Room version is in content.room_version
+    // If not present, it's room version 1 or 2 (legacy)
+    if (create_event.contains("content") &&
+        create_event["content"].contains("room_version")) {
+      co_return create_event["content"]["room_version"].get<std::string>();
+    }
+
+    // Default to version "1" if not specified (legacy behavior)
+    co_return "1";
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<std::string>>
+Database::get_membership(std::string_view room_id, std::string_view user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get the latest m.room.member event for this user in this room
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.member' "
+        "AND state_key = $2 ORDER BY depth DESC LIMIT 1",
+        room_id, user_id);
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    const auto member_event =
+        json::parse(query.at(0)["json"].as<std::string>());
+
+    if (member_event.contains("content") &&
+        member_event["content"].contains("membership")) {
+      co_return member_event["content"]["membership"].get<std::string>();
+    }
+
+    co_return std::nullopt;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<json>>
+Database::get_join_rules(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get the latest m.room.join_rules event
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = "
+        "'m.room.join_rules' AND state_key = '' ORDER BY depth DESC LIMIT 1",
+        room_id);
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    co_return json::parse(query.at(0)["json"].as<std::string>());
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<Database::AuthEventsForJoin>>
+Database::get_auth_events_for_join(std::string_view room_id,
+                                   std::string_view user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    AuthEventsForJoin result;
+
+    // Get the m.room.create event (required)
+    auto create_query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.create' "
+        "LIMIT 1",
+        room_id);
+    if (create_query.empty()) {
+      co_return std::nullopt;
+    }
+    result.create_event =
+        json::parse(create_query.at(0)["json"].as<std::string>());
+
+    // Get the m.room.power_levels event (optional)
+    auto power_query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = "
+        "'m.room.power_levels' AND state_key = '' ORDER BY depth DESC LIMIT 1",
+        room_id);
+    if (!power_query.empty()) {
+      result.power_levels =
+          json::parse(power_query.at(0)["json"].as<std::string>());
+    }
+
+    // Get the m.room.join_rules event (optional)
+    auto join_rules_query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = "
+        "'m.room.join_rules' AND state_key = '' ORDER BY depth DESC LIMIT 1",
+        room_id);
+    if (!join_rules_query.empty()) {
+      result.join_rules =
+          json::parse(join_rules_query.at(0)["json"].as<std::string>());
+    }
+
+    // Get the target user's current membership (optional)
+    auto membership_query = co_await sql->execSqlCoro(
+        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.member' "
+        "AND state_key = $2 ORDER BY depth DESC LIMIT 1",
+        room_id, user_id);
+    if (!membership_query.empty()) {
+      result.target_membership =
+          json::parse(membership_query.at(0)["json"].as<std::string>());
+    }
+
+    co_return result;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<std::string>>
+Database::get_room_heads(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get events that are not referenced as prev_events by any other event
+    // For now, just get the event with the highest depth
+    // TODO: Implement proper DAG head tracking
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT event_id FROM events WHERE room_id = $1 ORDER BY depth DESC "
+        "LIMIT 1",
+        room_id);
+
+    std::vector<std::string> heads;
+    for (const auto &row : query) {
+      heads.push_back(row["event_id"].as<std::string>());
+    }
+
+    co_return heads;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<int64_t>
+Database::get_max_depth(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT COALESCE(MAX(depth), 0) AS max_depth FROM events WHERE room_id "
+        "= $1",
+        room_id);
+
+    co_return query.at(0)["max_depth"].as<int64_t>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return 0;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<Database::CachedServerKey>>
+Database::get_cached_server_key(std::string_view server_name,
+                                std::string_view key_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT public_key, valid_until_ts, fetched_at FROM server_signing_keys "
+        "WHERE server_name = $1 AND key_id = $2",
+        server_name, key_id);
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    CachedServerKey key;
+    key.public_key = query.at(0)["public_key"].as<std::string>();
+    key.valid_until_ts = query.at(0)["valid_until_ts"].as<int64_t>();
+    key.fetched_at = query.at(0)["fetched_at"].as<int64_t>();
+    co_return key;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<void>
+Database::cache_server_key(std::string_view server_name,
+                           std::string_view key_id, std::string_view public_key,
+                           int64_t valid_until_ts) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+
+    // Upsert the key
+    co_await sql->execSqlCoro(
+        "INSERT INTO server_signing_keys (server_name, key_id, public_key, "
+        "valid_until_ts, fetched_at) "
+        "VALUES ($1, $2, $3, $4, $5) "
+        "ON CONFLICT (server_name, key_id) DO UPDATE SET "
+        "public_key = EXCLUDED.public_key, "
+        "valid_until_ts = EXCLUDED.valid_until_ts, "
+        "fetched_at = EXCLUDED.fetched_at",
+        server_name, key_id, public_key, valid_until_ts, now);
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "Failed to cache server key: " << e.base().what();
+  }
+  co_return;
+}
+
+[[nodiscard]] drogon::Task<void>
+Database::cleanup_expired_server_keys(int64_t max_age_ms) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+    const auto oldest_allowed = now - max_age_ms;
+
+    // Delete keys that are either expired (valid_until_ts < now) or stale
+    // (fetched_at < oldest_allowed)
+    co_await sql->execSqlCoro(
+        "DELETE FROM server_signing_keys WHERE valid_until_ts < $1 OR "
+        "fetched_at < $2",
+        now, oldest_allowed);
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "Failed to cleanup expired server keys: " << e.base().what();
+  }
+  co_return;
 }

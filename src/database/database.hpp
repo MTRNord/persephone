@@ -91,4 +91,58 @@ public:
 
   [[nodiscard]] static drogon::Task<json> get_filter(std::string user_id,
                                                      std::string filter_id);
+
+  // Room query methods for federation
+  [[nodiscard]] static drogon::Task<bool> room_exists(std::string_view room_id);
+
+  [[nodiscard]] static drogon::Task<std::optional<std::string>>
+  get_room_version(std::string_view room_id);
+
+  [[nodiscard]] static drogon::Task<std::optional<std::string>>
+  get_membership(std::string_view room_id, std::string_view user_id);
+
+  [[nodiscard]] static drogon::Task<std::optional<json>>
+  get_join_rules(std::string_view room_id);
+
+  /// Get events needed for auth_events in a join event
+  /// Returns: create event, power_levels, join_rules, and optionally
+  /// target membership
+  struct AuthEventsForJoin {
+    json create_event;
+    std::optional<json> power_levels;
+    std::optional<json> join_rules;
+    std::optional<json> target_membership;
+  };
+
+  [[nodiscard]] static drogon::Task<std::optional<AuthEventsForJoin>>
+  get_auth_events_for_join(std::string_view room_id, std::string_view user_id);
+
+  /// Get the current room head events (latest events with no children)
+  [[nodiscard]] static drogon::Task<std::vector<std::string>>
+  get_room_heads(std::string_view room_id);
+
+  /// Get the maximum depth of events in a room
+  [[nodiscard]] static drogon::Task<int64_t>
+  get_max_depth(std::string_view room_id);
+
+  // Server key caching for federation signature verification
+  struct CachedServerKey {
+    std::string public_key;
+    int64_t valid_until_ts;
+    int64_t fetched_at;
+  };
+
+  /// Get a cached server signing key
+  [[nodiscard]] static drogon::Task<std::optional<CachedServerKey>>
+  get_cached_server_key(std::string_view server_name, std::string_view key_id);
+
+  /// Store a server signing key in the cache
+  [[nodiscard]] static drogon::Task<void>
+  cache_server_key(std::string_view server_name, std::string_view key_id,
+                   std::string_view public_key, int64_t valid_until_ts);
+
+  /// Delete expired or stale server keys (valid_until_ts < now or fetched_at
+  /// older than max_age_ms)
+  [[nodiscard]] static drogon::Task<void>
+  cleanup_expired_server_keys(int64_t max_age_ms);
 };

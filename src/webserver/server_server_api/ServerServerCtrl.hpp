@@ -3,6 +3,7 @@
 #include "utils/config.hpp"
 #include "utils/utils.hpp"
 #include <drogon/HttpController.h>
+#include <drogon/HttpFilter.h>
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
@@ -22,13 +23,36 @@
 using namespace drogon;
 
 namespace server_server_api {
+
+/// Filter for verifying X-Matrix Authorization headers on federation endpoints.
+/// This filter verifies that incoming requests are properly signed by the
+/// origin server.
+class FederationAuthFilter final
+    : public drogon::HttpFilter<FederationAuthFilter> {
+public:
+  FederationAuthFilter() = default;
+
+  void doFilter(const HttpRequestPtr &req, FilterCallback &&callback,
+                FilterChainCallback &&chain_callback) override;
+
+  /// Set the server name for all filter instances (call once at startup)
+  static void setServerName(std::string name);
+
+private:
+  static std::string _server_name;
+};
 class ServerServerCtrl final
     : public drogon::HttpController<ServerServerCtrl, false> {
 public:
   METHOD_LIST_BEGIN
+  // These endpoints do NOT require X-Matrix auth
   ADD_METHOD_TO(ServerServerCtrl::version, "/_matrix/federation/v1/version",
                 Get);
   ADD_METHOD_TO(ServerServerCtrl::server_key, "/_matrix/key/v2/server", Get);
+  // These endpoints require X-Matrix auth
+  ADD_METHOD_TO(ServerServerCtrl::make_join,
+                "/_matrix/federation/v1/make_join/{1:roomId}/{2:userId}", Get,
+                "server_server_api::FederationAuthFilter");
   METHOD_LIST_END
 
   explicit ServerServerCtrl(Config config, VerifyKeyData verify_key_data)
@@ -42,6 +66,10 @@ protected:
   void
   server_key(const HttpRequestPtr &,
              std::function<void(const HttpResponsePtr &)> &&callback) const;
+
+  void make_join(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &roomId, const std::string &userId) const;
 
 private:
   Config _config;

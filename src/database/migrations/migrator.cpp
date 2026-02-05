@@ -13,6 +13,7 @@ void Migrator::migrate() {
   migration_v3();
   migration_v4();
   migration_v5();
+  migration_v6();
 
   LOG_INFO << "Finished database migration";
 }
@@ -366,6 +367,56 @@ void Migrator::migration_v5() {
     const auto query_7 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (5);");
     query_7.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v6() {
+  LOG_INFO << "Starting database migration v5->v6";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 6) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v5->v6 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v6";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Create table for caching remote server signing keys */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS server_signing_keys ("
+        "server_name TEXT NOT NULL, "
+        "key_id TEXT NOT NULL, "
+        "public_key TEXT NOT NULL, "
+        "valid_until_ts BIGINT NOT NULL, "
+        "fetched_at BIGINT NOT NULL, "
+        "PRIMARY KEY (server_name, key_id));");
+    query_1.wait();
+
+    /* Create index for cleanup queries (expired keys) */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX IF NOT EXISTS server_signing_keys_valid_until_idx "
+        "ON server_signing_keys (valid_until_ts);");
+    query_2.wait();
+
+    /* Mark the migration as completed */
+    const auto query_3 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (6);");
+    query_3.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

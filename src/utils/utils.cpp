@@ -832,3 +832,94 @@ std::string to_lower(const std::string &original) {
 
   return lower;
 }
+
+/**
+ * @brief Parses an X-Matrix Authorization header.
+ *
+ * Format: X-Matrix origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
+ *
+ * @param header The Authorization header value (including "X-Matrix " prefix)
+ * @return Parsed XMatrixAuth struct, or nullopt if parsing failed
+ */
+[[nodiscard]] std::optional<XMatrixAuth>
+parse_xmatrix_header(std::string_view header) {
+  // Remove leading/trailing whitespace
+  while (!header.empty() && std::isspace(header.front())) {
+    header.remove_prefix(1);
+  }
+  while (!header.empty() && std::isspace(header.back())) {
+    header.remove_suffix(1);
+  }
+
+  // Check for X-Matrix prefix
+  constexpr std::string_view prefix = "X-Matrix ";
+  if (header.size() < prefix.size() ||
+      header.substr(0, prefix.size()) != prefix) {
+    return std::nullopt;
+  }
+  header.remove_prefix(prefix.size());
+
+  XMatrixAuth result;
+
+  // Parse key=value pairs separated by commas
+  // Values are quoted with double quotes
+  auto extract_value = [](std::string_view &str,
+                          std::string_view key) -> std::optional<std::string> {
+    // Find key= pattern
+    auto key_pos = str.find(key);
+    if (key_pos == std::string_view::npos) {
+      return std::nullopt;
+    }
+
+    // Move past key=
+    auto value_start = key_pos + key.size();
+    if (value_start >= str.size()) {
+      return std::nullopt;
+    }
+
+    // Skip any whitespace
+    while (value_start < str.size() && std::isspace(str[value_start])) {
+      value_start++;
+    }
+
+    // Check for opening quote
+    if (value_start >= str.size() || str[value_start] != '"') {
+      return std::nullopt;
+    }
+    value_start++; // Skip opening quote
+
+    // Find closing quote
+    auto value_end = str.find('"', value_start);
+    if (value_end == std::string_view::npos) {
+      return std::nullopt;
+    }
+
+    return std::string(str.substr(value_start, value_end - value_start));
+  };
+
+  auto origin_opt = extract_value(header, "origin=");
+  if (!origin_opt) {
+    return std::nullopt;
+  }
+  result.origin = std::move(*origin_opt);
+
+  auto destination_opt = extract_value(header, "destination=");
+  if (!destination_opt) {
+    return std::nullopt;
+  }
+  result.destination = std::move(*destination_opt);
+
+  auto key_opt = extract_value(header, "key=");
+  if (!key_opt) {
+    return std::nullopt;
+  }
+  result.key_id = std::move(*key_opt);
+
+  auto sig_opt = extract_value(header, "sig=");
+  if (!sig_opt) {
+    return std::nullopt;
+  }
+  result.signature = std::move(*sig_opt);
+
+  return result;
+}

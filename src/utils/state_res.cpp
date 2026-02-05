@@ -1159,3 +1159,49 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   return partial_state;
 }
+
+std::vector<std::string> select_auth_events_for_join(
+    const json &create_event, const std::optional<json> &power_levels,
+    const std::optional<json> &join_rules,
+    const std::optional<json> &target_membership,
+    const std::optional<json> &auth_user_membership,
+    std::string_view room_version) {
+
+  std::vector<std::string> auth_events;
+
+  // 1. Always include the m.room.create event
+  if (!create_event.contains("event_id")) {
+    throw std::runtime_error("create_event must have event_id");
+  }
+  auth_events.push_back(create_event["event_id"].get<std::string>());
+
+  // 2. Include m.room.power_levels if present
+  if (power_levels.has_value() && power_levels->contains("event_id")) {
+    auth_events.push_back(power_levels.value()["event_id"].get<std::string>());
+  }
+
+  // 3. For join events, include m.room.join_rules if present
+  if (join_rules.has_value() && join_rules->contains("event_id")) {
+    auth_events.push_back(join_rules.value()["event_id"].get<std::string>());
+  }
+
+  // 4. Include target's current membership if they have one
+  // (This is the target user's existing m.room.member event, if any)
+  if (target_membership.has_value() &&
+      target_membership->contains("event_id")) {
+    auth_events.push_back(
+        target_membership.value()["event_id"].get<std::string>());
+  }
+
+  // 5. For restricted room joins (room versions 8+), include the authorizing
+  // user's membership if join_authorised_via_users_server will be used
+  if (auth_user_membership.has_value() &&
+      auth_user_membership->contains("event_id") &&
+      (room_version == "8" || room_version == "9" || room_version == "10" ||
+       room_version == "11")) {
+    auth_events.push_back(
+        auth_user_membership.value()["event_id"].get<std::string>());
+  }
+
+  return auth_events;
+}

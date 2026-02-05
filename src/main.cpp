@@ -89,6 +89,10 @@ int main() {
         })
         .registerBeginningAdvice([]() { Database::migrate(); });
 
+    // Initialize the federation auth filter with our server name
+    server_server_api::FederationAuthFilter::setServerName(
+        std::string(config.matrix_config.server_name));
+
     const auto srv_srv_ctrlPtr =
         std::make_shared<server_server_api::ServerServerCtrl>(config,
                                                               verify_key_data);

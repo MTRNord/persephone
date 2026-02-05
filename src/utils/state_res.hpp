@@ -133,6 +133,24 @@ findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
 [[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 stateres_v2(const std::vector<std::vector<StateEvent>> &forks);
 
+/// Select auth_events for a join event based on current room state
+/// This is used by make_join to build the proto-event
+/// @param create_event The m.room.create event (required)
+/// @param power_levels The current m.room.power_levels event (optional)
+/// @param join_rules The current m.room.join_rules event (optional)
+/// @param target_membership The target user's current m.room.member event
+/// (optional)
+/// @param auth_user_membership For restricted joins, the authorizing user's
+/// membership
+/// @param room_version The room version
+/// @return Vector of event_ids to use as auth_events
+[[nodiscard]] std::vector<std::string> select_auth_events_for_join(
+    const json &create_event, const std::optional<json> &power_levels,
+    const std::optional<json> &join_rules,
+    const std::optional<json> &target_membership,
+    const std::optional<json> &auth_user_membership,
+    std::string_view room_version);
+
 // NOTE: THIS ONLY WORKS FOR THE ROOM CREATION CURRENTLY!
 constexpr void
 find_auth_event_for_event_on_create(std::vector<StateEvent> &events,

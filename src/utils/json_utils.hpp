@@ -11,8 +11,10 @@
 #else
 #include <nlohmann/json.hpp>
 #endif
+#include <optional>
 #include <sodium/crypto_sign.h>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 struct Config;
@@ -40,4 +42,18 @@ void write_server_key(const Config &config,
                       const std::vector<unsigned char> &private_key);
 
 void ensure_server_keys(const Config &config);
+
+/// Verify a signature against a message using Ed25519
+/// @param public_key The public key as base64-encoded string (URL-safe,
+/// unpadded)
+/// @param signature The signature as base64-encoded string (standard, unpadded)
+/// @param message The message that was signed
+/// @return true if signature is valid, false otherwise
+[[nodiscard]] bool verify_signature(std::string_view public_key_base64,
+                                    std::string_view signature_base64,
+                                    std::string_view message);
+
+/// Decode a base64 string (supports both URL-safe and standard variants)
+[[nodiscard]] std::optional<std::vector<unsigned char>>
+decode_base64(const std::string &input);
 } // namespace json_utils
