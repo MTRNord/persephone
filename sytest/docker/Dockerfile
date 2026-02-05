@@ -1,7 +1,7 @@
 # Dockerfile for running Sytest against Persephone
 # Based on the official sytest Docker image
 
-FROM matrixdotorg/sytest:bookworm
+FROM matrixdotorg/sytest:testing
 
 # Install C++ build dependencies for Persephone
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -13,8 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     git \
     # Compiler toolchain
-    clang-18 \
-    lld-18 \
+    clang-21 \
+    lld-21 \
     # Persephone dependencies
     libpq-dev \
     libsodium-dev \
