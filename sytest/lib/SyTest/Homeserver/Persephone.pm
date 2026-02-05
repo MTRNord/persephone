@@ -53,6 +53,9 @@ sub _get_config {
     # Use a unique database name based on port to avoid conflicts
     my $db_name = "persephone_sytest_$client_port";
 
+    # Drogon requires IP addresses, not hostnames like "localhost"
+    my $bind_ip = ($bind_host eq 'localhost') ? '127.0.0.1' : $bind_host;
+
     return <<"YAML";
 database:
   host: "localhost"
@@ -69,7 +72,7 @@ webserver:
   ssl: false
   port: $client_port
   federation_port: $fed_port
-  bind_host: "$bind_host"
+  bind_host: "$bind_ip"
 
 log_level: "debug"
 YAML
