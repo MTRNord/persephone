@@ -46,7 +46,7 @@ sub _get_config {
     my $self = shift;
 
     my $hs_dir = $self->{hs_dir};
-    my $bind_host = $self->bind_host;
+    my $bind_host = $self->{bind_host};
     my $client_port = $self->{ports}{client};
     my $fed_port = $self->{ports}{federation};
 
@@ -105,6 +105,7 @@ sub _start_persephone {
 
     my $hs_dir = $self->{hs_dir};
     my $output = $self->{output};
+    my $idx = $self->{hs_index};
     my $binary = "$self->{bindir}/persephone";
 
     unless (-x $binary) {
@@ -121,8 +122,9 @@ sub _start_persephone {
             chdir $hs_dir or die "Cannot chdir to $hs_dir: $!";
         },
         command => \@command,
-        connect_host => $self->bind_host,
+        connect_host => $self->{bind_host},
         connect_port => $self->{ports}{client},
+        name => "persephone-$idx",
     );
 }
 
@@ -173,12 +175,12 @@ sub federation_port {
 
 sub server_name {
     my $self = shift;
-    return $self->bind_host . ":" . $self->secure_port;
+    return $self->{bind_host} . ":" . $self->secure_port;
 }
 
 sub public_baseurl {
     my $self = shift;
-    return "http://" . $self->bind_host . ":" . $self->unsecure_port;
+    return "http://$self->{bind_host}:" . $self->unsecure_port;
 }
 
 sub print_output {
