@@ -5,6 +5,8 @@
 #include "webserver/client_server_api/ClientServerCtrl.hpp"
 #include "webserver/server_server_api/ServerServerCtrl.hpp"
 #include "yaml-cpp/exceptions.h"
+#include <algorithm>
+#include <cstddef>
 #include <drogon/HttpAppFramework.h>
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
@@ -64,7 +66,7 @@ int main() {
 
     // Determine connection pool size: use config value, or default to
     // max(4, hardware_concurrency) for good performance
-    const int database_connections = config.db_config.pool_size.value_or(
+    const size_t database_connections = config.db_config.pool_size.value_or(
         std::max(4, static_cast<int>(std::thread::hardware_concurrency())));
     LOG_INFO << "Database connection pool size: " << database_connections;
 
