@@ -203,6 +203,46 @@ jobs:
             complement_ci/complement.log
           retention-days: 14
 
+  # Run Sytest integration tests
+  sytest:
+    name: "Sytest Tests"
+    timeout-minutes: 90
+    needs: initial-tests-done
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Sytest Docker image
+        run: |
+          docker build -t sytest-persephone -f sytest/docker/Dockerfile .
+        env:
+          DOCKER_BUILDKIT: 1
+
+      - name: Create logs directory
+        run: mkdir -p ${{ github.workspace }}/sytest-logs
+
+      - name: Run Sytest
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/src:ro \
+            -v ${{ github.workspace }}/sytest-logs:/logs \
+            -e SYTEST_BRANCH="${{ github.head_ref || github.ref_name }}" \
+            sytest-persephone \
+            -S
+        continue-on-error: true
+
+      - name: Upload Sytest logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Sytest Logs - ${{ job.status }}
+          path: ${{ github.workspace }}/sytest-logs/
+          retention-days: 14
+
   # Package with CPack
   package:
     name: Package with CPack
@@ -252,7 +292,7 @@ jobs:
   # Final gate for all tests
   all-tests-done:
     name: All tests passed
-    needs: [ initial-tests-done, complement, package ]
+    needs: [ initial-tests-done, complement, sytest, package ]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
@@ -261,5 +301,5 @@ jobs:
       - name: Check all tests passed
         uses: re-actors/alls-green@release/v1
         with:
-          allowed-failures: complement
+          allowed-failures: complement,sytest
           jobs: ${{ toJSON(needs) }}

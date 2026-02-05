@@ -1,0 +1,11 @@
+# Persephone Sytest Whitelist
+#
+# Tests listed here are expected to pass. Lines starting with # are comments.
+# Add tests as they pass implementation.
+#
+# Format: One test name per line (exact match or regex pattern)
+#
+# Example:
+# GET /versions
+# Can register a new user
+

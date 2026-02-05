@@ -1,0 +1,59 @@
+# Persephone Sytest Blacklist
+#
+# Tests listed here are expected to fail and will be skipped.
+# Lines starting with # are comments.
+#
+# Format: One test name per line (exact match)
+#
+# These tests require endpoints/features not yet implemented in Persephone.
+
+# Federation tests requiring unimplemented endpoints
+Inbound federation can query room alias directory
+Inbound federation can backfill events
+Inbound federation can receive events
+Inbound federation can get public room list
+Outbound federation can query room alias directory
+
+# Room directory tests
+Can get remote public room list
+
+# Presence tests (not implemented)
+Presence can be set from sync
+GET /presence/:user_id/status fetches initial status
+
+# Push notification tests (not implemented)
+Test that rejected pushers are removed
+
+# Device management tests (partially implemented)
+Can query remote device keys using POST
+Can claim remote one time keys using POST
+
+# Account data tests (partially implemented)
+Can add tag to room
+Can remove tag from room
+
+# Media tests (not implemented)
+Can upload with ASCII file name
+Can download file
+Can download specifying a different file name
+Can fetch my own thumbnail
+Can fetch remote thumbnail
+
+# Search tests (not implemented)
+Can search for an event by body
+
+# Room upgrade tests (not implemented)
+Can upgrade a room version
+
+# Typing notifications (not implemented)
+Typing notification sent to local room members
+
+# Read receipts (not implemented)
+Read receipts are sent as events
+
+# Redaction tests (partially implemented)
+Redaction of a redaction is ignored
+
+# E2EE tests (not implemented)
+Can upload device keys
+Newly joined room includes presence in incremental sync
