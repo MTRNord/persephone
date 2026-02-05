@@ -1,5 +1,5 @@
 # Dockerfile for running Sytest against Persephone
-# Based on the official sytest Docker image which has sytest pre-installed
+# Based on the official sytest Docker image
 
 FROM matrixdotorg/sytest:testing
 
@@ -11,9 +11,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     ninja-build \
     git \
-    # Compiler toolchain
-    clang-21 \
-    lld-21 \
+    # Compiler toolchain (use versioned packages available in testing)
+    clang \
+    lld \
     # Persephone dependencies
     libpq-dev \
     libsodium-dev \
@@ -26,10 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libevent-dev \
     libicu-dev \
-    # PostgreSQL
-    postgresql \
-    postgresql-contrib \
-    # Additional perl deps
+    # Additional perl deps for our plugin
     libdbi-perl \
     libdbd-pg-perl \
     && rm -rf /var/lib/apt/lists/*
@@ -59,24 +56,29 @@ RUN cd /tmp && \
     rm -rf /tmp/drogon
 
 # Configure PostgreSQL for trust authentication on localhost
-RUN find /etc/postgresql -name pg_hba.conf -exec sed -i 's/peer/trust/g' {} \; && \
-    find /etc/postgresql -name pg_hba.conf -exec sed -i 's/scram-sha-256/trust/g' {} \; && \
-    find /etc/postgresql -name pg_hba.conf -exec sed -i 's/md5/trust/g' {} \; && \
-    find /etc/postgresql -name postgresql.conf -exec sed -i 's/max_connections = 100/max_connections = 500/g' {} \;
+# Handle multiple possible postgres versions
+RUN for conf in /etc/postgresql/*/main/pg_hba.conf; do \
+        if [ -f "$conf" ]; then \
+            sed -i 's/peer/trust/g' "$conf"; \
+            sed -i 's/scram-sha-256/trust/g' "$conf"; \
+            sed -i 's/md5/trust/g' "$conf"; \
+        fi; \
+    done; \
+    for conf in /etc/postgresql/*/main/postgresql.conf; do \
+        if [ -f "$conf" ]; then \
+            sed -i 's/max_connections = 100/max_connections = 500/g' "$conf"; \
+        fi; \
+    done
 
 # Create directories
-RUN mkdir -p /src /build /logs /work /persephone
+RUN mkdir -p /src /build /persephone
 
 # Copy Persephone source
 COPY . /src
 
-# Copy sytest plugin files into sytest (sytest is at /sytest in the base image)
-COPY sytest/lib/SyTest/Homeserver/Persephone.pm /sytest/lib/SyTest/Homeserver/
-COPY sytest/lib/SyTest/HomeserverFactory/Persephone.pm /sytest/lib/SyTest/HomeserverFactory/
-
 # Build Persephone
 RUN cd /src && \
-    CC=clang-21 CXX=clang++-21 cmake -B /build -S . \
+    CC=clang CXX=clang++ cmake -B /build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DDISABLE_TESTS=ON \
         -DCMAKE_INSTALL_PREFIX=/persephone \
@@ -85,16 +87,19 @@ RUN cd /src && \
     cmake --build /build -j$(nproc) && \
     cmake --install /build
 
-# Copy runner script and config files
-COPY sytest/scripts/persephone_sytest.sh /sytest/scripts/
-COPY sytest/whitelist.txt /sytest/persephone_whitelist.txt
-COPY sytest/blacklist.txt /sytest/persephone_blacklist.txt
-RUN chmod +x /sytest/scripts/persephone_sytest.sh
+# Copy our sytest plugin files to /persephone (not /sytest - that gets created by bootstrap.sh)
+COPY sytest/lib /persephone/sytest-plugin/lib/
+COPY sytest/scripts/persephone_sytest.sh /persephone/sytest-plugin/
+COPY sytest/whitelist.txt /persephone/whitelist.txt
+COPY sytest/blacklist.txt /persephone/blacklist.txt
 
-# Set up environment
-ENV SYTEST_PLUGINS=/sytest/lib
-ENV PERSEPHONE_BINARY=/persephone/bin/persephone
+RUN chmod +x /persephone/sytest-plugin/persephone_sytest.sh
 
-WORKDIR /sytest
+# Set environment variables
+ENV PERSEPHONE_BINDIR=/persephone/bin
 
-ENTRYPOINT ["/bin/bash", "/sytest/scripts/persephone_sytest.sh"]
+# Create our own entrypoint wrapper
+COPY sytest/docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

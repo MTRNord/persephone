@@ -1,92 +1,91 @@
 #!/bin/bash
 # Sytest runner script for Persephone
+# Based on dendrite_sytest.sh from the sytest repository
 set -e
 
-SYTEST_DIR="${SYTEST_DIR:-/sytest}"
-LOGS_DIR="${LOGS_DIR:-/logs}"
-WORK_DIR="${WORK_DIR:-/work}"
-PERSEPHONE_BINARY="${PERSEPHONE_BINARY:-/persephone/bin/persephone}"
-
-cd "$SYTEST_DIR"
+PERSEPHONE_BINDIR="${PERSEPHONE_BINDIR:-/persephone/bin}"
 
 echo "=== Persephone Sytest Runner ==="
-echo "Sytest directory: $SYTEST_DIR"
-echo "Logs directory: $LOGS_DIR"
-echo "Persephone binary: $PERSEPHONE_BINARY"
+echo "Persephone binary dir: $PERSEPHONE_BINDIR"
 
-# Verify binary exists and is executable
-if [ ! -x "$PERSEPHONE_BINARY" ]; then
-    echo "ERROR: Persephone binary not found or not executable at $PERSEPHONE_BINARY"
+# Verify binary exists
+if [ ! -x "$PERSEPHONE_BINDIR/persephone" ]; then
+    echo "ERROR: Persephone binary not found at $PERSEPHONE_BINDIR/persephone"
     exit 1
 fi
 
-echo "Persephone version check:"
-"$PERSEPHONE_BINARY" --version 2>/dev/null || echo "(version flag not supported)"
-
-# Start PostgreSQL
+# Start PostgreSQL - find the installed version dynamically
 echo "Starting PostgreSQL..."
-service postgresql start 2>/dev/null || pg_ctlcluster 15 main start 2>/dev/null || true
+PG_VERSION=$(ls /etc/postgresql/ 2>/dev/null | sort -rn | head -1)
+if [ -n "$PG_VERSION" ]; then
+    echo "Found PostgreSQL version: $PG_VERSION"
+    pg_ctlcluster "$PG_VERSION" main start 2>/dev/null || service postgresql start 2>/dev/null || true
+else
+    service postgresql start 2>/dev/null || true
+fi
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
 for i in $(seq 1 30); do
-    if pg_isready -q; then
+    if pg_isready -q 2>/dev/null; then
         echo "PostgreSQL is ready"
         break
     fi
-    if [ $i -eq 30 ]; then
+    if [ "$i" -eq 30 ]; then
         echo "ERROR: PostgreSQL did not start in time"
         exit 1
     fi
     sleep 1
 done
 
-# Create work and logs directories
-mkdir -p "$WORK_DIR" "$LOGS_DIR"
+# Create test databases (similar to dendrite_sytest.sh)
+echo "Creating test databases..."
+for db in pg1 pg2 sytest_template; do
+    su -c "createdb --encoding=UTF8 $db 2>/dev/null || true" postgres
+done
 
 # Determine whitelist/blacklist files
 WHITELIST_ARG=""
-if [ -f "/sytest/persephone_whitelist.txt" ]; then
-    WHITELIST_ARG="-W /sytest/persephone_whitelist.txt"
+if [ -f "/persephone/whitelist.txt" ]; then
+    WHITELIST_ARG="-W /persephone/whitelist.txt"
 fi
 
 BLACKLIST_ARG=""
-if [ -f "/sytest/persephone_blacklist.txt" ]; then
-    BLACKLIST_ARG="-B /sytest/persephone_blacklist.txt"
+if [ -f "/persephone/blacklist.txt" ]; then
+    BLACKLIST_ARG="-B /persephone/blacklist.txt"
 fi
 
-# Get the binary directory (parent of the binary)
-BINARY_DIR=$(dirname "$PERSEPHONE_BINARY")
+# Trap to ensure logs are copied on exit
+mkdir -p /logs
+cleanup() {
+    echo "Copying server logs..."
+    cp -r /work/server-* /logs/ 2>/dev/null || true
+}
+trap cleanup EXIT
 
 # Run sytest
 echo "=== Running Sytest ==="
 echo "Implementation: Persephone"
-echo "Binary directory: $BINARY_DIR"
-echo "Whitelist: $WHITELIST_ARG"
-echo "Blacklist: $BLACKLIST_ARG"
+echo "Binary directory: $PERSEPHONE_BINDIR"
+
+cd /sytest
+mkdir -p /work
 
 TEST_STATUS=0
 ./run-tests.pl \
     -I Persephone \
-    -d "$BINARY_DIR" \
+    -d "$PERSEPHONE_BINDIR" \
+    --work-directory /work \
     $WHITELIST_ARG \
     $BLACKLIST_ARG \
     -O tap \
     --all \
-    --work-directory="$WORK_DIR" \
     --exclude-deprecated \
     "$@" \
-    2>&1 | tee "$LOGS_DIR/results.tap" || TEST_STATUS=$?
+    2>&1 | tee /logs/results.tap || TEST_STATUS=$?
 
-# Copy server logs
-echo "Copying server logs..."
-rsync -r --ignore-missing-args --min-size=1 "$WORK_DIR/server-"* "$LOGS_DIR/" 2>/dev/null || true
-
-# Summary
 echo ""
 echo "=== Test Run Complete ==="
-echo "Results: $LOGS_DIR/results.tap"
-echo "Server logs: $LOGS_DIR/"
 echo "Exit status: $TEST_STATUS"
 
 exit $TEST_STATUS
