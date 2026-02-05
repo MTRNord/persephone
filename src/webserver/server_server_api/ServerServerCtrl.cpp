@@ -24,9 +24,6 @@
 using namespace server_server_api;
 using json = nlohmann::json;
 
-// Maximum age for cached server keys (24 hours in milliseconds)
-static constexpr int64_t SERVER_KEY_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-
 /// Fetch a server's signing keys from the remote server
 /// Returns the keys JSON response, or nullopt on failure
 static drogon::Task<std::optional<json>>
