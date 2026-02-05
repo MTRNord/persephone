@@ -94,6 +94,7 @@ find_package(ICU COMPONENTS uc REQUIRED)
 set(SOURCES
         src/database/database.cpp
         src/database/migrations/migrator.cpp
+        src/database/state_ordering.cpp
         src/utils/config.cpp
         src/utils/json_utils.cpp
         src/utils/utils.cpp

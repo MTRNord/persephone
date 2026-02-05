@@ -12,9 +12,11 @@
 #include <memory>
 #include <sodium/core.h>
 #include <stdexcept>
+#include <thread>
 #include <trantor/utils/Logger.h>
 
-static constexpr int DATABASE_CONNECTIONS = 10;
+// Default connection pool size if not configured
+static constexpr int DEFAULT_DATABASE_CONNECTIONS = 10;
 
 trantor::Logger::LogLevel logLevelFromStr(const std::string_view level) {
   const auto lowered_level = to_lower(std::string(level));
@@ -60,6 +62,12 @@ int main() {
     }
     auto verify_key_data = get_verify_key_data(config);
 
+    // Determine connection pool size: use config value, or default to
+    // max(4, hardware_concurrency) for good performance
+    const int database_connections = config.db_config.pool_size.value_or(
+        std::max(4, static_cast<int>(std::thread::hardware_concurrency())));
+    LOG_INFO << "Database connection pool size: " << database_connections;
+
     LOG_INFO << "Server running on " << config.webserver_config.bind_host << ":"
              << config.webserver_config.port;
     drogon::app()
@@ -73,7 +81,7 @@ int main() {
                                 .databaseName = config.db_config.database_name,
                                 .username = config.db_config.user,
                                 .password = config.db_config.password,
-                                .connectionNumber = DATABASE_CONNECTIONS,
+                                .connectionNumber = database_connections,
                                 .name = "default",
                                 .isFast = false,
                                 .characterSet = "",

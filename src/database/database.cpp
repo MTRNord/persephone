@@ -162,37 +162,40 @@ Database::validate_access_token(std::string_view auth_token) {
     std::terminate();
   }
   try {
-    const auto query =
-        co_await sql->execSqlCoro("select exists(select 1 from devices "
-                                  "where access_token = $1) as exists",
-                                  auth_token);
-    // TMP loging for complement debugging
+    // Single query with CTE to get device info and push_rules status
+    const auto query = co_await sql->execSqlCoro(
+        "WITH device_info AS ("
+        "  SELECT matrix_id, device_id FROM devices WHERE access_token = $1"
+        "), push_exists AS ("
+        "  SELECT EXISTS("
+        "    SELECT 1 FROM push_rules WHERE user_id = (SELECT matrix_id FROM "
+        "device_info)"
+        "  ) as has_rules"
+        ") "
+        "SELECT d.matrix_id, d.device_id, p.has_rules "
+        "FROM device_info d, push_exists p",
+        auth_token);
+
+    // TMP logging for complement debugging
     LOG_DEBUG << "Access token: " << auth_token;
-    LOG_DEBUG << "Exists: " << query.at(0)["exists"].as<bool>();
+    LOG_DEBUG << "Query result size: " << query.size();
 
-    if (query.at(0)["exists"].as<bool>()) {
-      // Check if push_rules has a rule for the user
-      const auto push_rules_query = co_await sql->execSqlCoro(
-          "select exists(select 1 from push_rules where user_id = "
-          "(select matrix_id from devices where access_token = $1)) as exists",
-          auth_token);
-
-      if (!push_rules_query.at(0)["exists"].as<bool>()) {
-        // Create the default pushrules for the user
-        const auto matrix_id_query = co_await sql->execSqlCoro(
-            "select matrix_id from devices where access_token = $1",
-            auth_token);
-        const auto matrix_id =
-            matrix_id_query.at(0)["matrix_id"].as<std::string>();
-        const auto default_rules = get_default_pushrules(matrix_id);
-        co_await sql->execSqlCoro(
-            "INSERT INTO push_rules(user_id, json) VALUES($1, $2)", matrix_id,
-            default_rules.dump());
-      }
-
-      co_return true;
+    if (query.empty()) {
+      co_return false;
     }
-    co_return false;
+
+    const auto matrix_id = query.at(0)["matrix_id"].as<std::string>();
+    const bool has_rules = query.at(0)["has_rules"].as<bool>();
+
+    if (!has_rules) {
+      // Create the default pushrules for the user
+      const auto default_rules = get_default_pushrules(matrix_id);
+      co_await sql->execSqlCoro(
+          "INSERT INTO push_rules(user_id, json) VALUES($1, $2)", matrix_id,
+          default_rules.dump());
+    }
+
+    co_return true;
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     co_return false;
@@ -363,39 +366,115 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
   const int64_t calculated_depth =
       co_await calculate_event_depth(transaction, event);
 
+  const std::string event_type = event.at("type").get<std::string>();
+  const std::string event_id = event.at("event_id").get<std::string>();
+
   try {
+    // Ensure NID lookup entries exist (using v7 migration schema)
+    // Insert room_nid if not exists
     co_await transaction->execSqlCoro(
+        "INSERT INTO rooms(room_id) VALUES($1) ON CONFLICT DO NOTHING",
+        room_id);
+
+    // Insert event_type_nid if not exists
+    co_await transaction->execSqlCoro(
+        "INSERT INTO event_types(event_type) VALUES($1) ON CONFLICT DO NOTHING",
+        event_type);
+
+    // Insert state_key_nid if not exists (only for state events)
+    if (state_key.has_value()) {
+      co_await transaction->execSqlCoro(
+          "INSERT INTO state_keys(state_key) VALUES($1) ON CONFLICT DO NOTHING",
+          state_key.value());
+    }
+
+    // Get NID values for the insert
+    const auto room_nid_query = co_await transaction->execSqlCoro(
+        "SELECT room_nid FROM rooms WHERE room_id = $1", room_id);
+    const int room_nid = room_nid_query.at(0)["room_nid"].as<int>();
+
+    const auto type_nid_query = co_await transaction->execSqlCoro(
+        "SELECT event_type_nid FROM event_types WHERE event_type = $1",
+        event_type);
+    const int event_type_nid = type_nid_query.at(0)["event_type_nid"].as<int>();
+
+    std::optional<int> state_key_nid = std::nullopt;
+    if (state_key.has_value()) {
+      const auto state_key_nid_query = co_await transaction->execSqlCoro(
+          "SELECT state_key_nid FROM state_keys WHERE state_key = $1",
+          state_key.value());
+      state_key_nid = state_key_nid_query.at(0)["state_key_nid"].as<int>();
+    }
+
+    // Build prev_events_nids array
+    std::string prev_events_nids_str = "{}";
+    if (event.contains("prev_events") && event["prev_events"].is_array() &&
+        !event["prev_events"].empty()) {
+      std::vector<std::string> prev_event_ids;
+      for (const auto &prev : event["prev_events"]) {
+        if (prev.is_string()) {
+          prev_event_ids.push_back(prev.get<std::string>());
+        }
+      }
+      if (!prev_event_ids.empty()) {
+        std::string prev_events_array = "{";
+        for (size_t i = 0; i < prev_event_ids.size(); i++) {
+          if (i > 0)
+            prev_events_array += ",";
+          prev_events_array += "\"" + prev_event_ids[i] + "\"";
+        }
+        prev_events_array += "}";
+
+        const auto prev_nids_query = co_await transaction->execSqlCoro(
+            "SELECT ARRAY_AGG(event_nid) as nids FROM events "
+            "WHERE event_id = ANY($1::text[])",
+            prev_events_array);
+        if (!prev_nids_query.empty() &&
+            !prev_nids_query.at(0)["nids"].isNull()) {
+          prev_events_nids_str =
+              prev_nids_query.at(0)["nids"].as<std::string>();
+        }
+      }
+    }
+
+    // Insert into events table with NID columns (v7+ schema)
+    const auto insert_result = co_await transaction->execSqlCoro(
         "INSERT INTO events(event_id, room_id, depth, auth_events, "
-        "rejected, state_key, type, json) VALUES($1, $2, $3, $4::text[], $5, "
-        "$6, $7, $8)",
-        event.at("event_id").get<std::string>(), room_id, calculated_depth,
-        auth_events_str, false, state_key, event.at("type").get<std::string>(),
-        event.dump());
+        "rejected, state_key, type, room_nid, event_type_nid, state_key_nid, "
+        "prev_events_nids) "
+        "VALUES($1, $2, $3, $4::text[], $5, $6, $7, $8, $9, $10, "
+        "$11::integer[]) "
+        "RETURNING event_nid",
+        event_id, room_id, calculated_depth, auth_events_str, false, state_key,
+        event_type, room_nid, event_type_nid, state_key_nid,
+        prev_events_nids_str);
+
+    const int event_nid = insert_result.at(0)["event_nid"].as<int>();
+
+    // Insert JSON into separate event_json table (v8 migration)
+    co_await transaction->execSqlCoro(
+        "INSERT INTO event_json(event_nid, json) VALUES($1, $2::jsonb)",
+        event_nid, event.dump());
+
+    // Update temporal_state for state events (v9 migration)
+    if (state_key.has_value()) {
+      // Mark previous state as ended
+      co_await transaction->execSqlCoro(
+          "UPDATE temporal_state SET end_index = $1 "
+          "WHERE room_nid = $2 AND event_type_nid = $3 AND state_key_nid = $4 "
+          "AND end_index IS NULL",
+          calculated_depth, room_nid, event_type_nid, state_key_nid.value());
+
+      // Insert new current state
+      co_await transaction->execSqlCoro(
+          "INSERT INTO temporal_state(room_nid, event_type_nid, state_key_nid, "
+          "event_nid, start_index) VALUES($1, $2, $3, $4, $5)",
+          room_nid, event_type_nid, state_key_nid.value(), event_nid,
+          calculated_depth);
+    }
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     throw std::runtime_error("Failed to add event due to database error");
-  }
-
-  // Update materialized views
-  try {
-    co_await transaction->execSqlCoro("SELECT room_view_update($1);", room_id);
-  } catch (const drogon::orm::DrogonDbException &e) {
-    LOG_ERROR << e.base().what();
-    throw std::runtime_error("Failed to update materialized view due to "
-                             "database error");
-  }
-
-  // If member event also update the user view
-  if (event.at("type").get<std::string>() == "m.room.member") {
-    try {
-      co_await transaction->execSqlCoro(
-          "SELECT user_view_update($1);",
-          event.at("state_key").get<std::string>());
-    } catch (const drogon::orm::DrogonDbException &e) {
-      LOG_ERROR << e.base().what();
-      throw std::runtime_error("Failed to update materialized view due to "
-                               "database error");
-    }
   }
 }
 
@@ -419,13 +498,17 @@ Database::get_state_event(const std::string_view room_id,
     std::terminate();
   }
   try {
-    // TODO: We do not respect state res ordering yet. We should do that in the
-    // future
-    // TODO: Use the materialized view for this
-    const auto query =
-        co_await sql->execSqlCoro("SELECT json FROM events WHERE room_id = $1 "
-                                  "AND type = $2 AND state_key = $3",
-                                  room_id, event_type, state_key);
+    // Uses temporal_state for efficient current state lookup (from v9
+    // migration)
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "JOIN rooms r ON r.room_nid = ts.room_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "WHERE r.room_id = $1 AND et.event_type = $2 AND sk.state_key = $3 "
+        "AND ts.end_index IS NULL",
+        room_id, event_type, state_key);
 
     if (query.empty()) {
       throw std::runtime_error("State event not found");
@@ -575,8 +658,11 @@ Database::get_room_version(std::string_view room_id) {
   }
   try {
     // Get the m.room.create event and extract room_version from content
+    // Uses event_json table (from v8 migration)
     const auto query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.create' "
+        "SELECT ej.json FROM events e "
+        "JOIN event_json ej ON ej.event_nid = e.event_nid "
+        "WHERE e.room_id = $1 AND e.type = 'm.room.create' "
         "LIMIT 1",
         room_id);
 
@@ -610,10 +696,17 @@ Database::get_membership(std::string_view room_id, std::string_view user_id) {
     std::terminate();
   }
   try {
-    // Get the latest m.room.member event for this user in this room
+    // Get the current m.room.member state for this user in this room
+    // Uses temporal_state for efficient current state lookup (from v9
+    // migration)
     const auto query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.member' "
-        "AND state_key = $2 ORDER BY depth DESC LIMIT 1",
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "JOIN rooms r ON r.room_nid = ts.room_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "WHERE r.room_id = $1 AND et.event_type = 'm.room.member' "
+        "AND sk.state_key = $2 AND ts.end_index IS NULL",
         room_id, user_id);
 
     if (query.empty()) {
@@ -643,10 +736,17 @@ Database::get_join_rules(std::string_view room_id) {
     std::terminate();
   }
   try {
-    // Get the latest m.room.join_rules event
+    // Get the current m.room.join_rules state
+    // Uses temporal_state for efficient current state lookup (from v9
+    // migration)
     const auto query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = "
-        "'m.room.join_rules' AND state_key = '' ORDER BY depth DESC LIMIT 1",
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "JOIN rooms r ON r.room_nid = ts.room_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "WHERE r.room_id = $1 AND et.event_type = 'm.room.join_rules' "
+        "AND sk.state_key = '' AND ts.end_index IS NULL",
         room_id);
 
     if (query.empty()) {
@@ -671,45 +771,56 @@ Database::get_auth_events_for_join(std::string_view room_id,
   try {
     AuthEventsForJoin result;
 
-    // Get the m.room.create event (required)
-    auto create_query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.create' "
-        "LIMIT 1",
-        room_id);
-    if (create_query.empty()) {
-      co_return std::nullopt;
-    }
-    result.create_event =
-        json::parse(create_query.at(0)["json"].as<std::string>());
-
-    // Get the m.room.power_levels event (optional)
-    auto power_query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = "
-        "'m.room.power_levels' AND state_key = '' ORDER BY depth DESC LIMIT 1",
-        room_id);
-    if (!power_query.empty()) {
-      result.power_levels =
-          json::parse(power_query.at(0)["json"].as<std::string>());
-    }
-
-    // Get the m.room.join_rules event (optional)
-    auto join_rules_query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = "
-        "'m.room.join_rules' AND state_key = '' ORDER BY depth DESC LIMIT 1",
-        room_id);
-    if (!join_rules_query.empty()) {
-      result.join_rules =
-          json::parse(join_rules_query.at(0)["json"].as<std::string>());
-    }
-
-    // Get the target user's current membership (optional)
-    auto membership_query = co_await sql->execSqlCoro(
-        "SELECT json FROM events WHERE room_id = $1 AND type = 'm.room.member' "
-        "AND state_key = $2 ORDER BY depth DESC LIMIT 1",
+    // Single query to get all auth events
+    // Uses event_json table (from v8 migration) and event_types table (from v7
+    // migration)
+    const auto query = co_await sql->execSqlCoro(
+        "WITH room_info AS ("
+        "  SELECT room_nid FROM rooms WHERE room_id = $1"
+        ") "
+        "SELECT ej.json, et.event_type, sk.state_key "
+        "FROM events e "
+        "JOIN event_json ej ON ej.event_nid = e.event_nid "
+        "JOIN event_types et ON et.event_type_nid = e.event_type_nid "
+        "LEFT JOIN state_keys sk ON sk.state_key_nid = e.state_key_nid "
+        "WHERE e.room_nid = (SELECT room_nid FROM room_info) "
+        "  AND ("
+        "    (et.event_type = 'm.room.create') OR "
+        "    (et.event_type = 'm.room.power_levels' AND sk.state_key = '') OR "
+        "    (et.event_type = 'm.room.join_rules' AND sk.state_key = '') OR "
+        "    (et.event_type = 'm.room.member' AND sk.state_key = $2)"
+        "  ) "
+        "ORDER BY e.depth DESC",
         room_id, user_id);
-    if (!membership_query.empty()) {
-      result.target_membership =
-          json::parse(membership_query.at(0)["json"].as<std::string>());
+
+    // Process results - track which event types we've seen (take latest by
+    // depth)
+    bool found_create = false;
+    bool found_power_levels = false;
+    bool found_join_rules = false;
+    bool found_membership = false;
+
+    for (const auto &row : query) {
+      const auto event_type = row["event_type"].as<std::string>();
+      const auto json_str = row["json"].as<std::string>();
+
+      if (event_type == "m.room.create" && !found_create) {
+        result.create_event = json::parse(json_str);
+        found_create = true;
+      } else if (event_type == "m.room.power_levels" && !found_power_levels) {
+        result.power_levels = json::parse(json_str);
+        found_power_levels = true;
+      } else if (event_type == "m.room.join_rules" && !found_join_rules) {
+        result.join_rules = json::parse(json_str);
+        found_join_rules = true;
+      } else if (event_type == "m.room.member" && !found_membership) {
+        result.target_membership = json::parse(json_str);
+        found_membership = true;
+      }
+    }
+
+    if (!found_create) {
+      co_return std::nullopt;
     }
 
     co_return result;
@@ -727,17 +838,38 @@ Database::get_room_heads(std::string_view room_id) {
     std::terminate();
   }
   try {
-    // Get events that are not referenced as prev_events by any other event
-    // For now, just get the event with the highest depth
-    // TODO: Implement proper DAG head tracking
+    // Get all actual DAG heads: events not referenced as prev_events by any
+    // other event Uses prev_events_nids column (from v12 migration) and rooms
+    // table (from v7 migration)
     const auto query = co_await sql->execSqlCoro(
-        "SELECT event_id FROM events WHERE room_id = $1 ORDER BY depth DESC "
-        "LIMIT 1",
+        "SELECT e.event_id "
+        "FROM events e "
+        "JOIN rooms r ON r.room_nid = e.room_nid "
+        "WHERE r.room_id = $1 "
+        "  AND NOT EXISTS ("
+        "    SELECT 1 FROM events e2 "
+        "    WHERE e2.room_nid = e.room_nid "
+        "      AND e.event_nid = ANY(e2.prev_events_nids)"
+        "  )",
         room_id);
 
     std::vector<std::string> heads;
+    heads.reserve(query.size());
     for (const auto &row : query) {
       heads.push_back(row["event_id"].as<std::string>());
+    }
+
+    // If no heads found (shouldn't happen for a valid room), fall back to
+    // highest depth
+    if (heads.empty()) {
+      const auto fallback_query = co_await sql->execSqlCoro(
+          "SELECT e.event_id FROM events e "
+          "JOIN rooms r ON r.room_nid = e.room_nid "
+          "WHERE r.room_id = $1 ORDER BY e.depth DESC LIMIT 1",
+          room_id);
+      for (const auto &row : fallback_query) {
+        heads.push_back(row["event_id"].as<std::string>());
+      }
     }
 
     co_return heads;
@@ -776,10 +908,11 @@ Database::get_cached_server_key(std::string_view server_name,
     std::terminate();
   }
   try {
-    const auto query = co_await sql->execSqlCoro(
-        "SELECT public_key, valid_until_ts, fetched_at FROM server_signing_keys "
-        "WHERE server_name = $1 AND key_id = $2",
-        server_name, key_id);
+    const auto query =
+        co_await sql->execSqlCoro("SELECT public_key, valid_until_ts, "
+                                  "fetched_at FROM server_signing_keys "
+                                  "WHERE server_name = $1 AND key_id = $2",
+                                  server_name, key_id);
 
     if (query.empty()) {
       co_return std::nullopt;

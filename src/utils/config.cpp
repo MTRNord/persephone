@@ -53,6 +53,11 @@ void Config::load_db(const YAML::Node &config) {
       config["database"]["database_name"].as<std::string>();
   db_config.user = config["database"]["user"].as<std::string>();
   db_config.password = config["database"]["password"].as<std::string>();
+
+  // Pool size is optional - if not set, main.cpp will use a default
+  if (config["database"]["pool_size"].IsDefined()) {
+    db_config.pool_size = config["database"]["pool_size"].as<int>();
+  }
 }
 
 /**

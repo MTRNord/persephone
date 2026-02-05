@@ -30,6 +30,7 @@ struct [[nodiscard]] DBConfig {
   std::string user;
   std::string password;
   unsigned short port{};
+  std::optional<int> pool_size; // Connection pool size (defaults to max(4, num_cores))
 };
 
 /**

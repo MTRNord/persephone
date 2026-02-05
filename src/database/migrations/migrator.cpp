@@ -14,6 +14,13 @@ void Migrator::migrate() {
   migration_v4();
   migration_v5();
   migration_v6();
+  migration_v7();
+  migration_v8();
+  migration_v9();
+  migration_v10();
+  migration_v11();
+  migration_v12();
+  migration_v13();
 
   LOG_INFO << "Finished database migration";
 }
@@ -417,6 +424,571 @@ void Migrator::migration_v6() {
     const auto query_3 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (6);");
     query_3.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v7() {
+  LOG_INFO << "Starting database migration v6->v7";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 7) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v6->v7 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v7";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Create lookup table for event types */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS event_types ("
+        "event_type_nid SERIAL PRIMARY KEY, "
+        "event_type TEXT NOT NULL UNIQUE);");
+    query_1.wait();
+
+    /* Create lookup table for state keys */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS state_keys ("
+        "state_key_nid SERIAL PRIMARY KEY, "
+        "state_key TEXT NOT NULL UNIQUE);");
+    query_2.wait();
+
+    /* Create lookup table for rooms */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS rooms ("
+        "room_nid SERIAL PRIMARY KEY, "
+        "room_id TEXT NOT NULL UNIQUE);");
+    query_3.wait();
+
+    /* Pre-populate common event types */
+    const auto query_4 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO event_types (event_type) VALUES "
+        "('m.room.create'), ('m.room.member'), ('m.room.message'), "
+        "('m.room.power_levels'), ('m.room.join_rules'), ('m.room.name'), "
+        "('m.room.topic'), ('m.room.avatar'), ('m.room.canonical_alias'), "
+        "('m.room.history_visibility'), ('m.room.guest_access'), "
+        "('m.room.encryption'), ('m.room.server_acl'), ('m.room.tombstone'), "
+        "('m.room.pinned_events'), ('m.room.third_party_invite'), "
+        "('m.reaction'), ('m.room.redaction') "
+        "ON CONFLICT DO NOTHING;");
+    query_4.wait();
+
+    /* Add event_nid as the new primary identifier for events */
+    const auto query_5 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD COLUMN event_nid SERIAL;");
+    query_5.wait();
+
+    /* Add NID reference columns to events table */
+    const auto query_6 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD COLUMN room_nid INTEGER, "
+        "ADD COLUMN event_type_nid INTEGER, "
+        "ADD COLUMN state_key_nid INTEGER;");
+    query_6.wait();
+
+    /* Populate rooms lookup from existing events */
+    const auto query_7 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO rooms (room_id) "
+        "SELECT DISTINCT room_id FROM events ON CONFLICT DO NOTHING;");
+    query_7.wait();
+
+    /* Populate event_types lookup from existing events */
+    const auto query_8 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO event_types (event_type) "
+        "SELECT DISTINCT type FROM events ON CONFLICT DO NOTHING;");
+    query_8.wait();
+
+    /* Populate state_keys lookup from existing events */
+    const auto query_9 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO state_keys (state_key) "
+        "SELECT DISTINCT state_key FROM events "
+        "WHERE state_key IS NOT NULL ON CONFLICT DO NOTHING;");
+    query_9.wait();
+
+    /* Update events with NID references */
+    const auto query_10 = transPtr->execSqlAsyncFuture(
+        "UPDATE events e SET "
+        "room_nid = (SELECT room_nid FROM rooms WHERE room_id = e.room_id), "
+        "event_type_nid = (SELECT event_type_nid FROM event_types WHERE "
+        "event_type = e.type), "
+        "state_key_nid = (SELECT state_key_nid FROM state_keys WHERE "
+        "state_key = e.state_key);");
+    query_10.wait();
+
+    /* Make room_nid NOT NULL after population */
+    const auto query_11 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ALTER COLUMN room_nid SET NOT NULL;");
+    query_11.wait();
+
+    /* Make event_type_nid NOT NULL after population */
+    const auto query_12 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ALTER COLUMN event_type_nid SET NOT NULL;");
+    query_12.wait();
+
+    /* Add foreign key constraints */
+    const auto query_13 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD CONSTRAINT events_room_nid_fk "
+        "FOREIGN KEY (room_nid) REFERENCES rooms (room_nid);");
+    query_13.wait();
+
+    const auto query_14 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD CONSTRAINT events_event_type_nid_fk "
+        "FOREIGN KEY (event_type_nid) REFERENCES event_types (event_type_nid);");
+    query_14.wait();
+
+    const auto query_15 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD CONSTRAINT events_state_key_nid_fk "
+        "FOREIGN KEY (state_key_nid) REFERENCES state_keys (state_key_nid);");
+    query_15.wait();
+
+    /* Create indexes on NID columns */
+    const auto query_16 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX events_room_nid_idx ON events (room_nid);");
+    query_16.wait();
+
+    const auto query_17 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX events_room_nid_depth_idx ON events (room_nid, depth DESC);");
+    query_17.wait();
+
+    const auto query_18 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX events_type_nid_idx ON events (event_type_nid);");
+    query_18.wait();
+
+    const auto query_19 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX events_state_key_nid_idx ON events (state_key_nid) "
+        "WHERE state_key_nid IS NOT NULL;");
+    query_19.wait();
+
+    /* Create unique index on event_nid */
+    const auto query_20 = transPtr->execSqlAsyncFuture(
+        "CREATE UNIQUE INDEX events_event_nid_idx ON events (event_nid);");
+    query_20.wait();
+
+    /* Mark the migration as completed */
+    const auto query_21 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (7);");
+    query_21.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v8() {
+  LOG_INFO << "Starting database migration v7->v8";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 8) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v7->v8 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v8";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Create separate table for event JSON content */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS event_json ("
+        "event_nid INTEGER PRIMARY KEY REFERENCES events (event_nid), "
+        "json JSONB NOT NULL);");
+    query_1.wait();
+
+    /* Migrate existing JSON data from events table */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO event_json (event_nid, json) "
+        "SELECT event_nid, json FROM events;");
+    query_2.wait();
+
+    /* Drop the json column from events table */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events DROP COLUMN json;");
+    query_3.wait();
+
+    /* Mark the migration as completed */
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (8);");
+    query_4.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v9() {
+  LOG_INFO << "Starting database migration v8->v9";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 9) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v8->v9 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v9";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Create temporal state tracking table */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS temporal_state ("
+        "room_nid INTEGER NOT NULL REFERENCES rooms (room_nid), "
+        "event_type_nid INTEGER NOT NULL REFERENCES event_types (event_type_nid), "
+        "state_key_nid INTEGER NOT NULL REFERENCES state_keys (state_key_nid), "
+        "event_nid INTEGER NOT NULL REFERENCES events (event_nid), "
+        "start_index BIGINT NOT NULL, "
+        "end_index BIGINT, "
+        "ordering INTEGER, "
+        "PRIMARY KEY (room_nid, event_type_nid, state_key_nid, start_index));");
+    query_1.wait();
+
+    /* Partial index for current state (fast lookups) */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX temporal_state_current_idx "
+        "ON temporal_state (room_nid) WHERE end_index IS NULL;");
+    query_2.wait();
+
+    /* Index for historical state queries */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX temporal_state_historical_idx "
+        "ON temporal_state (room_nid, start_index, end_index);");
+    query_3.wait();
+
+    /* Index for ordering-based scans (compression) */
+    const auto query_4 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX temporal_state_ordering_idx "
+        "ON temporal_state (room_nid, ordering);");
+    query_4.wait();
+
+    /* Populate from existing state events */
+    const auto query_5 = transPtr->execSqlAsyncFuture(
+        "INSERT INTO temporal_state (room_nid, event_type_nid, state_key_nid, "
+        "event_nid, start_index) "
+        "SELECT e.room_nid, e.event_type_nid, e.state_key_nid, e.event_nid, e.depth "
+        "FROM events e WHERE e.state_key_nid IS NOT NULL "
+        "ORDER BY e.room_nid, e.event_type_nid, e.state_key_nid, e.depth;");
+    query_5.wait();
+
+    /* Update end_index for superseded state using window function */
+    const auto query_6 = transPtr->execSqlAsyncFuture(
+        "WITH ranked AS ("
+        "SELECT room_nid, event_type_nid, state_key_nid, start_index, "
+        "LEAD(start_index) OVER ("
+        "PARTITION BY room_nid, event_type_nid, state_key_nid "
+        "ORDER BY start_index) as next_start "
+        "FROM temporal_state) "
+        "UPDATE temporal_state ts SET end_index = r.next_start "
+        "FROM ranked r "
+        "WHERE ts.room_nid = r.room_nid "
+        "AND ts.event_type_nid = r.event_type_nid "
+        "AND ts.state_key_nid = r.state_key_nid "
+        "AND ts.start_index = r.start_index "
+        "AND r.next_start IS NOT NULL;");
+    query_6.wait();
+
+    /* Mark the migration as completed */
+    const auto query_7 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (9);");
+    query_7.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v10() {
+  LOG_INFO << "Starting database migration v9->v10";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 10) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v9->v10 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v10";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Remove materialized view triggers */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "DROP TRIGGER IF EXISTS tg_room_view_create ON events;");
+    query_1.wait();
+
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "DROP TRIGGER IF EXISTS tg_user_view_create ON events;");
+    query_2.wait();
+
+    /* Drop the trigger functions */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "DROP FUNCTION IF EXISTS new_room_view();");
+    query_3.wait();
+
+    const auto query_4 = transPtr->execSqlAsyncFuture(
+        "DROP FUNCTION IF EXISTS room_view_update(text);");
+    query_4.wait();
+
+    const auto query_5 = transPtr->execSqlAsyncFuture(
+        "DROP FUNCTION IF EXISTS new_user_view();");
+    query_5.wait();
+
+    const auto query_6 = transPtr->execSqlAsyncFuture(
+        "DROP FUNCTION IF EXISTS user_view_update(text);");
+    query_6.wait();
+
+    /* Drop all dynamically created materialized views */
+    const auto query_7 = transPtr->execSqlAsyncFuture(
+        "DO $$ "
+        "DECLARE view_name TEXT; "
+        "BEGIN "
+        "FOR view_name IN SELECT matviewname FROM pg_matviews "
+        "WHERE schemaname = 'public' "
+        "AND (matviewname LIKE 'room_%' OR matviewname LIKE 'user_%') "
+        "LOOP "
+        "EXECUTE 'DROP MATERIALIZED VIEW IF EXISTS ' || quote_ident(view_name) || ' CASCADE'; "
+        "END LOOP; "
+        "END $$;");
+    query_7.wait();
+
+    /* Mark the migration as completed */
+    const auto query_8 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (10);");
+    query_8.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v11() {
+  LOG_INFO << "Starting database migration v10->v11";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 11) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v10->v11 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v11";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Index on event_id for direct lookups */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX IF NOT EXISTS events_event_id_idx ON events (event_id);");
+    query_1.wait();
+
+    /* Index on devices.matrix_id for FK lookups */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX IF NOT EXISTS devices_matrix_id_idx ON devices (matrix_id);");
+    query_2.wait();
+
+    /* Composite index for state event lookups using NIDs */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX IF NOT EXISTS events_state_lookup_nid_idx "
+        "ON events (room_nid, event_type_nid, state_key_nid) "
+        "WHERE state_key_nid IS NOT NULL;");
+    query_3.wait();
+
+    /* Mark the migration as completed */
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (11);");
+    query_4.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v12() {
+  LOG_INFO << "Starting database migration v11->v12";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 12) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v11->v12 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v12";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Add prev_events as queryable array column (using NIDs for efficiency) */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "ALTER TABLE events ADD COLUMN prev_events_nids INTEGER[] NOT NULL DEFAULT '{}';");
+    query_1.wait();
+
+    /* GIN index for efficient array containment queries */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX events_prev_events_gin_idx ON events USING GIN (prev_events_nids);");
+    query_2.wait();
+
+    /* Populate from existing event JSON */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "UPDATE events e SET prev_events_nids = COALESCE("
+        "(SELECT ARRAY_AGG(e2.event_nid) FROM events e2 "
+        "WHERE e2.event_id = ANY ("
+        "SELECT jsonb_array_elements_text(ej.json -> 'prev_events') "
+        "FROM event_json ej WHERE ej.event_nid = e.event_nid)), '{}');");
+    query_3.wait();
+
+    /* Mark the migration as completed */
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (12);");
+    query_4.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v13() {
+  LOG_INFO << "Starting database migration v12->v13";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 13) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v12->v13 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v13";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Foreign key on devices.matrix_id (if not already exists) */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name = 'devices_matrix_id_fk' AND table_name = 'devices') THEN "
+        "ALTER TABLE devices ADD CONSTRAINT devices_matrix_id_fk "
+        "FOREIGN KEY (matrix_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
+        "END IF; END $$;");
+    query_1.wait();
+
+    /* Foreign key on account_data.user_id */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name = 'account_data_user_id_fk' AND table_name = 'account_data') THEN "
+        "ALTER TABLE account_data ADD CONSTRAINT account_data_user_id_fk "
+        "FOREIGN KEY (user_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
+        "END IF; END $$;");
+    query_2.wait();
+
+    /* Foreign key on push_rules.user_id */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name = 'push_rules_user_id_fk' AND table_name = 'push_rules') THEN "
+        "ALTER TABLE push_rules ADD CONSTRAINT push_rules_user_id_fk "
+        "FOREIGN KEY (user_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
+        "END IF; END $$;");
+    query_3.wait();
+
+    /* Foreign key on temporal_state.event_nid with RESTRICT */
+    const auto query_4 = transPtr->execSqlAsyncFuture(
+        "DO $$ BEGIN "
+        "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
+        "WHERE constraint_name = 'temporal_state_event_exists' AND table_name = 'temporal_state') THEN "
+        "ALTER TABLE temporal_state ADD CONSTRAINT temporal_state_event_exists "
+        "FOREIGN KEY (event_nid) REFERENCES events (event_nid) ON DELETE RESTRICT; "
+        "END IF; END $$;");
+    query_4.wait();
+
+    /* Trigger to prevent deleting events referenced as prev_events */
+    const auto query_5 = transPtr->execSqlAsyncFuture(
+        "CREATE OR REPLACE FUNCTION check_event_not_referenced() "
+        "RETURNS TRIGGER AS $$ BEGIN "
+        "IF EXISTS (SELECT 1 FROM events WHERE OLD.event_nid = ANY (prev_events_nids)) THEN "
+        "RAISE EXCEPTION 'Cannot delete event % - referenced by other events as prev_events', OLD.event_id; "
+        "END IF; RETURN OLD; END; $$ LANGUAGE plpgsql;");
+    query_5.wait();
+
+    const auto query_6 = transPtr->execSqlAsyncFuture(
+        "DROP TRIGGER IF EXISTS prevent_referenced_event_delete ON events;");
+    query_6.wait();
+
+    const auto query_7 = transPtr->execSqlAsyncFuture(
+        "CREATE TRIGGER prevent_referenced_event_delete "
+        "BEFORE DELETE ON events FOR EACH ROW "
+        "EXECUTE FUNCTION check_event_not_referenced();");
+    query_7.wait();
+
+    /* Mark the migration as completed */
+    const auto query_8 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (13);");
+    query_8.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

@@ -1,5 +1,6 @@
 #include "ClientServerCtrl.hpp"
 #include "database/database.hpp"
+#include "database/state_ordering.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
@@ -785,6 +786,16 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const auto transaction = sql->newTransaction();
     co_await Database::add_room(transaction, state_with_membership, room_id);
 
+    // Trigger state ordering for the newly joined room
+    // This is important for compression efficiency when receiving state from
+    // federation in potentially suboptimal order (from v9 migration schema)
+    const auto room_nid_query = co_await sql->execSqlCoro(
+        "SELECT room_nid FROM rooms WHERE room_id = $1", room_id);
+    if (!room_nid_query.empty()) {
+      const int room_nid = room_nid_query.at(0)["room_nid"].as<int>();
+      co_await StateOrdering::reorder_room(room_nid);
+    }
+
     // TODO: Walk the auth_chain, get our signed membership event, use the
     // resolved current room state prior to join
     // TODO: In the future consider faster room joins here
@@ -912,6 +923,14 @@ void ClientServerCtrl::createRoom(
     const auto transaction = sql->newTransaction();
     try {
       co_await Database::add_room(transaction, state_events_vector, room_id);
+
+      // Trigger state ordering for the newly created room (for consistency)
+      const auto room_nid_query = co_await sql->execSqlCoro(
+          "SELECT room_nid FROM rooms WHERE room_id = $1", room_id);
+      if (!room_nid_query.empty()) {
+        const int room_nid = room_nid_query.at(0)["room_nid"].as<int>();
+        co_await StateOrdering::reorder_room(room_nid);
+      }
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to add room to db: " << e.what();
       return_error(callback, "M_UNKNOWN", "Failed to add room to db",
