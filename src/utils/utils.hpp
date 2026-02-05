@@ -33,6 +33,10 @@ using namespace drogon;
 static constexpr auto UserAgent = "persephone/0.1.0";
 static constexpr auto DEFAULT_FEDERATION_TIMEOUT = 30;
 
+/// Content-Type header value for JSON responses with UTF-8 charset.
+/// Matrix spec requires responses to include charset=utf-8.
+static constexpr auto JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+
 static constexpr int MATRIX_SSL_PORT = 8448;
 static constexpr int MATRIX_HTTP_PORT = 8008;
 

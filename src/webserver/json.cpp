@@ -249,16 +249,16 @@ void from_json(const json &obj, registration_body &data_type) {
   }
   if (obj.contains("initial_device_display_name")) {
     data_type.initial_device_display_name =
-        obj["initial_device_display_name"].get<std::string_view>();
+        obj["initial_device_display_name"].get<std::string>();
   }
   if (obj.contains("password")) {
-    data_type.password = obj["password"].get<std::string_view>();
+    data_type.password = obj["password"].get<std::string>();
   }
   if (obj.contains("refresh_token")) {
     data_type.refresh_token = obj["refresh_token"].get<bool>();
   }
   if (obj.contains("username")) {
-    data_type.username = obj["username"].get<std::string_view>();
+    data_type.username = obj["username"].get<std::string>();
   }
 }
 
@@ -345,7 +345,7 @@ void from_json(const json &obj, login_body &data_type) {
     data_type.medium = obj["medium"].get<std::string_view>();
   }
   if (obj.contains("password")) {
-    data_type.password = obj["password"].get<std::string_view>();
+    data_type.password = obj["password"].get<std::string>();
   }
   if (obj.contains("refresh_token")) {
     data_type.refresh_token = obj["refresh_token"].get<bool>();

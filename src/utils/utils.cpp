@@ -57,7 +57,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
   json const json_data = json_error;
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(json_data.dump());
-  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  resp->setContentTypeString(JSON_CONTENT_TYPE);
   resp->setStatusCode(status_code);
   callback(resp);
 }

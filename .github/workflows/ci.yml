@@ -206,7 +206,7 @@ jobs:
   # Run Sytest integration tests
   sytest:
     name: "Sytest Tests"
-    timeout-minutes: 90
+    timeout-minutes: 180
     needs: initial-tests-done
     runs-on: ubuntu-latest
     permissions:

@@ -266,7 +266,7 @@ void ServerServerCtrl::version(
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(json_data.dump());
   resp->setExpiredTime(0);
-  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  resp->setContentTypeString(JSON_CONTENT_TYPE);
   callback(resp);
 }
 
@@ -297,7 +297,7 @@ void ServerServerCtrl::server_key(
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(signed_j.dump());
-  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  resp->setContentTypeString(JSON_CONTENT_TYPE);
   callback(resp);
 }
 
@@ -327,7 +327,7 @@ void ServerServerCtrl::make_join(
       const json error_body = generic_json::generic_json_error{
           .errcode = "M_NOT_FOUND", .error = "Unknown room"};
       resp->setBody(error_body.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -340,7 +340,7 @@ void ServerServerCtrl::make_join(
       const json error_body = generic_json::generic_json_error{
           .errcode = "M_UNKNOWN", .error = "Could not determine room version"};
       resp->setBody(error_body.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -356,7 +356,7 @@ void ServerServerCtrl::make_join(
                     "join this room"},
           {"room_version", room_version}};
       resp->setBody(error_body.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -379,7 +379,7 @@ void ServerServerCtrl::make_join(
                       "to join this room"},
             {"room_version", room_version}};
         resp->setBody(error_body.dump());
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        resp->setContentTypeString(JSON_CONTENT_TYPE);
         callback(resp);
         co_return;
       }
@@ -394,7 +394,7 @@ void ServerServerCtrl::make_join(
       const json error_body = generic_json::generic_json_error{
           .errcode = "M_FORBIDDEN", .error = "User is banned from the room"};
       resp->setBody(error_body.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -418,7 +418,7 @@ void ServerServerCtrl::make_join(
                 .errcode = "M_FORBIDDEN",
                 .error = "User is not invited to this room"};
             resp->setBody(error_body.dump());
-            resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+            resp->setContentTypeString(JSON_CONTENT_TYPE);
             callback(resp);
             co_return;
           }
@@ -436,7 +436,7 @@ void ServerServerCtrl::make_join(
       const json error_body = generic_json::generic_json_error{
           .errcode = "M_UNKNOWN", .error = "Could not retrieve room state"};
       resp->setBody(error_body.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -482,7 +482,7 @@ void ServerServerCtrl::make_join(
 
     const auto resp = HttpResponse::newHttpResponse();
     resp->setBody(response_json.dump());
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     callback(resp);
     co_return;
   });

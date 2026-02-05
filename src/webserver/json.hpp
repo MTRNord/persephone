@@ -272,7 +272,9 @@ struct [[nodiscard]] login_body {
   std::optional<login_identifier> identifier;
   std::optional<std::string_view> initial_device_display_name;
   std::optional<std::string_view> medium;
-  std::optional<std::string_view> password;
+  // Password is stored as std::string (not string_view) to ensure it owns the
+  // data, preventing potential UTF-8 issues with dangling references.
+  std::optional<std::string> password;
   std::optional<bool> refresh_token;
   std::optional<std::string_view> token;
   std::string_view type;

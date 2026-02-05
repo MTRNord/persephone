@@ -128,7 +128,7 @@ void ClientServerCtrl::versions(
 
   const auto resp = HttpResponse::newHttpResponse();
   resp->setBody(j.dump());
-  resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+  resp->setContentTypeString(JSON_CONTENT_TYPE);
   callback(resp);
 }
 
@@ -167,7 +167,7 @@ void ClientServerCtrl::whoami(
     const json json_data = j_resp;
 
     resp->setBody(json_data.dump());
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     callback(resp);
   });
 }
@@ -211,7 +211,7 @@ void ClientServerCtrl::user_available(
         }();
 
         resp->setBody(json_data);
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        resp->setContentTypeString(JSON_CONTENT_TYPE);
         callback(resp);
       });
 }
@@ -230,7 +230,7 @@ void ClientServerCtrl::login_get(
 
     const auto resp = HttpResponse::newHttpResponse();
     resp->setBody(login_flow);
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     callback(resp);
     co_return;
   });
@@ -307,7 +307,7 @@ void ClientServerCtrl::login_post(
       // If the login was successful, return the response as json
       const auto resp = HttpResponse::newHttpResponse();
       resp->setBody(json(login_resp).dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       resp->setStatusCode(k200OK);
       callback(resp);
     } catch (const std::exception &e) {
@@ -390,7 +390,7 @@ void ClientServerCtrl::register_user(
       auto resp = HttpResponse::newHttpResponse();
       resp->setStatusCode(k401Unauthorized);
       resp->setBody(json_data.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
     }
@@ -464,7 +464,7 @@ void ClientServerCtrl::register_user(
 #pragma GCC diagnostic pop
     const json json_data = reg_resp;
     resp->setBody(json_data.dump());
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     callback(resp);
   });
 }
@@ -487,7 +487,7 @@ void client_server_api::ClientServerCtrl::getPushrules(
         // Respond with the pushrules
         const auto resp = HttpResponse::newHttpResponse();
         resp->setBody(pushrules.dump());
-        resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+        resp->setContentTypeString(JSON_CONTENT_TYPE);
         resp->setStatusCode(k200OK);
         callback(resp);
         co_return;
@@ -791,7 +791,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     const auto resp = HttpResponse::newHttpResponse();
     resp->setStatusCode(k200OK);
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     json json_resp = {{"room_id", room_id}};
     resp->setBody(json_resp.dump());
     callback(resp);
@@ -927,7 +927,7 @@ void ClientServerCtrl::createRoom(
 
     const auto resp = HttpResponse::newHttpResponse();
     resp->setBody(resp_body.dump());
-    resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
     resp->setStatusCode(k200OK);
     callback(resp);
     co_return;
@@ -951,7 +951,7 @@ void ClientServerCtrl::state(
       // Return the state event as json
       const auto resp = HttpResponse::newHttpResponse();
       resp->setBody(json_data.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       resp->setStatusCode(k200OK);
       callback(resp);
       co_return;
@@ -978,7 +978,7 @@ void ClientServerCtrl::setFilter(
           // Return the filter id as json with a single key "filter_id"
           const auto resp = HttpResponse::newHttpResponse();
           resp->setBody(json({{"filter_id", filter_id}}).dump());
-          resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+          resp->setContentTypeString(JSON_CONTENT_TYPE);
           resp->setStatusCode(k200OK);
           callback(resp);
           co_return;
@@ -1002,7 +1002,7 @@ void ClientServerCtrl::getFilter(
       // Return the filter as json
       const auto resp = HttpResponse::newHttpResponse();
       resp->setBody(filter.dump());
-      resp->setContentTypeCode(ContentType::CT_APPLICATION_JSON);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
       resp->setStatusCode(k200OK);
       callback(resp);
       co_return;
