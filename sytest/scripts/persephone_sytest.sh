@@ -3,61 +3,25 @@
 set -e
 
 SYTEST_DIR="${SYTEST_DIR:-/sytest}"
-SRC_DIR="${SRC_DIR:-/src}"
-BUILD_DIR="${BUILD_DIR:-/build}"
 LOGS_DIR="${LOGS_DIR:-/logs}"
 WORK_DIR="${WORK_DIR:-/work}"
-BINARY_DIR="${BINARY_DIR:-/usr/local/bin}"
+PERSEPHONE_BINARY="${PERSEPHONE_BINARY:-/persephone/bin/persephone}"
 
 cd "$SYTEST_DIR"
 
 echo "=== Persephone Sytest Runner ==="
-echo "Source directory: $SRC_DIR"
-echo "Build directory: $BUILD_DIR"
+echo "Sytest directory: $SYTEST_DIR"
 echo "Logs directory: $LOGS_DIR"
-
-# Install perl dependencies
-echo "Installing Perl dependencies..."
-./install-deps.pl
-
-# Build Persephone if binary doesn't exist
-if [ ! -f "$BINARY_DIR/persephone" ]; then
-    echo "Building Persephone from source..."
-
-    if [ ! -d "$SRC_DIR/src" ]; then
-        echo "ERROR: Source directory $SRC_DIR does not contain Persephone source"
-        exit 1
-    fi
-
-    cd "$SRC_DIR"
-
-    # Configure
-    CC=clang-18 CXX=clang++-18 cmake -B "$BUILD_DIR" -S . \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DDISABLE_TESTS=ON \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld-18" \
-        -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld-18"
-
-    # Build
-    cmake --build "$BUILD_DIR" -j$(nproc)
-
-    # Install
-    cmake --install "$BUILD_DIR"
-
-    echo "Persephone built and installed successfully"
-else
-    echo "Using existing Persephone binary at $BINARY_DIR/persephone"
-fi
+echo "Persephone binary: $PERSEPHONE_BINARY"
 
 # Verify binary exists and is executable
-if [ ! -x "$BINARY_DIR/persephone" ]; then
-    echo "ERROR: Persephone binary not found or not executable at $BINARY_DIR/persephone"
+if [ ! -x "$PERSEPHONE_BINARY" ]; then
+    echo "ERROR: Persephone binary not found or not executable at $PERSEPHONE_BINARY"
     exit 1
 fi
 
 echo "Persephone version check:"
-"$BINARY_DIR/persephone" --version 2>/dev/null || echo "(version flag not supported)"
+"$PERSEPHONE_BINARY" --version 2>/dev/null || echo "(version flag not supported)"
 
 # Start PostgreSQL
 echo "Starting PostgreSQL..."
@@ -80,22 +44,19 @@ done
 # Create work and logs directories
 mkdir -p "$WORK_DIR" "$LOGS_DIR"
 
-cd "$SYTEST_DIR"
-
 # Determine whitelist/blacklist files
 WHITELIST_ARG=""
-if [ -f "$SRC_DIR/sytest/whitelist.txt" ]; then
-    WHITELIST_ARG="-W $SRC_DIR/sytest/whitelist.txt"
-elif [ -f "/sytest/persephone_whitelist.txt" ]; then
+if [ -f "/sytest/persephone_whitelist.txt" ]; then
     WHITELIST_ARG="-W /sytest/persephone_whitelist.txt"
 fi
 
 BLACKLIST_ARG=""
-if [ -f "$SRC_DIR/sytest/blacklist.txt" ]; then
-    BLACKLIST_ARG="-B $SRC_DIR/sytest/blacklist.txt"
-elif [ -f "/sytest/persephone_blacklist.txt" ]; then
+if [ -f "/sytest/persephone_blacklist.txt" ]; then
     BLACKLIST_ARG="-B /sytest/persephone_blacklist.txt"
 fi
+
+# Get the binary directory (parent of the binary)
+BINARY_DIR=$(dirname "$PERSEPHONE_BINARY")
 
 # Run sytest
 echo "=== Running Sytest ==="

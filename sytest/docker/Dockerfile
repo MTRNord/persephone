@@ -1,12 +1,11 @@
 # Dockerfile for running Sytest against Persephone
-# Based on the official sytest Docker image
+# Based on the official sytest Docker image which has sytest pre-installed
 
 FROM matrixdotorg/sytest:testing
 
 # Install C++ build dependencies for Persephone
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
+    # Build tools
     build-essential \
     pkg-config \
     cmake \
@@ -27,9 +26,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libevent-dev \
     libicu-dev \
-    # PostgreSQL for tests
+    # PostgreSQL
     postgresql \
     postgresql-contrib \
+    # Additional perl deps
+    libdbi-perl \
+    libdbd-pg-perl \
     && rm -rf /var/lib/apt/lists/*
 
 # Fix jsoncpp include path (debian vs fedora difference)
@@ -59,27 +61,39 @@ RUN cd /tmp && \
 # Configure PostgreSQL for trust authentication on localhost
 RUN find /etc/postgresql -name pg_hba.conf -exec sed -i 's/peer/trust/g' {} \; && \
     find /etc/postgresql -name pg_hba.conf -exec sed -i 's/scram-sha-256/trust/g' {} \; && \
-    find /etc/postgresql -name pg_hba.conf -exec sed -i 's/md5/trust/g' {} \;
+    find /etc/postgresql -name pg_hba.conf -exec sed -i 's/md5/trust/g' {} \; && \
+    find /etc/postgresql -name postgresql.conf -exec sed -i 's/max_connections = 100/max_connections = 500/g' {} \;
 
-# Increase PostgreSQL max connections
-RUN find /etc/postgresql -name postgresql.conf -exec sed -i 's/max_connections = 100/max_connections = 500/g' {} \;
+# Create directories
+RUN mkdir -p /src /build /logs /work /persephone
 
-# Create source mount point and build directory
-RUN mkdir -p /src /build /logs /work
+# Copy Persephone source
+COPY . /src
 
-# Copy sytest plugin files
+# Copy sytest plugin files into sytest (sytest is at /sytest in the base image)
 COPY sytest/lib/SyTest/Homeserver/Persephone.pm /sytest/lib/SyTest/Homeserver/
 COPY sytest/lib/SyTest/HomeserverFactory/Persephone.pm /sytest/lib/SyTest/HomeserverFactory/
+
+# Build Persephone
+RUN cd /src && \
+    CC=clang-21 CXX=clang++-21 cmake -B /build -S . \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DDISABLE_TESTS=ON \
+        -DCMAKE_INSTALL_PREFIX=/persephone \
+        -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld" && \
+    cmake --build /build -j$(nproc) && \
+    cmake --install /build
+
+# Copy runner script and config files
 COPY sytest/scripts/persephone_sytest.sh /sytest/scripts/
 COPY sytest/whitelist.txt /sytest/persephone_whitelist.txt
 COPY sytest/blacklist.txt /sytest/persephone_blacklist.txt
-
-# Make the runner script executable
 RUN chmod +x /sytest/scripts/persephone_sytest.sh
 
 # Set up environment
 ENV SYTEST_PLUGINS=/sytest/lib
-ENV PERSEPHONE_BINARY_DIR=/usr/local/bin
+ENV PERSEPHONE_BINARY=/persephone/bin/persephone
 
 WORKDIR /sytest
 

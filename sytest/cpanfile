@@ -1,0 +1,8 @@
+# Additional Perl dependencies for Persephone sytest plugin
+# These are on top of sytest's own dependencies
+
+requires 'YAML::XS';
+requires 'JSON::PP';
+requires 'File::Slurper';
+requires 'DBI';
+requires 'DBD::Pg';

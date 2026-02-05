@@ -228,9 +228,7 @@ jobs:
       - name: Run Sytest
         run: |
           docker run --rm \
-            -v ${{ github.workspace }}:/src:ro \
             -v ${{ github.workspace }}/sytest-logs:/logs \
-            -e SYTEST_BRANCH="${{ github.head_ref || github.ref_name }}" \
             sytest-persephone \
             -S
         continue-on-error: true
