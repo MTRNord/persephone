@@ -173,6 +173,11 @@ sub federation_port {
     return $self->secure_port;
 }
 
+sub federation_host {
+    my $self = shift;
+    return $self->{bind_host};
+}
+
 sub server_name {
     my $self = shift;
     return $self->{bind_host} . ":" . $self->secure_port;
