@@ -22,7 +22,7 @@ constexpr uint64_t LCG_INCREMENT = 1442695040888963407ULL;
 constexpr uint64_t MINHASH_SEED = 0x517cc1b727220a95ULL;
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
 
-constexpr uint64_t lcg_next(uint64_t state) {
+constexpr uint64_t lcg_next(const uint64_t state) {
   return (state * LCG_MULTIPLIER) + LCG_INCREMENT;
 }
 
@@ -57,7 +57,7 @@ uint64_t StateOrdering::hash_state_tuple(const int event_type_nid,
   // Combine the three NIDs into a single hash using FNV-1a
   uint64_t hash = FNV_OFFSET_BASIS;
 
-  auto mix = [&](uint64_t val) {
+  auto mix = [&](const uint64_t val) {
     hash ^= val;
     hash *= FNV_PRIME;
   };

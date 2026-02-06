@@ -68,7 +68,7 @@ void Migrator::migration_v1() {
 
     /* Global events table
        This is meant to be accompanied by various views for per-room data */
-    auto query_1 = transPtr->execSqlAsyncFuture(
+    const auto query_1 = transPtr->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS events ( "
         "event_id TEXT NOT NULL CONSTRAINT event_id_unique UNIQUE, "
         "room_id TEXT NOT NULL, depth BIGINT NOT NULL, "
@@ -454,24 +454,24 @@ void Migrator::migration_v7() {
     }
 
     /* Create lookup table for event types */
-    const auto query_1 = transPtr->execSqlAsyncFuture(
-        "CREATE TABLE IF NOT EXISTS event_types ("
-        "event_type_nid SERIAL PRIMARY KEY, "
-        "event_type TEXT NOT NULL UNIQUE);");
+    const auto query_1 =
+        transPtr->execSqlAsyncFuture("CREATE TABLE IF NOT EXISTS event_types ("
+                                     "event_type_nid SERIAL PRIMARY KEY, "
+                                     "event_type TEXT NOT NULL UNIQUE);");
     query_1.wait();
 
     /* Create lookup table for state keys */
-    const auto query_2 = transPtr->execSqlAsyncFuture(
-        "CREATE TABLE IF NOT EXISTS state_keys ("
-        "state_key_nid SERIAL PRIMARY KEY, "
-        "state_key TEXT NOT NULL UNIQUE);");
+    const auto query_2 =
+        transPtr->execSqlAsyncFuture("CREATE TABLE IF NOT EXISTS state_keys ("
+                                     "state_key_nid SERIAL PRIMARY KEY, "
+                                     "state_key TEXT NOT NULL UNIQUE);");
     query_2.wait();
 
     /* Create lookup table for rooms */
-    const auto query_3 = transPtr->execSqlAsyncFuture(
-        "CREATE TABLE IF NOT EXISTS rooms ("
-        "room_nid SERIAL PRIMARY KEY, "
-        "room_id TEXT NOT NULL UNIQUE);");
+    const auto query_3 =
+        transPtr->execSqlAsyncFuture("CREATE TABLE IF NOT EXISTS rooms ("
+                                     "room_nid SERIAL PRIMARY KEY, "
+                                     "room_id TEXT NOT NULL UNIQUE);");
     query_3.wait();
 
     /* Pre-populate common event types */
@@ -546,7 +546,8 @@ void Migrator::migration_v7() {
 
     const auto query_14 = transPtr->execSqlAsyncFuture(
         "ALTER TABLE events ADD CONSTRAINT events_event_type_nid_fk "
-        "FOREIGN KEY (event_type_nid) REFERENCES event_types (event_type_nid);");
+        "FOREIGN KEY (event_type_nid) REFERENCES event_types "
+        "(event_type_nid);");
     query_14.wait();
 
     const auto query_15 = transPtr->execSqlAsyncFuture(
@@ -559,8 +560,9 @@ void Migrator::migration_v7() {
         "CREATE INDEX events_room_nid_idx ON events (room_nid);");
     query_16.wait();
 
-    const auto query_17 = transPtr->execSqlAsyncFuture(
-        "CREATE INDEX events_room_nid_depth_idx ON events (room_nid, depth DESC);");
+    const auto query_17 =
+        transPtr->execSqlAsyncFuture("CREATE INDEX events_room_nid_depth_idx "
+                                     "ON events (room_nid, depth DESC);");
     query_17.wait();
 
     const auto query_18 = transPtr->execSqlAsyncFuture(
@@ -618,14 +620,14 @@ void Migrator::migration_v8() {
     query_1.wait();
 
     /* Migrate existing JSON data from events table */
-    const auto query_2 = transPtr->execSqlAsyncFuture(
-        "INSERT INTO event_json (event_nid, json) "
-        "SELECT event_nid, json FROM events;");
+    const auto query_2 =
+        transPtr->execSqlAsyncFuture("INSERT INTO event_json (event_nid, json) "
+                                     "SELECT event_nid, json FROM events;");
     query_2.wait();
 
     /* Drop the json column from events table */
-    const auto query_3 = transPtr->execSqlAsyncFuture(
-        "ALTER TABLE events DROP COLUMN json;");
+    const auto query_3 =
+        transPtr->execSqlAsyncFuture("ALTER TABLE events DROP COLUMN json;");
     query_3.wait();
 
     /* Mark the migration as completed */
@@ -665,7 +667,8 @@ void Migrator::migration_v9() {
     const auto query_1 = transPtr->execSqlAsyncFuture(
         "CREATE TABLE IF NOT EXISTS temporal_state ("
         "room_nid INTEGER NOT NULL REFERENCES rooms (room_nid), "
-        "event_type_nid INTEGER NOT NULL REFERENCES event_types (event_type_nid), "
+        "event_type_nid INTEGER NOT NULL REFERENCES event_types "
+        "(event_type_nid), "
         "state_key_nid INTEGER NOT NULL REFERENCES state_keys (state_key_nid), "
         "event_nid INTEGER NOT NULL REFERENCES events (event_nid), "
         "start_index BIGINT NOT NULL, "
@@ -687,16 +690,17 @@ void Migrator::migration_v9() {
     query_3.wait();
 
     /* Index for ordering-based scans (compression) */
-    const auto query_4 = transPtr->execSqlAsyncFuture(
-        "CREATE INDEX temporal_state_ordering_idx "
-        "ON temporal_state (room_nid, ordering);");
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("CREATE INDEX temporal_state_ordering_idx "
+                                     "ON temporal_state (room_nid, ordering);");
     query_4.wait();
 
     /* Populate from existing state events */
     const auto query_5 = transPtr->execSqlAsyncFuture(
         "INSERT INTO temporal_state (room_nid, event_type_nid, state_key_nid, "
         "event_nid, start_index) "
-        "SELECT e.room_nid, e.event_type_nid, e.state_key_nid, e.event_nid, e.depth "
+        "SELECT e.room_nid, e.event_type_nid, e.state_key_nid, e.event_nid, "
+        "e.depth "
         "FROM events e WHERE e.state_key_nid IS NOT NULL "
         "ORDER BY e.room_nid, e.event_type_nid, e.state_key_nid, e.depth;");
     query_5.wait();
@@ -786,7 +790,8 @@ void Migrator::migration_v10() {
         "WHERE schemaname = 'public' "
         "AND (matviewname LIKE 'room_%' OR matviewname LIKE 'user_%') "
         "LOOP "
-        "EXECUTE 'DROP MATERIALIZED VIEW IF EXISTS ' || quote_ident(view_name) || ' CASCADE'; "
+        "EXECUTE 'DROP MATERIALIZED VIEW IF EXISTS ' || quote_ident(view_name) "
+        "|| ' CASCADE'; "
         "END LOOP; "
         "END $$;");
     query_7.wait();
@@ -831,7 +836,8 @@ void Migrator::migration_v11() {
 
     /* Index on devices.matrix_id for FK lookups */
     const auto query_2 = transPtr->execSqlAsyncFuture(
-        "CREATE INDEX IF NOT EXISTS devices_matrix_id_idx ON devices (matrix_id);");
+        "CREATE INDEX IF NOT EXISTS devices_matrix_id_idx ON devices "
+        "(matrix_id);");
     query_2.wait();
 
     /* Composite index for state event lookups using NIDs */
@@ -876,12 +882,14 @@ void Migrator::migration_v12() {
 
     /* Add prev_events as queryable array column (using NIDs for efficiency) */
     const auto query_1 = transPtr->execSqlAsyncFuture(
-        "ALTER TABLE events ADD COLUMN prev_events_nids INTEGER[] NOT NULL DEFAULT '{}';");
+        "ALTER TABLE events ADD COLUMN prev_events_nids INTEGER[] NOT NULL "
+        "DEFAULT '{}';");
     query_1.wait();
 
     /* GIN index for efficient array containment queries */
-    const auto query_2 = transPtr->execSqlAsyncFuture(
-        "CREATE INDEX events_prev_events_gin_idx ON events USING GIN (prev_events_nids);");
+    const auto query_2 =
+        transPtr->execSqlAsyncFuture("CREATE INDEX events_prev_events_gin_idx "
+                                     "ON events USING GIN (prev_events_nids);");
     query_2.wait();
 
     /* Populate from existing event JSON */
@@ -930,9 +938,11 @@ void Migrator::migration_v13() {
     const auto query_1 = transPtr->execSqlAsyncFuture(
         "DO $$ BEGIN "
         "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
-        "WHERE constraint_name = 'devices_matrix_id_fk' AND table_name = 'devices') THEN "
+        "WHERE constraint_name = 'devices_matrix_id_fk' AND table_name = "
+        "'devices') THEN "
         "ALTER TABLE devices ADD CONSTRAINT devices_matrix_id_fk "
-        "FOREIGN KEY (matrix_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
+        "FOREIGN KEY (matrix_id) REFERENCES users (matrix_id) ON DELETE "
+        "CASCADE; "
         "END IF; END $$;");
     query_1.wait();
 
@@ -940,7 +950,8 @@ void Migrator::migration_v13() {
     const auto query_2 = transPtr->execSqlAsyncFuture(
         "DO $$ BEGIN "
         "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
-        "WHERE constraint_name = 'account_data_user_id_fk' AND table_name = 'account_data') THEN "
+        "WHERE constraint_name = 'account_data_user_id_fk' AND table_name = "
+        "'account_data') THEN "
         "ALTER TABLE account_data ADD CONSTRAINT account_data_user_id_fk "
         "FOREIGN KEY (user_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
         "END IF; END $$;");
@@ -950,7 +961,8 @@ void Migrator::migration_v13() {
     const auto query_3 = transPtr->execSqlAsyncFuture(
         "DO $$ BEGIN "
         "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
-        "WHERE constraint_name = 'push_rules_user_id_fk' AND table_name = 'push_rules') THEN "
+        "WHERE constraint_name = 'push_rules_user_id_fk' AND table_name = "
+        "'push_rules') THEN "
         "ALTER TABLE push_rules ADD CONSTRAINT push_rules_user_id_fk "
         "FOREIGN KEY (user_id) REFERENCES users (matrix_id) ON DELETE CASCADE; "
         "END IF; END $$;");
@@ -960,9 +972,11 @@ void Migrator::migration_v13() {
     const auto query_4 = transPtr->execSqlAsyncFuture(
         "DO $$ BEGIN "
         "IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints "
-        "WHERE constraint_name = 'temporal_state_event_exists' AND table_name = 'temporal_state') THEN "
+        "WHERE constraint_name = 'temporal_state_event_exists' AND table_name "
+        "= 'temporal_state') THEN "
         "ALTER TABLE temporal_state ADD CONSTRAINT temporal_state_event_exists "
-        "FOREIGN KEY (event_nid) REFERENCES events (event_nid) ON DELETE RESTRICT; "
+        "FOREIGN KEY (event_nid) REFERENCES events (event_nid) ON DELETE "
+        "RESTRICT; "
         "END IF; END $$;");
     query_4.wait();
 
@@ -970,8 +984,10 @@ void Migrator::migration_v13() {
     const auto query_5 = transPtr->execSqlAsyncFuture(
         "CREATE OR REPLACE FUNCTION check_event_not_referenced() "
         "RETURNS TRIGGER AS $$ BEGIN "
-        "IF EXISTS (SELECT 1 FROM events WHERE OLD.event_nid = ANY (prev_events_nids)) THEN "
-        "RAISE EXCEPTION 'Cannot delete event % - referenced by other events as prev_events', OLD.event_id; "
+        "IF EXISTS (SELECT 1 FROM events WHERE OLD.event_nid = ANY "
+        "(prev_events_nids)) THEN "
+        "RAISE EXCEPTION 'Cannot delete event % - referenced by other events "
+        "as prev_events', OLD.event_id; "
         "END IF; RETURN OLD; END; $$ LANGUAGE plpgsql;");
     query_5.wait();
 

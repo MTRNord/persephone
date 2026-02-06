@@ -438,14 +438,12 @@ generate_room_id(const std::string_view server_name) {
  */
 [[nodiscard]] inline bool check_if_ip_address(const std::string &address) {
   LOG_DEBUG << "Checking if " << address << " is an IP address";
-  struct sockaddr_in socket_addr;
-  auto is_ipv4 = false;
-  const auto result =
-      inet_pton(AF_INET, address.c_str(), &(socket_addr.sin_addr));
-  is_ipv4 = result == 1;
+  struct in_addr ipv4_addr;
+  const auto result = inet_pton(AF_INET, address.c_str(), &ipv4_addr);
+  const bool is_ipv4 = result == 1;
 
-  const auto result_v6 =
-      inet_pton(AF_INET6, address.c_str(), &(socket_addr.sin_addr));
+  struct in6_addr ipv6_addr;
+  const auto result_v6 = inet_pton(AF_INET6, address.c_str(), &ipv6_addr);
 
   LOG_DEBUG << "Is IPv4: " << is_ipv4 << " Is IPv6: " << result_v6
             << " boolean: " << (is_ipv4 || (result_v6 == 1));

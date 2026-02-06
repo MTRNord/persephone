@@ -544,6 +544,10 @@ TEST_CASE("check_if_ip_address", "[ip_detection]") {
     REQUIRE(check_if_ip_address("::1"));
     REQUIRE(check_if_ip_address("::"));
     REQUIRE(check_if_ip_address("fe80::1"));
+    // Full 128-bit IPv6 addresses (regression: previously overflowed a
+    // sockaddr_in.sin_addr buffer since inet_pton AF_INET6 writes 16 bytes)
+    REQUIRE(check_if_ip_address("2001:0db8:85a3:0000:0000:8a2e:0370:7334"));
+    REQUIRE(check_if_ip_address("fd00::1"));
   }
 
   SECTION("Not an IP address") {
