@@ -1290,3 +1290,103 @@ Database::get_invite_stripped_state(int room_nid,
     co_return {};
   }
 }
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_auth_chain(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "WITH RECURSIVE auth_chain AS ("
+        "  SELECT e.event_id, e.auth_events"
+        "  FROM events e"
+        "  JOIN rooms r ON r.room_nid = e.room_nid"
+        "  JOIN temporal_state ts ON ts.event_nid = e.event_nid"
+        "  WHERE r.room_id = $1 AND ts.end_index IS NULL"
+        "  UNION"
+        "  SELECT e2.event_id, e2.auth_events"
+        "  FROM events e2"
+        "  JOIN auth_chain ac ON e2.event_id = ANY(ac.auth_events)"
+        ") "
+        "SELECT DISTINCT ej.json"
+        " FROM auth_chain ac"
+        " JOIN events e ON e.event_id = ac.event_id"
+        " JOIN event_json ej ON ej.event_nid = e.event_nid",
+        std::string(room_id));
+
+    std::vector<json> auth_events;
+    auth_events.reserve(query.size());
+
+    for (const auto &row : query) {
+      auth_events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    co_return auth_events;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_auth_chain failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<std::string>>
+Database::get_servers_in_room(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT DISTINCT"
+        "  SUBSTRING(sk.state_key FROM POSITION(':' IN sk.state_key) + 1)"
+        "    AS server_name"
+        " FROM temporal_state ts"
+        " JOIN rooms r ON r.room_nid = ts.room_nid"
+        " JOIN event_types et ON et.event_type_nid = ts.event_type_nid"
+        " JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid"
+        " JOIN event_json ej ON ej.event_nid = ts.event_nid"
+        " WHERE r.room_id = $1"
+        "  AND et.event_type = 'm.room.member'"
+        "  AND ts.end_index IS NULL"
+        "  AND ej.json->'content'->>'membership' = 'join'",
+        std::string(room_id));
+
+    std::vector<std::string> servers;
+    servers.reserve(query.size());
+
+    for (const auto &row : query) {
+      servers.push_back(row["server_name"].as<std::string>());
+    }
+
+    co_return servers;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_servers_in_room failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<int>>
+Database::get_room_nid(std::string_view room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT room_nid FROM rooms WHERE room_id = $1",
+        std::string(room_id));
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    co_return query.at(0)["room_nid"].as<int>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_room_nid failed: " << e.base().what();
+    co_return std::nullopt;
+  }
+}

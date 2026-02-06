@@ -57,6 +57,121 @@ TEST_CASE("server_server_json::MakeJoinResp serialization",
   }
 }
 
+TEST_CASE("server_server_json::SendJoinResp serialization",
+          "[json_serialization]") {
+  SECTION("Full round-trip with all fields") {
+    json input = {
+        {"auth_chain",
+         {{{"type", "m.room.create"},
+           {"room_id", "!abc:example.com"},
+           {"event_id", "$create"}}}},
+        {"event",
+         {{"type", "m.room.member"},
+          {"state_key", "@alice:remote.com"},
+          {"content", {{"membership", "join"}}}}},
+        {"members_omitted", false},
+        {"origin", "example.com"},
+        {"servers_in_room", {"example.com", "remote.com", "third.com"}},
+        {"state",
+         {{{"type", "m.room.create"},
+           {"content", {{"creator", "@admin:example.com"}}}}}}};
+
+    auto resp = input.get<server_server_json::SendJoinResp>();
+    REQUIRE(resp.auth_chain.size() == 1);
+    REQUIRE(resp.auth_chain[0]["type"] == "m.room.create");
+    REQUIRE(resp.event["type"] == "m.room.member");
+    REQUIRE(resp.event["state_key"] == "@alice:remote.com");
+    REQUIRE(resp.members_omitted == false);
+    REQUIRE(resp.origin == "example.com");
+    REQUIRE(resp.servers_in_room.size() == 3);
+    REQUIRE(resp.servers_in_room[0] == "example.com");
+    REQUIRE(resp.servers_in_room[1] == "remote.com");
+    REQUIRE(resp.servers_in_room[2] == "third.com");
+    REQUIRE(resp.state.size() == 1);
+    REQUIRE(resp.state[0]["type"] == "m.room.create");
+
+    json output = resp;
+    REQUIRE(output["auth_chain"].size() == 1);
+    REQUIRE(output["event"]["type"] == "m.room.member");
+    REQUIRE(output["members_omitted"] == false);
+    REQUIRE(output["origin"] == "example.com");
+    REQUIRE(output["servers_in_room"].size() == 3);
+    REQUIRE(output["state"].size() == 1);
+  }
+
+  SECTION("Without optional fields (origin, servers_in_room)") {
+    json input = {
+        {"auth_chain", json::array()},
+        {"event", {{"type", "m.room.member"}}},
+        {"state", json::array()}};
+
+    auto resp = input.get<server_server_json::SendJoinResp>();
+    REQUIRE(resp.auth_chain.empty());
+    REQUIRE(resp.event["type"] == "m.room.member");
+    REQUIRE(resp.members_omitted == false);
+    REQUIRE(resp.origin.empty());
+    REQUIRE(resp.servers_in_room.empty());
+    REQUIRE(resp.state.empty());
+
+    json output = resp;
+    REQUIRE(output["auth_chain"].empty());
+    REQUIRE(output["members_omitted"] == false);
+    REQUIRE(output["origin"] == "");
+    REQUIRE(output["servers_in_room"].empty());
+  }
+
+  SECTION("members_omitted defaults to false when missing") {
+    json input = {
+        {"auth_chain", json::array()},
+        {"event", {{"type", "m.room.member"}}},
+        {"state", json::array()}};
+
+    auto resp = input.get<server_server_json::SendJoinResp>();
+    REQUIRE(resp.members_omitted == false);
+  }
+
+  SECTION("members_omitted true") {
+    json input = {
+        {"auth_chain", json::array()},
+        {"event", {{"type", "m.room.member"}}},
+        {"members_omitted", true},
+        {"state", json::array()}};
+
+    auto resp = input.get<server_server_json::SendJoinResp>();
+    REQUIRE(resp.members_omitted == true);
+
+    json output = resp;
+    REQUIRE(output["members_omitted"] == true);
+  }
+
+  SECTION("Multiple auth chain and state events") {
+    json input = {
+        {"auth_chain",
+         {{{"type", "m.room.create"}, {"event_id", "$1"}},
+          {{"type", "m.room.power_levels"}, {"event_id", "$2"}},
+          {{"type", "m.room.join_rules"}, {"event_id", "$3"}}}},
+        {"event",
+         {{"type", "m.room.member"},
+          {"content", {{"membership", "join"}}}}},
+        {"origin", "matrix.org"},
+        {"servers_in_room", {"matrix.org"}},
+        {"state",
+         {{{"type", "m.room.create"}},
+          {{"type", "m.room.power_levels"}},
+          {{"type", "m.room.join_rules"}}}}};
+
+    auto resp = input.get<server_server_json::SendJoinResp>();
+    REQUIRE(resp.auth_chain.size() == 3);
+    REQUIRE(resp.state.size() == 3);
+    REQUIRE(resp.origin == "matrix.org");
+    REQUIRE(resp.servers_in_room.size() == 1);
+
+    json output = resp;
+    REQUIRE(output["auth_chain"].size() == 3);
+    REQUIRE(output["state"].size() == 3);
+  }
+}
+
 TEST_CASE("server_server_json::well_known serialization",
           "[json_serialization]") {
   SECTION("With m.server") {

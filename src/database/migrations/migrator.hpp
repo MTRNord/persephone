@@ -19,4 +19,5 @@ private:
   static void migration_v11();
   static void migration_v12();
   static void migration_v13();
+  static void migration_v14();
 };

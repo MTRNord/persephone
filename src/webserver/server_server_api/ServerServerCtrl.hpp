@@ -53,6 +53,9 @@ public:
   ADD_METHOD_TO(ServerServerCtrl::make_join,
                 "/_matrix/federation/v1/make_join/{1:roomId}/{2:userId}", Get,
                 "server_server_api::FederationAuthFilter");
+  ADD_METHOD_TO(ServerServerCtrl::send_join,
+                "/_matrix/federation/v2/send_join/{1:roomId}/{2:eventId}", Put,
+                "server_server_api::FederationAuthFilter");
   METHOD_LIST_END
 
   explicit ServerServerCtrl(Config config, VerifyKeyData verify_key_data)
@@ -70,6 +73,11 @@ protected:
   void make_join(const HttpRequestPtr &req,
                  std::function<void(const HttpResponsePtr &)> &&callback,
                  const std::string &roomId, const std::string &userId) const;
+
+  void send_join(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &roomId,
+                 const std::string &eventId) const;
 
 private:
   Config _config;

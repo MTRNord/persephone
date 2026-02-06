@@ -49,18 +49,16 @@ void from_json(const json &obj, MakeJoinResp &data_type);
 void to_json(json &obj, const MakeJoinResp &data_type);
 
 struct [[nodiscard]] SendJoinResp {
-  // TODO: Have a type for the basic PDU structure
   std::vector<json::object_t> auth_chain;
   json event;
   bool members_omitted;
-  std::string_view origin;
-  std::vector<std::string_view> servers_in_room;
+  std::string origin;
+  std::vector<std::string> servers_in_room;
   std::vector<json> state;
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SendJoinResp, auth_chain, event,
-                                   members_omitted, origin, servers_in_room,
-                                   state);
+void from_json(const json &obj, SendJoinResp &data_type);
+void to_json(json &obj, const SendJoinResp &data_type);
 
 struct incompatible_room_version_error
     : public generic_json::generic_json_error {

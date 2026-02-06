@@ -21,6 +21,7 @@ void Migrator::migrate() {
   migration_v11();
   migration_v12();
   migration_v13();
+  migration_v14();
 
   LOG_INFO << "Finished database migration";
 }
@@ -1005,6 +1006,67 @@ void Migrator::migration_v13() {
     const auto query_8 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (13);");
     query_8.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v14() {
+  LOG_INFO << "Starting database migration v13->v14";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 14) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v13->v14 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v14";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Server destination health tracking for federation */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS federation_destinations ("
+        "server_name TEXT PRIMARY KEY, "
+        "last_successful_ts BIGINT, "
+        "last_failure_ts BIGINT, "
+        "failure_count INTEGER NOT NULL DEFAULT 0, "
+        "retry_after_ts BIGINT NOT NULL DEFAULT 0);");
+    query_1.wait();
+
+    /* Persistent federation event queue */
+    const auto query_2 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS federation_event_queue ("
+        "queue_id SERIAL PRIMARY KEY, "
+        "destination TEXT NOT NULL, "
+        "event_id TEXT NOT NULL, "
+        "event_json JSONB NOT NULL, "
+        "created_at BIGINT NOT NULL, "
+        "retry_count INTEGER NOT NULL DEFAULT 0, "
+        "UNIQUE(destination, event_id));");
+    query_2.wait();
+
+    /* Index for efficient per-destination queries */
+    const auto query_3 = transPtr->execSqlAsyncFuture(
+        "CREATE INDEX federation_queue_destination_idx "
+        "ON federation_event_queue (destination);");
+    query_3.wait();
+
+    /* Mark the migration as completed */
+    const auto query_4 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (14);");
+    query_4.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

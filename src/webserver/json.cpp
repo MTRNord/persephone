@@ -31,6 +31,31 @@ void to_json(json &obj, const well_known &data_type) {
     obj["m.server"] = data_type.m_server.value();
   }
 }
+void from_json(const json &obj, SendJoinResp &data_type) {
+  data_type.auth_chain = obj["auth_chain"].get<std::vector<json::object_t>>();
+  data_type.event = obj["event"];
+  data_type.members_omitted =
+      obj.contains("members_omitted") && obj["members_omitted"].get<bool>();
+  if (obj.contains("origin")) {
+    data_type.origin = obj["origin"].get<std::string>();
+  }
+  if (obj.contains("servers_in_room")) {
+    data_type.servers_in_room =
+        obj["servers_in_room"].get<std::vector<std::string>>();
+  }
+  data_type.state = obj["state"].get<std::vector<json>>();
+}
+
+void to_json(json &obj, const SendJoinResp &data_type) {
+  obj = nlohmann::json::object();
+  obj["auth_chain"] = data_type.auth_chain;
+  obj["event"] = data_type.event;
+  obj["members_omitted"] = data_type.members_omitted;
+  obj["origin"] = data_type.origin;
+  obj["servers_in_room"] = data_type.servers_in_room;
+  obj["state"] = data_type.state;
+}
+
 } // namespace server_server_json
 
 namespace client_server_json {

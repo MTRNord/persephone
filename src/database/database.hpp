@@ -204,4 +204,20 @@ public:
   /// Get stripped state for an invite (limited state for invited rooms)
   [[nodiscard]] static drogon::Task<std::vector<json>>
   get_invite_stripped_state(int room_nid, std::string_view invited_user_id);
+
+  // ============================================================================
+  // Federation queries
+  // ============================================================================
+
+  /// Get the full auth chain for a room (recursive walk of auth_events)
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_auth_chain(std::string_view room_id);
+
+  /// Get distinct server names from joined members in a room
+  [[nodiscard]] static drogon::Task<std::vector<std::string>>
+  get_servers_in_room(std::string_view room_id);
+
+  /// Get room_nid for a room_id
+  [[nodiscard]] static drogon::Task<std::optional<int>>
+  get_room_nid(std::string_view room_id);
 };

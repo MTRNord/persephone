@@ -1,4 +1,5 @@
 #include "database/database.hpp"
+#include "federation/federation_sender.hpp"
 #include "utils/config.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
@@ -99,7 +100,12 @@ int main() {
           resp->addHeader("Access-Control-Allow-Headers",
                           "X-Requested-With, Content-Type, Authorization");
         })
-        .registerBeginningAdvice([]() { Database::migrate(); });
+        .registerBeginningAdvice([&verify_key_data, &config]() {
+          Database::migrate();
+          FederationSender::start(
+              std::string(config.matrix_config.server_name),
+              verify_key_data.key_id, verify_key_data.private_key);
+        });
 
     // Initialize the federation auth filter with our server name
     server_server_api::FederationAuthFilter::setServerName(

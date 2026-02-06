@@ -103,6 +103,7 @@ set(SOURCES
         src/webserver/client_server_api/ClientServerCtrl.cpp
         src/webserver/json.cpp
         src/webserver/server_server_api/ServerServerCtrl.cpp
+        src/federation/federation_sender.cpp
 )
 
 # Create a static library to avoid recompiling sources for each target
