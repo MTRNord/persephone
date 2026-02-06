@@ -9,3 +9,5 @@ matrix:
   server_key_location: ./server_key.key
 webserver:
   ssl: true
+
+log_level: debug

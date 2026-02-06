@@ -265,20 +265,24 @@ decode_base64(const std::string &input) {
   return bin_str;
 }
 
-[[nodiscard]] bool verify_signature(std::string_view public_key_base64,
-                                    std::string_view signature_base64,
-                                    std::string_view message) {
+[[nodiscard]] bool verify_signature(const std::string_view public_key_base64,
+                                    const std::string_view signature_base64,
+                                    const std::string_view message) {
   // Decode the public key
-  auto public_key_opt = decode_base64(std::string(public_key_base64));
+  const auto public_key_opt = decode_base64(std::string(public_key_base64));
   if (!public_key_opt.has_value() ||
       public_key_opt->size() != crypto_sign_PUBLICKEYBYTES) {
+    LOG_WARN << "[verify_signature] Failed to decode public key or invalid key "
+                "length";
     return false;
   }
 
   // Decode the signature
-  auto signature_opt = decode_base64(std::string(signature_base64));
+  const auto signature_opt = decode_base64(std::string(signature_base64));
   if (!signature_opt.has_value() ||
       signature_opt->size() != crypto_sign_BYTES) {
+    LOG_WARN << "[verify_signature] Failed to decode signature or invalid "
+                "signature length";
     return false;
   }
 

@@ -177,8 +177,8 @@ void FederationAuthFilter::doFilter(const HttpRequestPtr &req,
       // Get Authorization header
       const auto auth_header = req->getHeader("Authorization");
       if (auth_header.empty()) {
-        return_error(callback, "M_UNAUTHORIZED",
-                     "Missing Authorization header", k401Unauthorized);
+        return_error(callback, "M_UNAUTHORIZED", "Missing Authorization header",
+                     k401Unauthorized);
         co_return;
       }
 
@@ -204,8 +204,8 @@ void FederationAuthFilter::doFilter(const HttpRequestPtr &req,
       const auto public_key_opt =
           co_await get_server_signing_key(parsed->origin, parsed->key_id);
       if (!public_key_opt.has_value()) {
-        LOG_WARN << "Could not fetch signing key " << parsed->key_id
-                 << " from " << parsed->origin;
+        LOG_WARN << "Could not fetch signing key " << parsed->key_id << " from "
+                 << parsed->origin;
         return_error(callback, "M_UNAUTHORIZED",
                      "Could not verify signature: unable to fetch signing key",
                      k401Unauthorized);
@@ -348,11 +348,9 @@ void ServerServerCtrl::make_join(
       }
 
       // 2. Get room version
-      const auto room_version_opt =
-          co_await Database::get_room_version(roomId);
+      const auto room_version_opt = co_await Database::get_room_version(roomId);
       if (!room_version_opt.has_value()) {
-        return_error(callback, "M_UNKNOWN",
-                     "Could not determine room version",
+        return_error(callback, "M_UNKNOWN", "Could not determine room version",
                      k500InternalServerError);
         co_return;
       }
@@ -404,8 +402,8 @@ void ServerServerCtrl::make_join(
       const auto membership_opt =
           co_await Database::get_membership(roomId, userId);
       if (membership_opt.has_value() && membership_opt.value() == "ban") {
-        return_error(callback, "M_FORBIDDEN",
-                     "User is banned from the room", k403Forbidden);
+        return_error(callback, "M_FORBIDDEN", "User is banned from the room",
+                     k403Forbidden);
         co_return;
       }
 
@@ -507,222 +505,229 @@ void ServerServerCtrl::send_join(
   drogon::async_run([req, roomId, eventId, config, verify_key_data,
                      callback = std::move(callback)]() -> drogon::Task<> {
     try {
-    // 1. Parse body as JSON
-    json body;
-    try {
-      body = json::parse(req->body());
-    } catch (const std::exception &) {
-      return_error(callback, "M_NOT_JSON", "Request body is not valid JSON",
-                   k400BadRequest);
-      co_return;
-    }
-
-    // 2. Validate type is m.room.member
-    if (!body.contains("type") ||
-        body["type"].get<std::string>() != "m.room.member") {
-      return_error(callback, "M_BAD_JSON", "Event type must be m.room.member",
-                   k400BadRequest);
-      co_return;
-    }
-
-    // 3. Validate content.membership is join
-    if (!body.contains("content") || !body["content"].contains("membership") ||
-        body["content"]["membership"].get<std::string>() != "join") {
-      return_error(callback, "M_BAD_JSON",
-                   "Event content.membership must be 'join'", k400BadRequest);
-      co_return;
-    }
-
-    // 4. Validate state_key == sender
-    if (!body.contains("state_key") || !body.contains("sender") ||
-        body["state_key"].get<std::string>() !=
-            body["sender"].get<std::string>()) {
-      return_error(callback, "M_BAD_JSON", "Event state_key must match sender",
-                   k400BadRequest);
-      co_return;
-    }
-
-    // 5. Validate room_id matches path parameter
-    if (!body.contains("room_id") ||
-        body["room_id"].get<std::string>() != roomId) {
-      return_error(callback, "M_BAD_JSON",
-                   "Event room_id does not match path parameter",
-                   k400BadRequest);
-      co_return;
-    }
-
-    // 6. Check room exists
-    if (const bool exists = co_await Database::room_exists(roomId); !exists) {
-      return_error(callback, "M_NOT_FOUND", "Unknown room", k404NotFound);
-      co_return;
-    }
-
-    // 7. Get room version
-    const auto room_version_opt = co_await Database::get_room_version(roomId);
-    if (!room_version_opt.has_value()) {
-      return_error(callback, "M_UNKNOWN", "Could not determine room version",
-                   k500InternalServerError);
-      co_return;
-    }
-    const auto &room_version = room_version_opt.value();
-
-    // 8. Verify event ID matches computed event_id
-    try {
-      if (const auto computed_event_id = event_id(body, room_version);
-          computed_event_id != eventId) {
-        return_error(callback, "M_BAD_JSON",
-                     std::format("Event ID mismatch: path has {}, computed {}",
-                                 eventId, computed_event_id),
+      // 1. Parse body as JSON
+      json body;
+      try {
+        body = json::parse(req->body());
+      } catch (const std::exception &) {
+        return_error(callback, "M_NOT_JSON", "Request body is not valid JSON",
                      k400BadRequest);
         co_return;
       }
-    } catch (const std::exception &e) {
-      return_error(callback, "M_BAD_JSON",
-                   std::format("Failed to compute event ID: {}", e.what()),
-                   k400BadRequest);
-      co_return;
-    }
 
-    // 9. Verify event signature
-    const auto sender = body["sender"].get<std::string>();
-    const auto colon_pos = sender.find(':');
-    if (colon_pos == std::string::npos) {
-      return_error(callback, "M_BAD_JSON", "Invalid sender format",
-                   k400BadRequest);
-      co_return;
-    }
-    const auto origin_server = sender.substr(colon_pos + 1);
-
-    if (!body.contains("signatures") ||
-        !body["signatures"].contains(origin_server)) {
-      return_error(callback, "M_UNAUTHORIZED",
-                   "Event is not signed by the origin server", k403Forbidden);
-      co_return;
-    }
-
-    // Verify at least one signature from the origin server
-    bool signature_valid = false;
-    const auto &origin_sigs = body["signatures"][origin_server];
-    for (auto it = origin_sigs.begin(); it != origin_sigs.end(); ++it) {
-      const auto sig_key_id = it.key();
-      const auto sig_value = it.value().get<std::string>();
-
-      // Fetch the public key for this key_id
-      const auto pub_key =
-          co_await get_server_signing_key(origin_server, sig_key_id);
-      if (!pub_key.has_value()) {
-        continue;
+      // 2. Validate type is m.room.member
+      if (!body.contains("type") ||
+          body["type"].get<std::string>() != "m.room.member") {
+        return_error(callback, "M_BAD_JSON", "Event type must be m.room.member",
+                     k400BadRequest);
+        co_return;
       }
 
-      // Build canonical JSON without signatures and unsigned
-      auto canonical = body;
-      canonical.erase("signatures");
-      canonical.erase("unsigned");
-      const auto canonical_str = canonical.dump();
-
-      if (json_utils::verify_signature(*pub_key, sig_value, canonical_str)) {
-        signature_valid = true;
-        break;
+      // 3. Validate content.membership is join
+      if (!body.contains("content") ||
+          !body["content"].contains("membership") ||
+          body["content"]["membership"].get<std::string>() != "join") {
+        return_error(callback, "M_BAD_JSON",
+                     "Event content.membership must be 'join'", k400BadRequest);
+        co_return;
       }
-    }
 
-    if (!signature_valid) {
-      return_error(callback, "M_UNAUTHORIZED",
-                   "Could not verify event signature", k403Forbidden);
-      co_return;
-    }
+      // 4. Validate state_key == sender
+      if (!body.contains("state_key") || !body.contains("sender") ||
+          body["state_key"].get<std::string>() !=
+              body["sender"].get<std::string>()) {
+        return_error(callback, "M_BAD_JSON",
+                     "Event state_key must match sender", k400BadRequest);
+        co_return;
+      }
 
-    // 10. Check user is not banned
-    const auto membership_opt =
-        co_await Database::get_membership(roomId, sender);
-    if (membership_opt.has_value() && membership_opt.value() == "ban") {
-      return_error(callback, "M_FORBIDDEN", "User is banned from this room",
-                   k403Forbidden);
-      co_return;
-    }
+      // 5. Validate room_id matches path parameter
+      if (!body.contains("room_id") ||
+          body["room_id"].get<std::string>() != roomId) {
+        return_error(callback, "M_BAD_JSON",
+                     "Event room_id does not match path parameter",
+                     k400BadRequest);
+        co_return;
+      }
 
-    // 11. Check join rules
-    if (const auto join_rules_event = co_await Database::get_join_rules(roomId);
-        join_rules_event.has_value()) {
-      if (const auto &join_rules = join_rules_event.value();
-          join_rules.contains("content") &&
-          join_rules["content"].contains("join_rule")) {
-        const auto join_rule =
-            join_rules["content"]["join_rule"].get<std::string>();
+      // 6. Check room exists
+      if (const bool exists = co_await Database::room_exists(roomId); !exists) {
+        return_error(callback, "M_NOT_FOUND", "Unknown room", k404NotFound);
+        co_return;
+      }
 
-        if (join_rule == "invite") {
-          if (!membership_opt.has_value() ||
-              membership_opt.value() != "invite") {
-            return_error(callback, "M_FORBIDDEN",
-                         "User is not invited to this room", k403Forbidden);
-            co_return;
+      // 7. Get room version
+      const auto room_version_opt = co_await Database::get_room_version(roomId);
+      if (!room_version_opt.has_value()) {
+        return_error(callback, "M_UNKNOWN", "Could not determine room version",
+                     k500InternalServerError);
+        co_return;
+      }
+      const auto &room_version = room_version_opt.value();
+
+      // 8. Verify event ID matches computed event_id
+      try {
+        if (const auto computed_event_id = event_id(body, room_version);
+            computed_event_id != eventId) {
+          return_error(
+              callback, "M_BAD_JSON",
+              std::format("Event ID mismatch: path has {}, computed {}",
+                          eventId, computed_event_id),
+              k400BadRequest);
+          co_return;
+        }
+      } catch (const std::exception &e) {
+        return_error(callback, "M_BAD_JSON",
+                     std::format("Failed to compute event ID: {}", e.what()),
+                     k400BadRequest);
+        co_return;
+      }
+
+      // 9. Verify event signature
+      const auto sender = body["sender"].get<std::string>();
+      const auto colon_pos = sender.find(':');
+      if (colon_pos == std::string::npos) {
+        return_error(callback, "M_BAD_JSON", "Invalid sender format",
+                     k400BadRequest);
+        co_return;
+      }
+      const auto origin_server = sender.substr(colon_pos + 1);
+
+      if (!body.contains("signatures") ||
+          !body["signatures"].contains(origin_server)) {
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Event is not signed by the origin server", k403Forbidden);
+        co_return;
+      }
+
+      // Verify at least one signature from the origin server
+      bool signature_valid = false;
+      const auto &origin_sigs = body["signatures"][origin_server];
+      for (auto it = origin_sigs.begin(); it != origin_sigs.end(); ++it) {
+        const auto &sig_key_id = it.key();
+        const auto sig_value = it.value().get<std::string>();
+
+        // Fetch the public key for this key_id
+        const auto pub_key =
+            co_await get_server_signing_key(origin_server, sig_key_id);
+        if (!pub_key.has_value()) {
+          LOG_WARN << "Could not fetch signing key " << sig_key_id << " from "
+                   << origin_server << " for event signature verification";
+          // Should we fail here instead?
+          continue;
+        }
+
+        // Build canonical JSON without signatures and unsigned
+        auto canonical = body;
+        canonical.erase("signatures");
+        canonical.erase("unsigned");
+        const auto canonical_str = canonical.dump();
+
+        if (json_utils::verify_signature(*pub_key, sig_value, canonical_str)) {
+          signature_valid = true;
+          break;
+        }
+      }
+
+      if (!signature_valid) {
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Could not verify event signature", k403Forbidden);
+        co_return;
+      }
+
+      // 10. Check user is not banned
+      const auto membership_opt =
+          co_await Database::get_membership(roomId, sender);
+      if (membership_opt.has_value() && membership_opt.value() == "ban") {
+        return_error(callback, "M_FORBIDDEN", "User is banned from this room",
+                     k403Forbidden);
+        co_return;
+      }
+
+      // 11. Check join rules
+      if (const auto join_rules_event =
+              co_await Database::get_join_rules(roomId);
+          join_rules_event.has_value()) {
+        if (const auto &join_rules = join_rules_event.value();
+            join_rules.contains("content") &&
+            join_rules["content"].contains("join_rule")) {
+          const auto join_rule =
+              join_rules["content"]["join_rule"].get<std::string>();
+
+          if (join_rule == "invite") {
+            if (!membership_opt.has_value() ||
+                membership_opt.value() != "invite") {
+              return_error(callback, "M_FORBIDDEN",
+                           "User is not invited to this room", k403Forbidden);
+              co_return;
+            }
           }
         }
       }
-    }
 
-    // === Response construction (order matters!) ===
+      // === Response construction (order matters!) ===
 
-    // A. Get room_nid for state queries
-    const auto room_nid_opt = co_await Database::get_room_nid(roomId);
-    if (!room_nid_opt.has_value()) {
-      return_error(callback, "M_UNKNOWN", "Could not find room",
-                   k500InternalServerError);
+      // A. Get room_nid for state queries
+      const auto room_nid_opt = co_await Database::get_room_nid(roomId);
+      if (!room_nid_opt.has_value()) {
+        return_error(callback, "M_UNKNOWN", "Could not find room",
+                     k500InternalServerError);
+        co_return;
+      }
+      const auto room_nid = room_nid_opt.value();
+
+      // B. Fetch state BEFORE persisting (spec: state prior to the join)
+      const auto state_events =
+          co_await Database::get_current_room_state(room_nid);
+      const auto auth_chain = co_await Database::get_auth_chain(roomId);
+
+      // C. Co-sign the event
+      const auto server_name = std::string(config.matrix_config.server_name);
+      const auto key_id_str = verify_key_data.key_id;
+      const auto signed_event = json_utils::sign_json(
+          server_name, key_id_str, verify_key_data.private_key, body);
+
+      // D. Persist the event
+      try {
+        const auto sql = drogon::app().getDbClient();
+        const auto transaction = co_await sql->newTransactionCoro();
+        co_await Database::add_event(transaction, signed_event, roomId);
+      } catch (const std::exception &e) {
+        LOG_ERROR << "send_join: Failed to persist event: " << e.what();
+        return_error(callback, "M_UNKNOWN", "Failed to persist event",
+                     k500InternalServerError);
+        co_return;
+      }
+
+      // E. Broadcast to other servers (async, non-blocking)
+      FederationSender::broadcast_pdu(signed_event, roomId, origin_server);
+
+      // F. Get servers in room for response
+      const auto servers_in_room =
+          co_await Database::get_servers_in_room(roomId);
+
+      // G. Build and return response
+      // Convert auth_chain to vector<json::object_t>
+      std::vector<json::object_t> auth_chain_objects;
+      auth_chain_objects.reserve(auth_chain.size());
+      for (const auto &event : auth_chain) {
+        auth_chain_objects.push_back(event.get<json::object_t>());
+      }
+
+      const server_server_json::SendJoinResp response{
+          .auth_chain = std::move(auth_chain_objects),
+          .event = signed_event,
+          .members_omitted = false,
+          .origin = server_name,
+          .servers_in_room = servers_in_room,
+          .state = state_events};
+      const json response_json = response;
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(response_json.dump());
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
+      callback(resp);
       co_return;
-    }
-    const auto room_nid = room_nid_opt.value();
-
-    // B. Fetch state BEFORE persisting (spec: state prior to the join)
-    const auto state_events =
-        co_await Database::get_current_room_state(room_nid);
-    const auto auth_chain = co_await Database::get_auth_chain(roomId);
-
-    // C. Co-sign the event
-    const auto server_name = std::string(config.matrix_config.server_name);
-    const auto key_id_str = verify_key_data.key_id;
-    const auto signed_event = json_utils::sign_json(
-        server_name, key_id_str, verify_key_data.private_key, body);
-
-    // D. Persist the event
-    try {
-      const auto sql = drogon::app().getDbClient();
-      const auto transaction = co_await sql->newTransactionCoro();
-      co_await Database::add_event(transaction, signed_event, roomId);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "send_join: Failed to persist event: " << e.what();
-      return_error(callback, "M_UNKNOWN", "Failed to persist event",
-                   k500InternalServerError);
-      co_return;
-    }
-
-    // E. Broadcast to other servers (async, non-blocking)
-    FederationSender::broadcast_pdu(signed_event, roomId, origin_server);
-
-    // F. Get servers in room for response
-    const auto servers_in_room = co_await Database::get_servers_in_room(roomId);
-
-    // G. Build and return response
-    // Convert auth_chain to vector<json::object_t>
-    std::vector<json::object_t> auth_chain_objects;
-    auth_chain_objects.reserve(auth_chain.size());
-    for (const auto &event : auth_chain) {
-      auth_chain_objects.push_back(event.get<json::object_t>());
-    }
-
-    const server_server_json::SendJoinResp response{
-        .auth_chain = std::move(auth_chain_objects),
-        .event = signed_event,
-        .members_omitted = false,
-        .origin = server_name,
-        .servers_in_room = servers_in_room,
-        .state = state_events};
-    const json response_json = response;
-
-    const auto resp = HttpResponse::newHttpResponse();
-    resp->setBody(response_json.dump());
-    resp->setContentTypeString(JSON_CONTENT_TYPE);
-    callback(resp);
-    co_return;
     } catch (const std::exception &e) {
       LOG_ERROR << "send_join: Exception: " << e.what();
       return_error(callback, "M_UNKNOWN", "Internal server error",
