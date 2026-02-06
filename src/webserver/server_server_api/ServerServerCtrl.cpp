@@ -173,72 +173,93 @@ void FederationAuthFilter::doFilter(const HttpRequestPtr &req,
   drogon::async_run([req, chain_callback = std::move(chain_callback),
                      callback = std::move(callback),
                      server_name = _server_name]() mutable -> drogon::Task<> {
-    // Get Authorization header
-    const auto auth_header = req->getHeader("Authorization");
-    if (auth_header.empty()) {
-      return_error(callback, "M_UNAUTHORIZED", "Missing Authorization header",
-                   k401Unauthorized);
-      co_return;
-    }
-
-    // Parse X-Matrix header
-    const auto parsed = parse_xmatrix_header(auth_header);
-    if (!parsed.has_value()) {
-      return_error(callback, "M_UNAUTHORIZED",
-                   "Invalid Authorization header format", k401Unauthorized);
-      co_return;
-    }
-
-    // Verify destination matches our server
-    if (parsed->destination != server_name) {
-      LOG_WARN << "Authorization header destination mismatch: expected "
-               << server_name << ", got " << parsed->destination;
-      return_error(callback, "M_UNAUTHORIZED",
-                   "Destination does not match this server", k401Unauthorized);
-      co_return;
-    }
-
-    // Get the signing key for the origin server
-    const auto public_key_opt =
-        co_await get_server_signing_key(parsed->origin, parsed->key_id);
-    if (!public_key_opt.has_value()) {
-      LOG_WARN << "Could not fetch signing key " << parsed->key_id << " from "
-               << parsed->origin;
-      return_error(callback, "M_UNAUTHORIZED",
-                   "Could not verify signature: unable to fetch signing key",
-                   k401Unauthorized);
-      co_return;
-    }
-
-    // Build the content that was signed
-    std::optional<json> content;
-    if (!req->body().empty()) {
-      try {
-        content = json::parse(req->body());
-      } catch (const std::exception &e) {
-        // Body might not be JSON, that's ok for some requests
+    try {
+      // Get Authorization header
+      const auto auth_header = req->getHeader("Authorization");
+      if (auth_header.empty()) {
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Missing Authorization header", k401Unauthorized);
+        co_return;
       }
-    }
 
-    const std::string method = drogon_to_string_method(req->method()).data();
-    const std::string uri = req->path();
+      // Parse X-Matrix header
+      const auto parsed = parse_xmatrix_header(auth_header);
+      if (!parsed.has_value()) {
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Invalid Authorization header format", k401Unauthorized);
+        co_return;
+      }
 
-    const auto signed_content = build_signed_content(
-        method, uri, parsed->origin, parsed->destination, content);
+      // Verify destination matches our server
+      if (parsed->destination != server_name) {
+        LOG_WARN << "Authorization header destination mismatch: expected "
+                 << server_name << ", got " << parsed->destination;
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Destination does not match this server",
+                     k401Unauthorized);
+        co_return;
+      }
 
-    // Verify the signature
-    if (!json_utils::verify_signature(*public_key_opt, parsed->signature,
-                                      signed_content)) {
-      LOG_WARN << "Signature verification failed for request from "
-               << parsed->origin;
-      return_error(callback, "M_UNAUTHORIZED", "Invalid signature",
-                   k401Unauthorized);
+      // Get the signing key for the origin server
+      const auto public_key_opt =
+          co_await get_server_signing_key(parsed->origin, parsed->key_id);
+      if (!public_key_opt.has_value()) {
+        LOG_WARN << "Could not fetch signing key " << parsed->key_id
+                 << " from " << parsed->origin;
+        return_error(callback, "M_UNAUTHORIZED",
+                     "Could not verify signature: unable to fetch signing key",
+                     k401Unauthorized);
+        co_return;
+      }
+
+      // Build the content that was signed
+      std::optional<json> content;
+      if (!req->body().empty()) {
+        try {
+          content = json::parse(req->body());
+        } catch (const std::exception &) {
+          // Body might not be JSON, that's ok for some requests
+        }
+      }
+
+      const std::string method = drogon_to_string_method(req->method()).data();
+      // Use the original percent-encoded path + query string for signature
+      // verification. The spec requires the raw request target, not the decoded
+      // path.
+      std::string uri = std::string(req->getOriginalPath());
+      if (const auto &query = req->getQuery(); !query.empty()) {
+        uri += "?" + std::string(query);
+      }
+
+      const auto signed_content = build_signed_content(
+          method, uri, parsed->origin, parsed->destination, content);
+
+      // Verify the signature
+      if (!json_utils::verify_signature(*public_key_opt, parsed->signature,
+                                        signed_content)) {
+        LOG_WARN << "Signature verification failed for request from "
+                 << parsed->origin;
+        return_error(callback, "M_UNAUTHORIZED", "Invalid signature",
+                     k401Unauthorized);
+        co_return;
+      }
+
+      // Signature valid, proceed with the request
+      chain_callback();
       co_return;
+    } catch (const std::exception &e) {
+      LOG_ERROR << "FederationAuthFilter: Exception during authentication: "
+                << e.what();
+      return_error(callback, "M_UNKNOWN",
+                   "Internal error during request authentication",
+                   k500InternalServerError);
+    } catch (...) {
+      LOG_ERROR
+          << "FederationAuthFilter: Unknown exception during authentication";
+      return_error(callback, "M_UNKNOWN",
+                   "Internal error during request authentication",
+                   k500InternalServerError);
     }
-
-    // Signature valid, proceed with the request
-    chain_callback();
-    co_return;
   });
 }
 
@@ -318,172 +339,161 @@ void ServerServerCtrl::make_join(
 
   drogon::async_run([roomId, userId, ver_params,
                      callback = std::move(callback)]() -> drogon::Task<> {
-    // 1. Check if the room exists
-    if (const bool room_exists = co_await Database::room_exists(roomId);
-        !room_exists) {
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setStatusCode(k404NotFound);
-      const json error_body = generic_json::generic_json_error{
-          .errcode = "M_NOT_FOUND", .error = "Unknown room"};
-      resp->setBody(error_body.dump());
-      resp->setContentTypeString(JSON_CONTENT_TYPE);
-      callback(resp);
-      co_return;
-    }
-
-    // 2. Get room version
-    const auto room_version_opt = co_await Database::get_room_version(roomId);
-    if (!room_version_opt.has_value()) {
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setStatusCode(k500InternalServerError);
-      const json error_body = generic_json::generic_json_error{
-          .errcode = "M_UNKNOWN", .error = "Could not determine room version"};
-      resp->setBody(error_body.dump());
-      resp->setContentTypeString(JSON_CONTENT_TYPE);
-      callback(resp);
-      co_return;
-    }
-    const std::string &room_version = room_version_opt.value();
-
-    // 3. Check if the room version is supported
-    if (!room_version::is_supported(room_version)) {
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setStatusCode(k400BadRequest);
-      const json error_body = {
-          {"errcode", "M_INCOMPATIBLE_ROOM_VERSION"},
-          {"error", "Your homeserver does not support the features required to "
-                    "join this room"},
-          {"room_version", room_version}};
-      resp->setBody(error_body.dump());
-      resp->setContentTypeString(JSON_CONTENT_TYPE);
-      callback(resp);
-      co_return;
-    }
-
-    // 4. If ver params are provided, check that the room version is in the list
-    if (!ver_params.empty()) {
-      bool version_supported = false;
-      for (const auto &v : ver_params) {
-        if (v == room_version) {
-          version_supported = true;
-          break;
-        }
+    try {
+      // 1. Check if the room exists
+      if (const bool room_exists = co_await Database::room_exists(roomId);
+          !room_exists) {
+        return_error(callback, "M_NOT_FOUND", "Unknown room", k404NotFound);
+        co_return;
       }
-      if (!version_supported) {
+
+      // 2. Get room version
+      const auto room_version_opt =
+          co_await Database::get_room_version(roomId);
+      if (!room_version_opt.has_value()) {
+        return_error(callback, "M_UNKNOWN",
+                     "Could not determine room version",
+                     k500InternalServerError);
+        co_return;
+      }
+      const std::string &room_version = room_version_opt.value();
+
+      // 3. Check if the room version is supported
+      if (!room_version::is_supported(room_version)) {
         const auto resp = HttpResponse::newHttpResponse();
         resp->setStatusCode(k400BadRequest);
         const json error_body = {
             {"errcode", "M_INCOMPATIBLE_ROOM_VERSION"},
-            {"error", "Your homeserver does not support the features required "
-                      "to join this room"},
+            {"error",
+             "Your homeserver does not support the features required to "
+             "join this room"},
             {"room_version", room_version}};
         resp->setBody(error_body.dump());
         resp->setContentTypeString(JSON_CONTENT_TYPE);
         callback(resp);
         co_return;
       }
-    }
 
-    // 5. Check the user's current membership state
-    const auto membership_opt =
-        co_await Database::get_membership(roomId, userId);
-    if (membership_opt.has_value() && membership_opt.value() == "ban") {
-      const auto resp = HttpResponse::newHttpResponse();
-      resp->setStatusCode(k403Forbidden);
-      const json error_body = generic_json::generic_json_error{
-          .errcode = "M_FORBIDDEN", .error = "User is banned from the room"};
-      resp->setBody(error_body.dump());
-      resp->setContentTypeString(JSON_CONTENT_TYPE);
-      callback(resp);
-      co_return;
-    }
-
-    // 6. Check join rules
-    if (const auto join_rules_event = co_await Database::get_join_rules(roomId);
-        join_rules_event.has_value()) {
-      if (const auto &join_rules = join_rules_event.value();
-          join_rules.contains("content") &&
-          join_rules["content"].contains("join_rule")) {
-        const auto join_rule =
-            join_rules["content"]["join_rule"].get<std::string>();
-
-        // For invite-only rooms, check if user is invited
-        if (join_rule == "invite") {
-          if (!membership_opt.has_value() ||
-              membership_opt.value() != "invite") {
-            const auto resp = HttpResponse::newHttpResponse();
-            resp->setStatusCode(k403Forbidden);
-            const json error_body = generic_json::generic_json_error{
-                .errcode = "M_FORBIDDEN",
-                .error = "User is not invited to this room"};
-            resp->setBody(error_body.dump());
-            resp->setContentTypeString(JSON_CONTENT_TYPE);
-            callback(resp);
-            co_return;
+      // 4. If ver params are provided, check that the room version is in the
+      // list
+      if (!ver_params.empty()) {
+        bool version_supported = false;
+        for (const auto &v : ver_params) {
+          if (v == room_version) {
+            version_supported = true;
+            break;
           }
         }
-        // TODO: Handle restricted/knock join rules
+        if (!version_supported) {
+          const auto resp = HttpResponse::newHttpResponse();
+          resp->setStatusCode(k400BadRequest);
+          const json error_body = {
+              {"errcode", "M_INCOMPATIBLE_ROOM_VERSION"},
+              {"error",
+               "Your homeserver does not support the features required "
+               "to join this room"},
+              {"room_version", room_version}};
+          resp->setBody(error_body.dump());
+          resp->setContentTypeString(JSON_CONTENT_TYPE);
+          callback(resp);
+          co_return;
+        }
       }
-    }
 
-    // 7. Get auth events for the join
-    const auto auth_events_data =
-        co_await Database::get_auth_events_for_join(roomId, userId);
-    if (!auth_events_data.has_value()) {
+      // 5. Check the user's current membership state
+      const auto membership_opt =
+          co_await Database::get_membership(roomId, userId);
+      if (membership_opt.has_value() && membership_opt.value() == "ban") {
+        return_error(callback, "M_FORBIDDEN",
+                     "User is banned from the room", k403Forbidden);
+        co_return;
+      }
+
+      // 6. Check join rules
+      if (const auto join_rules_event =
+              co_await Database::get_join_rules(roomId);
+          join_rules_event.has_value()) {
+        if (const auto &join_rules = join_rules_event.value();
+            join_rules.contains("content") &&
+            join_rules["content"].contains("join_rule")) {
+          const auto join_rule =
+              join_rules["content"]["join_rule"].get<std::string>();
+
+          // For invite-only rooms, check if user is invited
+          if (join_rule == "invite") {
+            if (!membership_opt.has_value() ||
+                membership_opt.value() != "invite") {
+              return_error(callback, "M_FORBIDDEN",
+                           "User is not invited to this room", k403Forbidden);
+              co_return;
+            }
+          }
+          // TODO: Handle restricted/knock join rules
+        }
+      }
+
+      // 7. Get auth events for the join
+      const auto auth_events_data =
+          co_await Database::get_auth_events_for_join(roomId, userId);
+      if (!auth_events_data.has_value()) {
+        return_error(callback, "M_UNKNOWN", "Could not retrieve room state",
+                     k500InternalServerError);
+        co_return;
+      }
+
+      // Select auth events using the helper
+      const auto auth_event_ids = select_auth_events_for_join(
+          auth_events_data->create_event, auth_events_data->power_levels,
+          auth_events_data->join_rules, auth_events_data->target_membership,
+          std::nullopt, // No auth_user_membership for non-restricted joins
+          room_version);
+
+      // 8. Get prev_events and depth
+      const auto prev_events = co_await Database::get_room_heads(roomId);
+      const auto max_depth = co_await Database::get_max_depth(roomId);
+
+      // 9. Build the proto-event (unsigned template)
+      const long origin_server_ts =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::system_clock::now().time_since_epoch())
+              .count();
+
+      // Extract origin server from userId (@user:server.name)
+      const auto colon_pos = userId.find(':');
+      const std::string origin =
+          colon_pos != std::string::npos ? userId.substr(colon_pos + 1) : "";
+
+      const json proto_event = {{"type", "m.room.member"},
+                                {"sender", userId},
+                                {"state_key", userId},
+                                {"room_id", roomId},
+                                {"origin", origin},
+                                {"origin_server_ts", origin_server_ts},
+                                {"depth", max_depth + 1},
+                                {"content", {{"membership", "join"}}},
+                                {"auth_events", auth_event_ids},
+                                {"prev_events", prev_events}};
+
+      // 10. Return the response
+      const server_server_json::MakeJoinResp response{
+          .event = proto_event.get<json::object_t>(),
+          .room_version = room_version};
+      const json response_json = response;
+
       const auto resp = HttpResponse::newHttpResponse();
-      resp->setStatusCode(k500InternalServerError);
-      const json error_body = generic_json::generic_json_error{
-          .errcode = "M_UNKNOWN", .error = "Could not retrieve room state"};
-      resp->setBody(error_body.dump());
+      resp->setBody(response_json.dump());
       resp->setContentTypeString(JSON_CONTENT_TYPE);
       callback(resp);
       co_return;
+    } catch (const std::exception &e) {
+      LOG_ERROR << "make_join: Exception: " << e.what();
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
+    } catch (...) {
+      LOG_ERROR << "make_join: Unknown exception";
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
     }
-
-    // Select auth events using the helper
-    const auto auth_event_ids = select_auth_events_for_join(
-        auth_events_data->create_event, auth_events_data->power_levels,
-        auth_events_data->join_rules, auth_events_data->target_membership,
-        std::nullopt, // No auth_user_membership for non-restricted joins
-        room_version);
-
-    // 8. Get prev_events and depth
-    const auto prev_events = co_await Database::get_room_heads(roomId);
-    const auto max_depth = co_await Database::get_max_depth(roomId);
-
-    // 9. Build the proto-event (unsigned template)
-    const long origin_server_ts =
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-            .count();
-
-    // Extract origin server from userId (@user:server.name)
-    const auto colon_pos = userId.find(':');
-    const std::string origin =
-        colon_pos != std::string::npos ? userId.substr(colon_pos + 1) : "";
-
-    const json proto_event = {{"type", "m.room.member"},
-                              {"sender", userId},
-                              {"state_key", userId},
-                              {"room_id", roomId},
-                              {"origin", origin},
-                              {"origin_server_ts", origin_server_ts},
-                              {"depth", max_depth + 1},
-                              {"content", {{"membership", "join"}}},
-                              {"auth_events", auth_event_ids},
-                              {"prev_events", prev_events}};
-
-    // 10. Return the response
-    const server_server_json::MakeJoinResp response{
-        .event = proto_event.get<json::object_t>(),
-        .room_version = room_version};
-    const json response_json = response;
-
-    const auto resp = HttpResponse::newHttpResponse();
-    resp->setBody(response_json.dump());
-    resp->setContentTypeString(JSON_CONTENT_TYPE);
-    callback(resp);
-    co_return;
   });
 }
 
@@ -496,6 +506,7 @@ void ServerServerCtrl::send_join(
 
   drogon::async_run([req, roomId, eventId, config, verify_key_data,
                      callback = std::move(callback)]() -> drogon::Task<> {
+    try {
     // 1. Parse body as JSON
     json body;
     try {
@@ -712,5 +723,14 @@ void ServerServerCtrl::send_join(
     resp->setContentTypeString(JSON_CONTENT_TYPE);
     callback(resp);
     co_return;
+    } catch (const std::exception &e) {
+      LOG_ERROR << "send_join: Exception: " << e.what();
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
+    } catch (...) {
+      LOG_ERROR << "send_join: Unknown exception";
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
+    }
   });
 }
