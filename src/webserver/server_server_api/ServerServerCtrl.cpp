@@ -33,11 +33,9 @@ fetch_server_keys(const std::string_view server_name) {
     // Resolve the server
     const auto resolved = co_await discover_server(server_name);
 
-    // Create HTTP client
-    const bool use_ssl = resolved.port == MATRIX_SSL_PORT;
+    // Federation traffic is always HTTPS
     const std::string url =
-        std::format("{}://{}:{}", use_ssl ? "https" : "http", resolved.address,
-                    resolved.port);
+        std::format("https://{}:{}", resolved.address, resolved.port);
 
     const auto client = drogon::HttpClient::newHttpClient(url);
     client->enableCookies(false);
