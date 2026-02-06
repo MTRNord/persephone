@@ -329,20 +329,20 @@ void to_json(json &obj, const login_identifier &data_type) {
 
 void from_json(const json &obj, login_body &data_type) {
   if (obj.contains("address")) {
-    data_type.address = obj["address"].get<std::string_view>();
+    data_type.address = obj["address"].get<std::string>();
   }
   if (obj.contains("device_id")) {
-    data_type.device_id = obj["device_id"].get<std::string_view>();
+    data_type.device_id = obj["device_id"].get<std::string>();
   }
   if (obj.contains("identifier")) {
     data_type.identifier = obj["identifier"].get<login_identifier>();
   }
   if (obj.contains("initial_device_display_name")) {
     data_type.initial_device_display_name =
-        obj["initial_device_display_name"].get<std::string_view>();
+        obj["initial_device_display_name"].get<std::string>();
   }
   if (obj.contains("medium")) {
-    data_type.medium = obj["medium"].get<std::string_view>();
+    data_type.medium = obj["medium"].get<std::string>();
   }
   if (obj.contains("password")) {
     data_type.password = obj["password"].get<std::string>();
@@ -351,11 +351,11 @@ void from_json(const json &obj, login_body &data_type) {
     data_type.refresh_token = obj["refresh_token"].get<bool>();
   }
   if (obj.contains("token")) {
-    data_type.token = obj["token"].get<std::string_view>();
+    data_type.token = obj["token"].get<std::string>();
   }
-  data_type.type = obj["type"].get<std::string_view>();
+  data_type.type = obj["type"].get<std::string>();
   if (obj.contains("user")) {
-    data_type.user = obj["user"].get<std::string_view>();
+    data_type.user = obj["user"].get<std::string>();
   }
 }
 

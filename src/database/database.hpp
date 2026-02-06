@@ -49,10 +49,10 @@ public:
   };
 
   struct [[nodiscard]] LoginData {
-    std::string_view matrix_id;
-    std::string_view password;
-    std::optional<std::string_view> initial_device_name;
-    std::optional<std::string_view> device_id;
+    std::string matrix_id;
+    std::string password;
+    std::optional<std::string> initial_device_name;
+    std::optional<std::string> device_id;
   };
 
   [[nodiscard]] static drogon::Task<Database::UserCreationResp>

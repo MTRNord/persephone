@@ -267,18 +267,20 @@ void from_json(const json &obj, login_identifier &data_type);
 void to_json(json &obj, const login_identifier &data_type);
 
 struct [[nodiscard]] login_body {
-  std::optional<std::string_view> address;
-  std::optional<std::string_view> device_id;
+  std::optional<std::string> address;
+  // device_id and initial_device_display_name are stored as std::string to
+  // own the data and prevent UTF-8 issues when serializing/inserting to DB.
+  std::optional<std::string> device_id;
   std::optional<login_identifier> identifier;
-  std::optional<std::string_view> initial_device_display_name;
-  std::optional<std::string_view> medium;
+  std::optional<std::string> initial_device_display_name;
+  std::optional<std::string> medium;
   // Password is stored as std::string (not string_view) to ensure it owns the
   // data, preventing potential UTF-8 issues with dangling references.
   std::optional<std::string> password;
   std::optional<bool> refresh_token;
-  std::optional<std::string_view> token;
-  std::string_view type;
-  std::optional<std::string_view> user;
+  std::optional<std::string> token;
+  std::string type;
+  std::optional<std::string> user;
 };
 
 void from_json(const json &obj, login_body &data_type);

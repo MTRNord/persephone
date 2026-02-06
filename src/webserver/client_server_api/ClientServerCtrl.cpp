@@ -303,6 +303,8 @@ void ClientServerCtrl::login_post(
           .initial_device_name = login_body.initial_device_display_name,
           .device_id = login_body.device_id,
       };
+      // Note: login_body fields are now std::string (not string_view) to
+      // ensure proper ownership and prevent UTF-8 encoding issues
       const auto login_resp = co_await Database::login(login_data);
 
       // If the login was successful, return the response as json
