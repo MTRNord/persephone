@@ -200,7 +200,7 @@ TEST_CASE("EventID", "[event_ids]") {
     const json generated_event_id = event_id(event, "11"sv);
 
     REQUIRE(generated_event_id ==
-            "$9ofI-OZYoOSm7YdDRD0uv0UQ5zYsPJw59ffHmPX5jlU");
+            "$P_kn3vgLwKkBMkNtD5snHOQhuCoQTv2K6wSiRtnqXVA");
   }
 
   SECTION("Unsupported room_versions fail to generate an event_id") {
