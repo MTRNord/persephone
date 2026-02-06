@@ -506,4 +506,250 @@ void to_json(json &obj, const JoinBody &data_type) {
     obj["third_party_signed"] = data_type.third_party_signed.value();
   }
 }
+
+// ============================================================================
+// Sync API serialization
+// ============================================================================
+
+void from_json(const json &obj, SyncTimeline &data_type) {
+  if (obj.contains("events")) {
+    data_type.events = obj["events"].get<std::vector<json>>();
+  }
+  if (obj.contains("limited")) {
+    data_type.limited = obj["limited"].get<bool>();
+  }
+  if (obj.contains("prev_batch")) {
+    data_type.prev_batch = obj["prev_batch"].get<std::string>();
+  }
+}
+
+void to_json(json &obj, const SyncTimeline &data_type) {
+  obj = nlohmann::json::object();
+  obj["events"] = data_type.events;
+  obj["limited"] = data_type.limited;
+  if (data_type.prev_batch) {
+    obj["prev_batch"] = data_type.prev_batch.value();
+  }
+}
+
+void from_json(const json &obj, SyncRoomState &data_type) {
+  if (obj.contains("events")) {
+    data_type.events = obj["events"].get<std::vector<json>>();
+  }
+}
+
+void to_json(json &obj, const SyncRoomState &data_type) {
+  obj = nlohmann::json::object();
+  obj["events"] = data_type.events;
+}
+
+void from_json(const json &obj, SyncAccountData &data_type) {
+  if (obj.contains("events")) {
+    data_type.events = obj["events"].get<std::vector<json>>();
+  }
+}
+
+void to_json(json &obj, const SyncAccountData &data_type) {
+  obj = nlohmann::json::object();
+  obj["events"] = data_type.events;
+}
+
+void from_json(const json &obj, SyncEphemeral &data_type) {
+  if (obj.contains("events")) {
+    data_type.events = obj["events"].get<std::vector<json>>();
+  }
+}
+
+void to_json(json &obj, const SyncEphemeral &data_type) {
+  obj = nlohmann::json::object();
+  obj["events"] = data_type.events;
+}
+
+void from_json(const json &obj, UnreadNotificationCounts &data_type) {
+  if (obj.contains("highlight_count")) {
+    data_type.highlight_count = obj["highlight_count"].get<int64_t>();
+  }
+  if (obj.contains("notification_count")) {
+    data_type.notification_count = obj["notification_count"].get<int64_t>();
+  }
+}
+
+void to_json(json &obj, const UnreadNotificationCounts &data_type) {
+  obj = nlohmann::json::object();
+  obj["highlight_count"] = data_type.highlight_count;
+  obj["notification_count"] = data_type.notification_count;
+}
+
+void from_json(const json &obj, RoomSummary &data_type) {
+  if (obj.contains("m.heroes")) {
+    data_type.m_heroes = obj["m.heroes"].get<std::vector<std::string>>();
+  }
+  if (obj.contains("m.joined_member_count")) {
+    data_type.m_joined_member_count =
+        obj["m.joined_member_count"].get<int64_t>();
+  }
+  if (obj.contains("m.invited_member_count")) {
+    data_type.m_invited_member_count =
+        obj["m.invited_member_count"].get<int64_t>();
+  }
+}
+
+void to_json(json &obj, const RoomSummary &data_type) {
+  obj = nlohmann::json::object();
+  if (data_type.m_heroes) {
+    obj["m.heroes"] = data_type.m_heroes.value();
+  }
+  if (data_type.m_joined_member_count) {
+    obj["m.joined_member_count"] = data_type.m_joined_member_count.value();
+  }
+  if (data_type.m_invited_member_count) {
+    obj["m.invited_member_count"] = data_type.m_invited_member_count.value();
+  }
+}
+
+void from_json(const json &obj, SyncJoinedRoom &data_type) {
+  if (obj.contains("summary")) {
+    data_type.summary = obj["summary"].get<RoomSummary>();
+  }
+  if (obj.contains("timeline")) {
+    data_type.timeline = obj["timeline"].get<SyncTimeline>();
+  }
+  if (obj.contains("state")) {
+    data_type.state = obj["state"].get<SyncRoomState>();
+  }
+  if (obj.contains("account_data")) {
+    data_type.account_data = obj["account_data"].get<SyncAccountData>();
+  }
+  if (obj.contains("ephemeral")) {
+    data_type.ephemeral = obj["ephemeral"].get<SyncEphemeral>();
+  }
+  if (obj.contains("unread_notifications")) {
+    data_type.unread_notifications =
+        obj["unread_notifications"].get<UnreadNotificationCounts>();
+  }
+}
+
+void to_json(json &obj, const SyncJoinedRoom &data_type) {
+  obj = nlohmann::json::object();
+  if (data_type.summary) {
+    obj["summary"] = data_type.summary.value();
+  }
+  obj["timeline"] = data_type.timeline;
+  obj["state"] = data_type.state;
+  obj["account_data"] = data_type.account_data;
+  obj["ephemeral"] = data_type.ephemeral;
+  obj["unread_notifications"] = data_type.unread_notifications;
+}
+
+void from_json(const json &obj, SyncInviteState &data_type) {
+  if (obj.contains("events")) {
+    data_type.events = obj["events"].get<std::vector<json>>();
+  }
+}
+
+void to_json(json &obj, const SyncInviteState &data_type) {
+  obj = nlohmann::json::object();
+  obj["events"] = data_type.events;
+}
+
+void from_json(const json &obj, SyncInvitedRoom &data_type) {
+  if (obj.contains("invite_state")) {
+    data_type.invite_state = obj["invite_state"].get<SyncInviteState>();
+  }
+}
+
+void to_json(json &obj, const SyncInvitedRoom &data_type) {
+  obj = nlohmann::json::object();
+  obj["invite_state"] = data_type.invite_state;
+}
+
+void from_json(const json &obj, SyncLeftRoom &data_type) {
+  if (obj.contains("timeline")) {
+    data_type.timeline = obj["timeline"].get<SyncTimeline>();
+  }
+  if (obj.contains("state")) {
+    data_type.state = obj["state"].get<SyncRoomState>();
+  }
+  if (obj.contains("account_data")) {
+    data_type.account_data = obj["account_data"].get<SyncAccountData>();
+  }
+}
+
+void to_json(json &obj, const SyncLeftRoom &data_type) {
+  obj = nlohmann::json::object();
+  obj["timeline"] = data_type.timeline;
+  obj["state"] = data_type.state;
+  obj["account_data"] = data_type.account_data;
+}
+
+void from_json(const json &obj, SyncRooms &data_type) {
+  if (obj.contains("join")) {
+    data_type.join = obj["join"].get<std::map<std::string, SyncJoinedRoom>>();
+  }
+  if (obj.contains("invite")) {
+    data_type.invite =
+        obj["invite"].get<std::map<std::string, SyncInvitedRoom>>();
+  }
+  if (obj.contains("leave")) {
+    data_type.leave = obj["leave"].get<std::map<std::string, SyncLeftRoom>>();
+  }
+}
+
+void to_json(json &obj, const SyncRooms &data_type) {
+  obj = nlohmann::json::object();
+  obj["join"] = data_type.join;
+  obj["invite"] = data_type.invite;
+  obj["leave"] = data_type.leave;
+}
+
+void from_json(const json &obj, DeviceLists &data_type) {
+  if (obj.contains("changed")) {
+    data_type.changed = obj["changed"].get<std::vector<std::string>>();
+  }
+  if (obj.contains("left")) {
+    data_type.left = obj["left"].get<std::vector<std::string>>();
+  }
+}
+
+void to_json(json &obj, const DeviceLists &data_type) {
+  obj = nlohmann::json::object();
+  obj["changed"] = data_type.changed;
+  obj["left"] = data_type.left;
+}
+
+void from_json(const json &obj, SyncResponse &data_type) {
+  if (obj.contains("next_batch")) {
+    data_type.next_batch = obj["next_batch"].get<std::string>();
+  }
+  if (obj.contains("account_data")) {
+    data_type.account_data = obj["account_data"].get<SyncAccountData>();
+  }
+  if (obj.contains("rooms")) {
+    data_type.rooms = obj["rooms"].get<SyncRooms>();
+  }
+  if (obj.contains("device_lists")) {
+    data_type.device_lists = obj["device_lists"].get<DeviceLists>();
+  }
+  if (obj.contains("device_one_time_keys_count")) {
+    data_type.device_one_time_keys_count =
+        obj["device_one_time_keys_count"].get<std::map<std::string, int64_t>>();
+  }
+  if (obj.contains("device_unused_fallback_key_types")) {
+    data_type.device_unused_fallback_key_types =
+        obj["device_unused_fallback_key_types"]
+            .get<std::vector<std::string>>();
+  }
+}
+
+void to_json(json &obj, const SyncResponse &data_type) {
+  obj = nlohmann::json::object();
+  obj["next_batch"] = data_type.next_batch;
+  obj["account_data"] = data_type.account_data;
+  obj["rooms"] = data_type.rooms;
+  obj["device_lists"] = data_type.device_lists;
+  obj["device_one_time_keys_count"] = data_type.device_one_time_keys_count;
+  obj["device_unused_fallback_key_types"] =
+      data_type.device_unused_fallback_key_types;
+}
+
 } // namespace client_server_json

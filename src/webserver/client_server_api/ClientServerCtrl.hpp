@@ -91,6 +91,10 @@ public:
   ADD_METHOD_TO(ClientServerCtrl::getFilter,
                 "/_matrix/client/v3/user/{1:userId}/filter/{2:filterId}", Get,
                 Options, "client_server_api::AccessTokenFilter");
+
+  // Sync
+  ADD_METHOD_TO(ClientServerCtrl::sync, "/_matrix/client/v3/sync", Get, Options,
+                "client_server_api::AccessTokenFilter");
   METHOD_LIST_END
 
   explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
@@ -152,6 +156,9 @@ protected:
   void getFilter(const HttpRequestPtr &req,
                  std::function<void(const HttpResponsePtr &)> &&callback,
                  const std::string &userId, const std::string &filterId) const;
+
+  void sync(const HttpRequestPtr &req,
+            std::function<void(const HttpResponsePtr &)> &&callback) const;
 
 private:
   Config _config;

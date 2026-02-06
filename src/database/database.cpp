@@ -983,3 +983,299 @@ Database::cleanup_expired_server_keys(int64_t max_age_ms) {
   }
   co_return;
 }
+
+// ============================================================================
+// Sync API queries
+// ============================================================================
+
+[[nodiscard]] drogon::Task<std::vector<Database::RoomMembership>>
+Database::get_user_room_memberships(std::string_view user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get all rooms where user has a membership state event (current state only)
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT r.room_id, r.room_nid, "
+        "ej.json->'content'->>'membership' AS membership, "
+        "ts.event_nid "
+        "FROM temporal_state ts "
+        "JOIN rooms r ON r.room_nid = ts.room_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "WHERE et.event_type = 'm.room.member' "
+        "AND sk.state_key = $1 "
+        "AND ts.end_index IS NULL",
+        user_id);
+
+    std::vector<RoomMembership> memberships;
+    memberships.reserve(query.size());
+
+    for (const auto &row : query) {
+      RoomMembership membership;
+      membership.room_id = row["room_id"].as<std::string>();
+      membership.room_nid = row["room_nid"].as<int>();
+      membership.membership = row["membership"].as<std::string>();
+      membership.event_nid = row["event_nid"].as<int64_t>();
+      memberships.push_back(std::move(membership));
+    }
+
+    co_return memberships;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_user_room_memberships failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_current_room_state(int room_nid) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get all current state events for a room (end_index IS NULL)
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "WHERE ts.room_nid = $1 AND ts.end_index IS NULL "
+        "ORDER BY ts.event_nid",
+        room_nid);
+
+    std::vector<json> state_events;
+    state_events.reserve(query.size());
+
+    for (const auto &row : query) {
+      state_events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    co_return state_events;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_current_room_state failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<Database::TimelineResult>
+Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    TimelineResult result;
+    result.limited = false;
+
+    // First, count total events since the token to determine if limited
+    const auto count_query = co_await sql->execSqlCoro(
+        "SELECT COUNT(*) as total FROM events "
+        "WHERE room_nid = $1 AND event_nid > $2",
+        room_nid, since_event_nid);
+
+    const int64_t total_events = count_query.at(0)["total"].as<int64_t>();
+    result.limited = total_events > limit;
+
+    // Get timeline events
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json, e.event_nid FROM events e "
+        "JOIN event_json ej ON ej.event_nid = e.event_nid "
+        "WHERE e.room_nid = $1 AND e.event_nid > $2 "
+        "ORDER BY e.event_nid ASC LIMIT $3",
+        room_nid, since_event_nid, limit);
+
+    result.events.reserve(query.size());
+    int64_t first_event_nid = 0;
+
+    for (const auto &row : query) {
+      if (first_event_nid == 0) {
+        first_event_nid = row["event_nid"].as<int64_t>();
+      }
+      result.events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    // Set prev_batch for pagination if limited
+    if (result.limited && first_event_nid > 0) {
+      // The prev_batch token points to before the first event we returned
+      result.prev_batch = std::format("ps_{}_{}", first_event_nid - 1,
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::system_clock::now().time_since_epoch()).count());
+    }
+
+    co_return result;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_room_timeline failed: " << e.base().what();
+    co_return TimelineResult{};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_state_delta(int room_nid, int64_t from_event_nid,
+                          int64_t to_event_nid) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get state events that became active (started) between the two nids
+    // This catches new state that was set since the last sync
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "WHERE ts.room_nid = $1 "
+        "AND ts.event_nid > $2 AND ts.event_nid <= $3 "
+        "ORDER BY ts.event_nid",
+        room_nid, from_event_nid, to_event_nid);
+
+    std::vector<json> state_events;
+    state_events.reserve(query.size());
+
+    for (const auto &row : query) {
+      state_events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    co_return state_events;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_state_delta failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_account_data(std::string_view user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT type, json FROM account_data WHERE user_id = $1", user_id);
+
+    std::vector<json> account_data;
+    account_data.reserve(query.size());
+
+    for (const auto &row : query) {
+      json event;
+      event["type"] = row["type"].as<std::string>();
+      event["content"] = json::parse(row["json"].as<std::string>());
+      account_data.push_back(std::move(event));
+    }
+
+    co_return account_data;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_account_data failed: " << e.base().what();
+    co_return {};
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_room_account_data([[maybe_unused]] std::string_view user_id,
+                                [[maybe_unused]] std::string_view room_id) {
+  // Room-specific account data uses a different table or column
+  // For now return empty - can be implemented when room account data is needed
+  // TODO: Implement room-specific account data when needed
+  co_return {};
+}
+
+[[nodiscard]] drogon::Task<int64_t> Database::get_max_event_nid() {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query =
+        co_await sql->execSqlCoro("SELECT COALESCE(MAX(event_nid), 0) AS max_nid FROM events");
+
+    co_return query.at(0)["max_nid"].as<int64_t>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_max_event_nid failed: " << e.base().what();
+    co_return 0;
+  }
+}
+
+[[nodiscard]] drogon::Task<int64_t>
+Database::get_max_event_nid_for_user_rooms(std::string_view user_id,
+                                           int64_t since_event_nid) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get max event_nid from rooms the user is a member of, since the given nid
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT COALESCE(MAX(e.event_nid), $2) AS max_nid "
+        "FROM events e "
+        "WHERE e.room_nid IN ("
+        "  SELECT DISTINCT ts.room_nid FROM temporal_state ts "
+        "  JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "  JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "  WHERE et.event_type = 'm.room.member' "
+        "  AND sk.state_key = $1 "
+        "  AND ts.end_index IS NULL"
+        ") "
+        "AND e.event_nid > $2",
+        user_id, since_event_nid);
+
+    co_return query.at(0)["max_nid"].as<int64_t>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_max_event_nid_for_user_rooms failed: " << e.base().what();
+    co_return since_event_nid;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_invite_stripped_state(int room_nid,
+                                    std::string_view invited_user_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get stripped state for invite: only certain event types
+    // Per spec: m.room.create, m.room.name, m.room.avatar, m.room.topic,
+    // m.room.canonical_alias, m.room.encryption, m.room.join_rules,
+    // and the invite event itself
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json, et.event_type, sk.state_key "
+        "FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "WHERE ts.room_nid = $1 AND ts.end_index IS NULL "
+        "AND ("
+        "  et.event_type IN ('m.room.create', 'm.room.name', 'm.room.avatar', "
+        "    'm.room.topic', 'm.room.canonical_alias', 'm.room.encryption', "
+        "    'm.room.join_rules') "
+        "  OR (et.event_type = 'm.room.member' AND sk.state_key = $2)"
+        ")",
+        room_nid, invited_user_id);
+
+    std::vector<json> stripped_state;
+    stripped_state.reserve(query.size());
+
+    for (const auto &row : query) {
+      auto event = json::parse(row["json"].as<std::string>());
+      // Create stripped state event (only type, state_key, sender, content)
+      json stripped;
+      stripped["type"] = event.value("type", "");
+      stripped["state_key"] = event.value("state_key", "");
+      stripped["sender"] = event.value("sender", "");
+      stripped["content"] = event.value("content", json::object());
+      stripped_state.push_back(std::move(stripped));
+    }
+
+    co_return stripped_state;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_invite_stripped_state failed: " << e.base().what();
+    co_return {};
+  }
+}

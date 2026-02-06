@@ -3,6 +3,7 @@
 /// @file
 /// @brief A wrapper for the database operations to ensure they are uniform.
 #include "drogon/drogon.h"
+#include <cstdint>
 #include <memory>
 #ifdef __GNUC__
 // Ignore false positives (see https://github.com/nlohmann/json/issues/3808)
@@ -145,4 +146,62 @@ public:
   /// older than max_age_ms)
   [[nodiscard]] static drogon::Task<void>
   cleanup_expired_server_keys(int64_t max_age_ms);
+
+  // ============================================================================
+  // Sync API queries
+  // ============================================================================
+
+  /// Room membership info for sync
+  struct [[nodiscard]] RoomMembership {
+    std::string room_id;
+    int room_nid;
+    std::string membership; // "join", "invite", "leave", "ban", "knock"
+    int64_t event_nid;
+  };
+
+  /// Get all rooms where user has a membership state event
+  [[nodiscard]] static drogon::Task<std::vector<RoomMembership>>
+  get_user_room_memberships(std::string_view user_id);
+
+  /// Get current state for a room (all state events where end_index IS NULL)
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_current_room_state(int room_nid);
+
+  /// Timeline query result
+  struct [[nodiscard]] TimelineResult {
+    std::vector<json> events;
+    bool limited;
+    std::optional<std::string> prev_batch;
+  };
+
+  /// Get timeline events for a room since a given event_nid
+  /// @param room_nid The room's numeric ID
+  /// @param since_event_nid Only return events after this nid (0 for all)
+  /// @param limit Maximum number of events to return
+  [[nodiscard]] static drogon::Task<TimelineResult>
+  get_room_timeline(int room_nid, int64_t since_event_nid, int limit);
+
+  /// Get state changes for a room between two event_nids (for incremental sync)
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_state_delta(int room_nid, int64_t from_event_nid, int64_t to_event_nid);
+
+  /// Get global account data for a user
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_account_data(std::string_view user_id);
+
+  /// Get room-specific account data for a user
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_room_account_data(std::string_view user_id, std::string_view room_id);
+
+  /// Get the maximum event_nid across all rooms
+  [[nodiscard]] static drogon::Task<int64_t> get_max_event_nid();
+
+  /// Get the maximum event_nid for rooms the user is in since a given nid
+  [[nodiscard]] static drogon::Task<int64_t>
+  get_max_event_nid_for_user_rooms(std::string_view user_id,
+                                   int64_t since_event_nid);
+
+  /// Get stripped state for an invite (limited state for invited rooms)
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_invite_stripped_state(int room_nid, std::string_view invited_user_id);
 };

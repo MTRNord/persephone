@@ -409,4 +409,133 @@ struct [[nodiscard]] JoinBody {
 void from_json(const json &obj, JoinBody &data_type);
 
 void to_json(json &obj, const JoinBody &data_type);
+
+// ============================================================================
+// Sync API types (/_matrix/client/v3/sync)
+// ============================================================================
+
+/// Timeline section of a sync response for a room
+struct [[nodiscard]] SyncTimeline {
+  std::vector<json> events;
+  bool limited = false;
+  std::optional<std::string> prev_batch;
+};
+
+void from_json(const json &obj, SyncTimeline &data_type);
+void to_json(json &obj, const SyncTimeline &data_type);
+
+/// State section of a sync response for a room
+struct [[nodiscard]] SyncRoomState {
+  std::vector<json> events;
+};
+
+void from_json(const json &obj, SyncRoomState &data_type);
+void to_json(json &obj, const SyncRoomState &data_type);
+
+/// Account data (global or per-room)
+struct [[nodiscard]] SyncAccountData {
+  std::vector<json> events;
+};
+
+void from_json(const json &obj, SyncAccountData &data_type);
+void to_json(json &obj, const SyncAccountData &data_type);
+
+/// Ephemeral events (typing, read receipts - per-room)
+struct [[nodiscard]] SyncEphemeral {
+  std::vector<json> events;
+};
+
+void from_json(const json &obj, SyncEphemeral &data_type);
+void to_json(json &obj, const SyncEphemeral &data_type);
+
+/// Unread notification counts for a room
+struct [[nodiscard]] UnreadNotificationCounts {
+  int64_t highlight_count = 0;
+  int64_t notification_count = 0;
+};
+
+void from_json(const json &obj, UnreadNotificationCounts &data_type);
+void to_json(json &obj, const UnreadNotificationCounts &data_type);
+
+/// Room summary with heroes and member counts
+struct [[nodiscard]] RoomSummary {
+  std::optional<std::vector<std::string>> m_heroes;
+  std::optional<int64_t> m_joined_member_count;
+  std::optional<int64_t> m_invited_member_count;
+};
+
+void from_json(const json &obj, RoomSummary &data_type);
+void to_json(json &obj, const RoomSummary &data_type);
+
+/// Data for a joined room in sync response
+struct [[nodiscard]] SyncJoinedRoom {
+  std::optional<RoomSummary> summary;
+  SyncTimeline timeline;
+  SyncRoomState state;
+  SyncAccountData account_data;
+  SyncEphemeral ephemeral;
+  UnreadNotificationCounts unread_notifications;
+};
+
+void from_json(const json &obj, SyncJoinedRoom &data_type);
+void to_json(json &obj, const SyncJoinedRoom &data_type);
+
+/// Stripped state for invited rooms
+struct [[nodiscard]] SyncInviteState {
+  std::vector<json> events;
+};
+
+void from_json(const json &obj, SyncInviteState &data_type);
+void to_json(json &obj, const SyncInviteState &data_type);
+
+/// Data for an invited room in sync response
+struct [[nodiscard]] SyncInvitedRoom {
+  SyncInviteState invite_state;
+};
+
+void from_json(const json &obj, SyncInvitedRoom &data_type);
+void to_json(json &obj, const SyncInvitedRoom &data_type);
+
+/// Data for a left room in sync response
+struct [[nodiscard]] SyncLeftRoom {
+  SyncTimeline timeline;
+  SyncRoomState state;
+  SyncAccountData account_data;
+};
+
+void from_json(const json &obj, SyncLeftRoom &data_type);
+void to_json(json &obj, const SyncLeftRoom &data_type);
+
+/// Container for all room types in sync response
+struct [[nodiscard]] SyncRooms {
+  std::map<std::string, SyncJoinedRoom> join;
+  std::map<std::string, SyncInvitedRoom> invite;
+  std::map<std::string, SyncLeftRoom> leave;
+};
+
+void from_json(const json &obj, SyncRooms &data_type);
+void to_json(json &obj, const SyncRooms &data_type);
+
+/// Device list changes
+struct [[nodiscard]] DeviceLists {
+  std::vector<std::string> changed;
+  std::vector<std::string> left;
+};
+
+void from_json(const json &obj, DeviceLists &data_type);
+void to_json(json &obj, const DeviceLists &data_type);
+
+/// Full sync response
+struct [[nodiscard]] SyncResponse {
+  std::string next_batch;
+  SyncAccountData account_data;
+  SyncRooms rooms;
+  DeviceLists device_lists;
+  std::map<std::string, int64_t> device_one_time_keys_count;
+  std::vector<std::string> device_unused_fallback_key_types;
+};
+
+void from_json(const json &obj, SyncResponse &data_type);
+void to_json(json &obj, const SyncResponse &data_type);
+
 } // namespace client_server_json

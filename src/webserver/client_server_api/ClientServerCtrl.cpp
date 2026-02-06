@@ -1034,3 +1034,321 @@ void ClientServerCtrl::getFilter(
     }
   });
 }
+
+// ============================================================================
+// Sync token utilities
+// ============================================================================
+
+/// Parse a sync token in format: ps_<event_nid>_<timestamp>
+/// @return The event_nid if valid, nullopt if invalid token format
+[[nodiscard]] static std::optional<int64_t>
+parse_sync_token(const std::string &token) {
+  if (token.empty()) {
+    return std::nullopt;
+  }
+
+  // Expected format: ps_<event_nid>_<timestamp>
+  if (!token.starts_with("ps_")) {
+    LOG_WARN << "Invalid sync token format (missing prefix): " << token;
+    return std::nullopt;
+  }
+
+  const auto first_underscore = token.find('_', 3);
+  if (first_underscore == std::string::npos) {
+    LOG_WARN << "Invalid sync token format (missing second underscore): "
+             << token;
+    return std::nullopt;
+  }
+
+  try {
+    return std::stoll(token.substr(3, first_underscore - 3));
+  } catch (const std::exception &e) {
+    LOG_WARN << "Invalid sync token (failed to parse event_nid): " << token;
+    return std::nullopt;
+  }
+}
+
+/// Generate a sync token from event_nid
+[[nodiscard]] static std::string generate_sync_token(int64_t event_nid) {
+  const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::system_clock::now().time_since_epoch())
+                       .count();
+  return std::format("ps_{}_{}", event_nid, now);
+}
+
+// ============================================================================
+// Sync implementation
+// ============================================================================
+
+/// Perform initial sync (no since token)
+[[nodiscard]] static drogon::Task<client_server_json::SyncResponse>
+perform_initial_sync(const std::string &user_id,
+                     [[maybe_unused]] const std::optional<json> &filter) {
+  client_server_json::SyncResponse response;
+
+  // Get all room memberships for user
+  auto memberships = co_await Database::get_user_room_memberships(user_id);
+
+  constexpr int timeline_limit = 20;
+
+  for (const auto &membership : memberships) {
+    if (membership.membership == "join") {
+      // Joined room: full current state + recent timeline
+      client_server_json::SyncJoinedRoom joined;
+
+      // Get current state
+      auto state_events =
+          co_await Database::get_current_room_state(membership.room_nid);
+      joined.state.events = std::move(state_events);
+
+      // Get timeline (last N events)
+      auto timeline =
+          co_await Database::get_room_timeline(membership.room_nid, 0, timeline_limit);
+      joined.timeline.events = std::move(timeline.events);
+      joined.timeline.limited = timeline.limited;
+      joined.timeline.prev_batch = timeline.prev_batch;
+
+      // Get room account data (currently empty)
+      joined.account_data.events =
+          co_await Database::get_room_account_data(user_id, membership.room_id);
+
+      response.rooms.join[membership.room_id] = std::move(joined);
+
+    } else if (membership.membership == "invite") {
+      // Invited: stripped state only
+      client_server_json::SyncInvitedRoom invited;
+      invited.invite_state.events = co_await Database::get_invite_stripped_state(
+          membership.room_nid, user_id);
+      response.rooms.invite[membership.room_id] = std::move(invited);
+
+    } else if (membership.membership == "leave" ||
+               membership.membership == "ban") {
+      // For initial sync, we skip left rooms
+      // They are included on incremental sync when the leave event is new
+    }
+  }
+
+  // Get global account data
+  response.account_data.events = co_await Database::get_account_data(user_id);
+
+  // Generate next_batch token
+  const int64_t max_nid = co_await Database::get_max_event_nid();
+  response.next_batch = generate_sync_token(max_nid);
+
+  co_return response;
+}
+
+/// Perform incremental sync (with since token)
+[[nodiscard]] static drogon::Task<client_server_json::SyncResponse>
+perform_incremental_sync(const std::string &user_id, int64_t since_event_nid,
+                         bool full_state,
+                         [[maybe_unused]] const std::optional<json> &filter) {
+  client_server_json::SyncResponse response;
+
+  // Get all room memberships for user
+  auto memberships = co_await Database::get_user_room_memberships(user_id);
+
+  constexpr int timeline_limit = 20;
+
+  // Get current max event_nid
+  const int64_t current_max = co_await Database::get_max_event_nid();
+
+  for (const auto &membership : memberships) {
+    if (membership.membership == "join") {
+      client_server_json::SyncJoinedRoom joined;
+
+      if (full_state) {
+        // Full state requested
+        joined.state.events =
+            co_await Database::get_current_room_state(membership.room_nid);
+      } else {
+        // State delta only
+        joined.state.events = co_await Database::get_state_delta(
+            membership.room_nid, since_event_nid, current_max);
+      }
+
+      // Timeline since token
+      auto timeline = co_await Database::get_room_timeline(
+          membership.room_nid, since_event_nid, timeline_limit);
+      joined.timeline.events = std::move(timeline.events);
+      joined.timeline.limited = timeline.limited;
+      joined.timeline.prev_batch = timeline.prev_batch;
+
+      // Only include room if there are changes
+      if (!joined.state.events.empty() || !joined.timeline.events.empty()) {
+        response.rooms.join[membership.room_id] = std::move(joined);
+      }
+
+    } else if (membership.membership == "invite") {
+      // Only include if membership changed since token
+      if (membership.event_nid > since_event_nid) {
+        client_server_json::SyncInvitedRoom invited;
+        invited.invite_state.events =
+            co_await Database::get_invite_stripped_state(membership.room_nid,
+                                                         user_id);
+        response.rooms.invite[membership.room_id] = std::move(invited);
+      }
+
+    } else if (membership.membership == "leave" ||
+               membership.membership == "ban") {
+      // User left/banned since last sync
+      if (membership.event_nid > since_event_nid) {
+        client_server_json::SyncLeftRoom left;
+        // Include the leave event in timeline
+        auto timeline = co_await Database::get_room_timeline(
+            membership.room_nid, since_event_nid, timeline_limit);
+        left.timeline.events = std::move(timeline.events);
+        left.timeline.limited = timeline.limited;
+        left.timeline.prev_batch = timeline.prev_batch;
+        response.rooms.leave[membership.room_id] = std::move(left);
+      }
+    }
+  }
+
+  // Generate next_batch token
+  response.next_batch = generate_sync_token(current_max);
+
+  co_return response;
+}
+
+/// Check if sync response has any data
+[[nodiscard]] static bool sync_response_has_data(
+    const client_server_json::SyncResponse &response) {
+  return !response.rooms.join.empty() || !response.rooms.invite.empty() ||
+         !response.rooms.leave.empty() || !response.account_data.events.empty();
+}
+
+void ClientServerCtrl::sync(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback) const {
+  drogon::async_run(
+      [req, callback = std::move(callback), this]() -> drogon::Task<> {
+        // 1. Authenticate
+        const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
+        if (!isValid) {
+          co_return;
+        }
+
+        // 2. Parse query parameters
+        const auto since_token =
+            req->getOptionalParameter<std::string>("since");
+        const auto filter_param =
+            req->getOptionalParameter<std::string>("filter");
+        const bool full_state =
+            req->getOptionalParameter<std::string>("full_state").value_or(
+                "false") == "true";
+        auto timeout_ms =
+            req->getOptionalParameter<int64_t>("timeout").value_or(0);
+        // Ignored for now: set_presence
+
+        // Default timeout: 30s if not specified (reasonable for reverse proxies)
+        constexpr int64_t default_timeout_ms = 30000;
+        constexpr int64_t max_timeout_ms = 300000; // 5 minutes max
+        if (timeout_ms == 0) {
+          timeout_ms = default_timeout_ms;
+        }
+        if (timeout_ms > max_timeout_ms) {
+          timeout_ms = max_timeout_ms;
+        }
+
+        // 3. Parse since token
+        std::optional<int64_t> since_event_nid;
+        if (since_token.has_value() && !since_token->empty()) {
+          since_event_nid = parse_sync_token(*since_token);
+          if (!since_event_nid.has_value()) {
+            // Invalid token format - return error rather than treating as initial sync
+            return_error(callback, "M_INVALID_PARAM",
+                         "Invalid since token format", k400BadRequest);
+            co_return;
+          }
+        }
+
+        // 4. Parse or load filter
+        std::optional<json> filter;
+        if (filter_param.has_value() && !filter_param->empty()) {
+          if (filter_param->starts_with("{")) {
+            // Inline filter JSON
+            try {
+              filter = json::parse(*filter_param);
+            } catch (const json::parse_error &e) {
+              return_error(callback, "M_BAD_JSON", "Invalid filter JSON",
+                           k400BadRequest);
+              co_return;
+            }
+          } else {
+            // Filter ID - load from database
+            try {
+              filter =
+                  co_await Database::get_filter(userInfo->user_id, *filter_param);
+            } catch (const std::exception &e) {
+              return_error(callback, "M_UNKNOWN", "Filter not found",
+                           k404NotFound);
+              co_return;
+            }
+          }
+        }
+
+        // 5. Perform sync
+        client_server_json::SyncResponse sync_result;
+
+        if (!since_event_nid.has_value()) {
+          // Initial sync - return immediately
+          sync_result =
+              co_await perform_initial_sync(userInfo->user_id, filter);
+        } else {
+          // Incremental sync with long-polling
+          const int64_t since_nid = *since_event_nid;
+          const auto deadline = std::chrono::steady_clock::now() +
+                                std::chrono::milliseconds(timeout_ms);
+          constexpr auto poll_interval_ms = std::chrono::milliseconds(500);
+
+          // First check if data is immediately available
+          sync_result = co_await perform_incremental_sync(
+              userInfo->user_id, since_nid, full_state, filter);
+
+          if (!sync_response_has_data(sync_result)) {
+            // No data available - block until new events or timeout
+            while (std::chrono::steady_clock::now() < deadline) {
+              // Wait for poll interval or remaining time, whichever is smaller
+              const auto remaining =
+                  std::chrono::duration_cast<std::chrono::milliseconds>(
+                      deadline - std::chrono::steady_clock::now());
+              const auto sleep_time = std::min(poll_interval_ms, remaining);
+
+              if (sleep_time.count() <= 0) {
+                break;
+              }
+
+              co_await drogon::sleepCoro(
+                  trantor::EventLoop::getEventLoopOfCurrentThread(),
+                  sleep_time);
+
+              // Check for new events
+              const int64_t current_max =
+                  co_await Database::get_max_event_nid_for_user_rooms(
+                      userInfo->user_id, since_nid);
+
+              if (current_max > since_nid) {
+                // New events available
+                sync_result = co_await perform_incremental_sync(
+                    userInfo->user_id, since_nid, full_state, filter);
+                break;
+              }
+            }
+          }
+
+          // If still no data after timeout, return empty response with same token
+          if (!sync_response_has_data(sync_result)) {
+            sync_result.next_batch = generate_sync_token(since_nid);
+          }
+        }
+
+        // 6. Return response
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody(json(sync_result).dump());
+        resp->setContentTypeString(JSON_CONTENT_TYPE);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+        co_return;
+      });
+}
