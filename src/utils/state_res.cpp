@@ -128,18 +128,14 @@ namespace {
   if (event == nullptr) {
     throw std::invalid_argument("Event cannot be null");
   }
-  //  We copy here to (if needed) have the original still intact
-  json event_copy(event);
-  if (event_copy == nullptr) {
-    throw std::invalid_argument("event_copy cannot be null");
-  }
 
+  // Step 1: Redact the event (strips non-preserved keys like "origin")
+  json event_copy = v11_redact(event);
+
+  // Step 2: Remove signatures (unsigned is already stripped by redaction)
   event_copy.erase("signatures");
-  event_copy.erase("unsigned");
-  if (event_copy == nullptr) {
-    throw std::invalid_argument("event_copy1 cannot be null");
-  }
 
+  // Step 3: Canonical JSON and SHA256
   const auto input = event_copy.dump();
 
   unsigned char sha256_hash[crypto_hash_sha256_BYTES];
