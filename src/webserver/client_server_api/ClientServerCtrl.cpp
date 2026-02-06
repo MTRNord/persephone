@@ -589,8 +589,13 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       co_return;
     }
 
-    auto server_names =
-        req->getOptionalParameter<std::vector<std::string>>("server_name");
+    // Parse server_name query parameters (can appear multiple times)
+    const auto query_string = req->getQuery();
+    const auto parsed_params = parseQueryParamString(query_string);
+    std::optional<std::vector<std::string>> server_names;
+    if (auto it = parsed_params.find("server_name"); it != parsed_params.end()) {
+      server_names = it->second;
+    }
 
     const auto server_name = get_serverpart(roomIdOrAlias);
     const auto server_address = co_await discover_server(server_name);
@@ -639,11 +644,13 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       if (!server_names.has_value()) {
         return_error(callback, "M_MISSING_PARAM",
                      "Missing server_name parameter", k500InternalServerError);
+        co_return;
       }
       if (server_names.value().empty()) {
         return_error(callback, "M_INVALID_PARAM",
                      "server_name parameter can't be empty if using a room_id",
                      k500InternalServerError);
+        co_return;
       }
 
       const auto &param_server_name = server_names.value();

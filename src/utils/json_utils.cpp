@@ -129,24 +129,23 @@ base64_std_unpadded(const std::vector<unsigned char> &input) {
   json_data.erase("signatures");
   json_data.erase("unsigned");
 
-  // Sign canonical json
+  // Sign canonical json using detached signature (Matrix spec requires only
+  // the 64-byte signature, not the combined signature+message)
   const std::string canonical_json = json_data.dump();
-  std::vector<unsigned char> signed_message(crypto_sign_BYTES +
-                                            canonical_json.size());
-  unsigned long long signed_message_len = 0;
+  std::vector<unsigned char> signature(crypto_sign_BYTES);
 
   const auto unsigned_char_canonical_json =
       reinterpret_cast<const unsigned char *>(canonical_json.c_str());
 
-  const auto result = crypto_sign(signed_message.data(), &signed_message_len,
-                                  unsigned_char_canonical_json,
-                                  canonical_json.size(), secret_key.data());
+  const auto result = crypto_sign_detached(
+      signature.data(), nullptr, unsigned_char_canonical_json,
+      canonical_json.size(), secret_key.data());
   if (result < 0) {
     throw std::runtime_error("Signing the json failed");
   }
 
   // Encode signature as UNPADDED base64
-  auto base64_str = json_utils::base64_std_unpadded(signed_message);
+  auto base64_str = json_utils::base64_std_unpadded(signature);
   // Add signature to json
   signatures[server_name][std::format("ed25519:{}", key_id)] = base64_str;
   json_data["signatures"] = signatures;

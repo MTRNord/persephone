@@ -1072,10 +1072,13 @@ Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
     result.limited = false;
 
     // First, count total events since the token to determine if limited
+    // Cast since_event_nid to int to match SERIAL (int4) column type for
+    // Drogon's binary protocol
+    const auto since_nid = static_cast<int>(since_event_nid);
     const auto count_query = co_await sql->execSqlCoro(
         "SELECT COUNT(*) as total FROM events "
         "WHERE room_nid = $1 AND event_nid > $2",
-        room_nid, since_event_nid);
+        room_nid, since_nid);
 
     const int64_t total_events = count_query.at(0)["total"].as<int64_t>();
     result.limited = total_events > limit;
@@ -1086,7 +1089,7 @@ Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
         "JOIN event_json ej ON ej.event_nid = e.event_nid "
         "WHERE e.room_nid = $1 AND e.event_nid > $2 "
         "ORDER BY e.event_nid ASC LIMIT $3",
-        room_nid, since_event_nid, limit);
+        room_nid, since_nid, limit);
 
     result.events.reserve(query.size());
     int64_t first_event_nid = 0;
@@ -1124,13 +1127,16 @@ Database::get_state_delta(int room_nid, int64_t from_event_nid,
   try {
     // Get state events that became active (started) between the two nids
     // This catches new state that was set since the last sync
+    // Cast to int to match SERIAL (int4) column type for Drogon's binary
+    // protocol
     const auto query = co_await sql->execSqlCoro(
         "SELECT ej.json FROM temporal_state ts "
         "JOIN event_json ej ON ej.event_nid = ts.event_nid "
         "WHERE ts.room_nid = $1 "
         "AND ts.event_nid > $2 AND ts.event_nid <= $3 "
         "ORDER BY ts.event_nid",
-        room_nid, from_event_nid, to_event_nid);
+        room_nid, static_cast<int>(from_event_nid),
+        static_cast<int>(to_event_nid));
 
     std::vector<json> state_events;
     state_events.reserve(query.size());
@@ -1210,6 +1216,9 @@ Database::get_max_event_nid_for_user_rooms(std::string_view user_id,
   }
   try {
     // Get max event_nid from rooms the user is a member of, since the given nid
+    // Cast since_event_nid to int to match SERIAL (int4) column type for
+    // Drogon's binary protocol
+    const auto since_nid = static_cast<int>(since_event_nid);
     const auto query = co_await sql->execSqlCoro(
         "SELECT COALESCE(MAX(e.event_nid), $2) AS max_nid "
         "FROM events e "
@@ -1222,7 +1231,7 @@ Database::get_max_event_nid_for_user_rooms(std::string_view user_id,
         "  AND ts.end_index IS NULL"
         ") "
         "AND e.event_nid > $2",
-        user_id, since_event_nid);
+        user_id, since_nid);
 
     co_return query.at(0)["max_nid"].as<int64_t>();
   } catch (const drogon::orm::DrogonDbException &e) {
