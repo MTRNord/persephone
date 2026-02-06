@@ -1084,12 +1084,14 @@ Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
     result.limited = total_events > limit;
 
     // Get timeline events
+    // Cast limit to int64_t because PostgreSQL LIMIT uses int8 in binary
+    // protocol
     const auto query = co_await sql->execSqlCoro(
         "SELECT ej.json, e.event_nid FROM events e "
         "JOIN event_json ej ON ej.event_nid = e.event_nid "
         "WHERE e.room_nid = $1 AND e.event_nid > $2 "
         "ORDER BY e.event_nid ASC LIMIT $3",
-        room_nid, since_nid, limit);
+        room_nid, since_nid, static_cast<int64_t>(limit));
 
     result.events.reserve(query.size());
     int64_t first_event_nid = 0;

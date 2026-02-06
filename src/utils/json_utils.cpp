@@ -31,7 +31,8 @@ namespace json_utils {
 [[nodiscard]] std::vector<unsigned char>
 unbase64_key(const std::string &input) {
   const size_t b64_str_len = input.size();
-  size_t bin_len = b64_str_len * (static_cast<size_t>(4) * 3);
+  // Allocate max possible size (base64 expands by ~4/3)
+  size_t bin_len = b64_str_len * 3 / 4 + 4;
   std::vector<unsigned char> bin_str(bin_len);
 
   const int status = sodium_base642bin(
@@ -42,6 +43,8 @@ unbase64_key(const std::string &input) {
     throw std::runtime_error("Base64 String decode failed to decode");
   }
 
+  // Resize to actual decoded length
+  bin_str.resize(bin_len);
   return bin_str;
 }
 

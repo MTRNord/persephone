@@ -191,9 +191,20 @@ void ClientServerCtrl::user_available(
         }
 
         const auto resp = HttpResponse::newHttpResponse();
-        // Check if the username is already taken
-        const auto user_exists = co_await Database::user_exists(
+        // Check if the username is already taken.
+        // Check both the migrated form (for new registrations) and the
+        // lowercased form (for usernames already stored after migration,
+        // e.g. when the client sends back a localpart extracted from a
+        // user_id that was already migrated during registration).
+        auto lowered_username = to_lower(username);
+        const auto migrated_exists = co_await Database::user_exists(
             std::format("@{}:{}", fixed_username, server_name));
+        const auto lowered_exists =
+            (lowered_username != fixed_username)
+                ? co_await Database::user_exists(
+                      std::format("@{}:{}", lowered_username, server_name))
+                : false;
+        const auto user_exists = migrated_exists || lowered_exists;
 
         if (user_exists) {
           return_error(callback, "M_USER_IN_USE", "Username already taken",
@@ -251,7 +262,7 @@ void ClientServerCtrl::login_post(
       LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
       return_error(callback, "M_NOT_JSON",
                    "Unable to parse json. Is this valid json?",
-                   k500InternalServerError);
+                   k400BadRequest);
       co_return;
     }
 
@@ -269,7 +280,7 @@ void ClientServerCtrl::login_post(
       return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?",
-          k500InternalServerError);
+          k400BadRequest);
       co_return;
     }
 
@@ -337,7 +348,7 @@ void ClientServerCtrl::register_user(
                << '\n';
       return_error(callback, "M_NOT_JSON",
                    "Unable to parse json. Is this valid json?",
-                   k500InternalServerError);
+                   k400BadRequest);
       co_return;
     }
 
@@ -356,7 +367,7 @@ void ClientServerCtrl::register_user(
       return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?",
-          k500InternalServerError);
+          k400BadRequest);
       co_return;
     }
 
@@ -404,7 +415,7 @@ void ClientServerCtrl::register_user(
     if (!reg_body.username.has_value() || !reg_body.password.has_value()) {
       return_error(callback, "M_UNKNOWN",
                    "Invalid input. You are missing either username or password",
-                   k500InternalServerError);
+                   k400BadRequest);
       co_return;
     }
 
@@ -567,7 +578,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
                << '\n';
       return_error(callback, "M_NOT_JSON",
                    "Unable to parse json. Is this valid json?",
-                   k500InternalServerError);
+                   k400BadRequest);
       co_return;
     }
 
@@ -586,7 +597,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?",
-          k500InternalServerError);
+          k400BadRequest);
       co_return;
     }
 
@@ -841,7 +852,7 @@ void ClientServerCtrl::createRoom(
       LOG_WARN << "Failed to parse json in createRoom: " << ex.what() << '\n';
       return_error(callback, "M_NOT_JSON",
                    "Unable to parse json. Is this valid json?",
-                   k500InternalServerError);
+                   k400BadRequest);
       co_return;
     }
 
@@ -977,15 +988,20 @@ void ClientServerCtrl::state(
       const json json_data = co_await Database::get_state_event(
           roomId, eventType, stateKey.value_or(""));
 
-      // Return the state event as json
+      // Per spec, GET /rooms/{roomId}/state/{eventType}/{stateKey} returns
+      // only the event content, not the full event envelope
+      const auto &content = json_data.contains("content")
+                                ? json_data["content"]
+                                : json_data;
+
       const auto resp = HttpResponse::newHttpResponse();
-      resp->setBody(json_data.dump());
+      resp->setBody(content.dump());
       resp->setContentTypeString(JSON_CONTENT_TYPE);
       resp->setStatusCode(k200OK);
       callback(resp);
       co_return;
     } catch (const std::exception &e) {
-      return_error(callback, "M_UNKNOWN", "Failed to get state event",
+      return_error(callback, "M_NOT_FOUND", "State event not found",
                    k404NotFound);
       co_return;
     }

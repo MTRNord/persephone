@@ -309,12 +309,12 @@ void from_json(const json &obj, well_known &data_type);
 void to_json(json &obj, const well_known &data_type);
 
 struct [[nodiscard]] login_resp {
-  std::string_view access_token;
-  std::string_view device_id;
+  std::string access_token;
+  std::string device_id;
   std::optional<int> expires_in_ms;
-  std::optional<std::string_view> home_server;
-  std::optional<std::string_view> refresh_token;
-  std::string_view user_id;
+  std::optional<std::string> home_server;
+  std::optional<std::string> refresh_token;
+  std::string user_id;
   std::optional<client_server_json::well_known> well_known;
 };
 

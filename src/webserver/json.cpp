@@ -409,13 +409,21 @@ void to_json(json &obj, const well_known &data_type) {
 }
 
 void from_json(const json &obj, login_resp &data_type) {
-  data_type.access_token = obj["access_token"].get<std::string_view>();
-  data_type.device_id = obj["device_id"].get<std::string_view>();
-  data_type.expires_in_ms = obj["expires_in_ms"].get<long>();
-  data_type.home_server = obj["home_server"].get<std::string_view>();
-  data_type.refresh_token = obj["refresh_token"].get<std::string_view>();
-  data_type.user_id = obj["user_id"].get<std::string_view>();
-  data_type.well_known = obj["well_known"].get<well_known>();
+  data_type.access_token = obj["access_token"].get<std::string>();
+  data_type.device_id = obj["device_id"].get<std::string>();
+  if (obj.contains("expires_in_ms")) {
+    data_type.expires_in_ms = obj["expires_in_ms"].get<int>();
+  }
+  if (obj.contains("home_server")) {
+    data_type.home_server = obj["home_server"].get<std::string>();
+  }
+  if (obj.contains("refresh_token")) {
+    data_type.refresh_token = obj["refresh_token"].get<std::string>();
+  }
+  data_type.user_id = obj["user_id"].get<std::string>();
+  if (obj.contains("well_known")) {
+    data_type.well_known = obj["well_known"].get<well_known>();
+  }
 }
 
 void to_json(json &obj, const login_resp &data_type) {
