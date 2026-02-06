@@ -308,11 +308,21 @@ if (NOT DISABLE_TESTS)
             ${TEST_COMPILE_OPTIONS}
     )
 
+    add_executable(sync_test tests/sync_test.cpp)
+    target_link_libraries(sync_test PRIVATE
+            persephone_lib
+            snitch::snitch
+    )
+    target_compile_options(sync_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
+    )
+
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
             COMMAND config_test
             COMMAND drogon_tests
+            COMMAND sync_test
     )
 
     add_test(
@@ -331,11 +341,16 @@ if (NOT DISABLE_TESTS)
             NAME drogon_tests
             COMMAND drogon_tests
     )
+    add_test(
+            NAME sync_test
+            COMMAND sync_test
+    )
     target_code_coverage(persephone_lib AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(sync_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
 
 endif ()
 
