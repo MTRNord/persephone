@@ -20,6 +20,8 @@
  * 4. Update temporal_state.ordering column
  */
 class StateOrdering {
+  friend class StateOrderingTestAccess;
+
 public:
   /// Number of hash functions for MinHash (higher = more accurate, slower)
   static constexpr size_t MINHASH_SIZE = 128;

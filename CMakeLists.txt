@@ -317,12 +317,43 @@ if (NOT DISABLE_TESTS)
             ${TEST_COMPILE_OPTIONS}
     )
 
+    add_executable(json_serialization_test tests/json_serialization_test.cpp)
+    target_link_libraries(json_serialization_test PRIVATE
+            persephone_lib
+            snitch::snitch
+    )
+    target_compile_options(json_serialization_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
+    )
+
+    add_executable(room_utils_test tests/room_utils_test.cpp)
+    target_link_libraries(room_utils_test PRIVATE
+            persephone_lib
+            snitch::snitch
+    )
+    target_compile_options(room_utils_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
+    )
+
+    add_executable(state_ordering_test tests/state_ordering_test.cpp)
+    target_link_libraries(state_ordering_test PRIVATE
+            persephone_lib
+            snitch::snitch
+    )
+    target_compile_options(state_ordering_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
+    )
+
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
             COMMAND config_test
             COMMAND drogon_tests
             COMMAND sync_test
+            COMMAND json_serialization_test
+            COMMAND room_utils_test
+            COMMAND state_ordering_test
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
 
     add_test(
@@ -345,12 +376,27 @@ if (NOT DISABLE_TESTS)
             NAME sync_test
             COMMAND sync_test
     )
+    add_test(
+            NAME json_serialization_test
+            COMMAND json_serialization_test
+    )
+    add_test(
+            NAME room_utils_test
+            COMMAND room_utils_test
+    )
+    add_test(
+            NAME state_ordering_test
+            COMMAND state_ordering_test
+    )
     target_code_coverage(persephone_lib AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(sync_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(json_serialization_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(room_utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(state_ordering_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
 
 endif ()
 
