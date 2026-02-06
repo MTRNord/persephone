@@ -48,7 +48,15 @@ void FederationSender::start(std::string server_name, std::string key_id,
   _secret_key = std::move(secret_key);
 
   LOG_INFO << "FederationSender started for " << _server_name;
-  drogon::async_run([]() -> drogon::Task<> { co_await process_queue_loop(); });
+  drogon::async_run([]() -> drogon::Task<> {
+    try {
+      co_await process_queue_loop();
+    } catch (const std::exception &e) {
+      LOG_ERROR << "FederationSender: Queue loop crashed: " << e.what();
+    } catch (...) {
+      LOG_ERROR << "FederationSender: Queue loop crashed with unknown exception";
+    }
+  });
 }
 
 void FederationSender::broadcast_pdu(const json &event,
@@ -101,7 +109,15 @@ void FederationSender::broadcast_pdu(const json &event,
             // Fire-and-forget delivery attempt
             const auto &dest = server;
             drogon::async_run([dest]() -> drogon::Task<> {
-              co_await deliver_to_server(dest);
+              try {
+                co_await deliver_to_server(dest);
+              } catch (const std::exception &e) {
+                LOG_ERROR << "FederationSender: Delivery to " << dest
+                          << " failed: " << e.what();
+              } catch (...) {
+                LOG_ERROR << "FederationSender: Delivery to " << dest
+                          << " failed with unknown exception";
+              }
             });
           }
         } catch (const drogon::orm::DrogonDbException &e) {
@@ -111,6 +127,9 @@ void FederationSender::broadcast_pdu(const json &event,
       }
     } catch (const std::exception &e) {
       LOG_ERROR << "FederationSender: broadcast_pdu failed: " << e.what();
+    } catch (...) {
+      LOG_ERROR << "FederationSender: broadcast_pdu failed with unknown "
+                   "exception";
     }
   });
 }
@@ -144,8 +163,17 @@ drogon::Task<> FederationSender::process_queue_loop() {
 
         // Launch independent delivery coroutine
         const auto &dest = destination;
-        drogon::async_run(
-            [dest]() -> drogon::Task<> { co_await deliver_to_server(dest); });
+        drogon::async_run([dest]() -> drogon::Task<> {
+          try {
+            co_await deliver_to_server(dest);
+          } catch (const std::exception &e) {
+            LOG_ERROR << "FederationSender: Delivery to " << dest
+                      << " failed: " << e.what();
+          } catch (...) {
+            LOG_ERROR << "FederationSender: Delivery to " << dest
+                      << " failed with unknown exception";
+          }
+        });
       }
     } catch (const std::exception &e) {
       LOG_ERROR << "FederationSender: Queue processor error: " << e.what();

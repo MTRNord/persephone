@@ -19,6 +19,14 @@ if [ ! -f /sytest/run-tests.pl ]; then
     rm /tmp/sytest.tar.gz
 fi
 
+# Install sytest CA certificate into the system trust store so that
+# outbound federation HTTPS requests trust the sytest mock servers.
+if [ -f /sytest/keys/ca.crt ]; then
+    echo "Installing sytest CA certificate..."
+    cp /sytest/keys/ca.crt /usr/local/share/ca-certificates/sytest-ca.crt
+    update-ca-certificates
+fi
+
 # Install our plugin files
 echo "Installing Persephone sytest plugin..."
 cp -r /persephone/sytest-plugin/lib/* /sytest/lib/

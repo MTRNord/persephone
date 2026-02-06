@@ -7,13 +7,6 @@
 #
 # These tests require endpoints/features not yet implemented in Persephone.
 
-# Federation tests requiring unimplemented endpoints
-Inbound federation can query room alias directory
-Inbound federation can backfill events
-Inbound federation can receive events
-Inbound federation can get public room list
-Outbound federation can query room alias directory
-
 # Room directory tests
 Can get remote public room list
 
