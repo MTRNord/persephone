@@ -15,7 +15,7 @@ permissions:
   id-token: write
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  IMAGE: ghcr.io/${{ toLower(github.repository) }}
 
 concurrency:
   group: docker-build-${{ github.ref }}
