@@ -14,12 +14,12 @@ permissions:
   packages: write
   id-token: write
 
-env:
-  IMAGE: ghcr.io/${{ toLower(github.repository) }}
-
 concurrency:
   group: docker-build-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
   build-main:
@@ -31,6 +31,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Derive image name (lowercased)
+        id: vars
+        run: |
+          # Lowercase the repository name reliably using bash parameter expansion
+          # and expose it as an output for subsequent steps.
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -47,11 +54,11 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: |
-            ${{ env.IMAGE }}:main
-            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ steps.vars.outputs.image }}:main
+            ${{ steps.vars.outputs.image }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -62,6 +69,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Derive image name (lowercased)
+        id: vars
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -78,11 +90,11 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:${{ github.event.release.tag_name }}
-            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ steps.vars.outputs.image }}:latest
+            ${{ steps.vars.outputs.image }}:${{ github.event.release.tag_name }}
+            ${{ steps.vars.outputs.image }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
