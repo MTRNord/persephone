@@ -33,18 +33,18 @@ RUN dnf -y update && \
 # Create the cmake toolchain file for arm64 cross-compilation (only when TARGETARCH=arm64).
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
     mkdir -p /usr/share/cmake/Modules/Platform && \
-    cat > /usr/share/cmake/Modules/Platform/Linux-aarch64.cmake <<'EOF'
-set(CMAKE_SYSTEM_NAME Linux)
-set(CMAKE_SYSTEM_PROCESSOR aarch64)
-set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)
-set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)
-# Point CMake to the cross sysroot provided by the aarch64 glibc package
-set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu /usr/local/aarch64-linux-gnu)
-set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-EOF \
-fi
+    printf '%s\n' \
+    'set(CMAKE_SYSTEM_NAME Linux)' \
+    'set(CMAKE_SYSTEM_PROCESSOR aarch64)' \
+    'set(CMAKE_C_COMPILER aarch64-linux-gnu-gcc)' \
+    'set(CMAKE_CXX_COMPILER aarch64-linux-gnu-g++)' \
+    '# Point CMake to the cross sysroot provided by the aarch64 glibc package' \
+    'set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu /usr/local/aarch64-linux-gnu)' \
+    'set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)' \
+    'set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)' \
+    'set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)' \
+    > /usr/share/cmake/Modules/Platform/Linux-aarch64.cmake ; \
+    fi
 
 # Workaround: some distributions ship a broken ldns.pc with an include path that doesn't exist.
 # This sed is best-effort (ignored on failure).
