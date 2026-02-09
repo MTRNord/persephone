@@ -103,7 +103,8 @@ struct [[nodiscard]] Config {
 
     // Check if the "PERSEPHONE_CONFIG" environment variable is set and use that
     // as basepath if it is
-    const std::string env_var = std::string(std::getenv("PERSEPHONE_CONFIG"));
+    const char *raw_env_var = std::getenv("PERSEPHONE_CONFIG");
+    const std::string env_var = raw_env_var == nullptr ? "" : raw_env_var;
     const std::string base_path = env_var.empty() ? "./" : env_var;
 
     const auto path = base_path + "config.yaml";
