@@ -99,7 +99,7 @@ struct [[nodiscard]] Config {
    * the return value is discarded.
    */
   [[nodiscard]] explicit Config() {
-    LOG_INFO << "Loading config file";
+    LOG_INFO << "Loading config file\n";
 
     // Check if the "PERSEPHONE_CONFIG" environment variable is set and use that
     // as path if it is set
@@ -114,22 +114,22 @@ struct [[nodiscard]] Config {
     }
 
     const YAML::Node config = YAML::LoadFile(path);
-    LOG_INFO << "Config file loaded";
-    LOG_INFO << "Loading log_level configuration";
+    LOG_INFO << "Config file loaded\n";
+    LOG_INFO << "Loading log_level configuration\n";
     if (config["log_level"].IsDefined()) {
       log_level = config["log_level"].as<std::string>();
     } else {
       log_level = "info";
     }
-    LOG_INFO << "Loading database configuration";
+    LOG_INFO << "Loading database configuration\n";
     this->load_db(config);
-    LOG_INFO << "Database configuration loaded";
-    LOG_INFO << "Loading Matrix configuration";
+    LOG_INFO << "Database configuration loaded\n";
+    LOG_INFO << "Loading Matrix configuration\n";
     this->load_matrix(config);
-    LOG_INFO << "Matrix configuration loaded";
-    LOG_INFO << "Loading webserver configuration";
+    LOG_INFO << "Matrix configuration loaded\n";
+    LOG_INFO << "Loading webserver configuration\n";
     this->load_webserver(config);
-    LOG_INFO << "Webserver configuration loaded";
+    LOG_INFO << "Webserver configuration loaded\n";
   }
 
 private:
