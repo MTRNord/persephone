@@ -28,8 +28,8 @@ namespace generic_json {
  * @brief The structure of generic errors for most return values
  */
 struct [[nodiscard]] generic_json_error {
-  std::string_view errcode;
-  std::string_view error;
+  std::string errcode;
+  std::string error;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(generic_json_error, errcode, error)
@@ -41,7 +41,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(generic_json_error, errcode, error)
 namespace server_server_json {
 struct [[nodiscard]] MakeJoinResp {
   json::object_t event;
-  std::optional<std::string_view> room_version;
+  std::optional<std::string> room_version;
 };
 
 void from_json(const json &obj, MakeJoinResp &data_type);
@@ -62,7 +62,7 @@ void to_json(json &obj, const SendJoinResp &data_type);
 
 struct incompatible_room_version_error
     : public generic_json::generic_json_error {
-  std::string_view room_version;
+  std::string room_version;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incompatible_room_version_error, errcode,
@@ -75,8 +75,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incompatible_room_version_error, errcode,
  * https://spec.matrix.org/v1.8/server-server-api/#get_matrixfederationv1version
  */
 struct [[nodiscard]] server_version {
-  std::string_view name;
-  std::string_view version;
+  std::string name;
+  std::string version;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(server_version, name, version)
@@ -134,7 +134,7 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(keys, server_name, valid_until_ts,
                                    old_verify_keys, verify_keys, signatures)
 
 struct [[nodiscard]] well_known {
-  std::optional<std::string_view> m_server;
+  std::optional<std::string> m_server;
 };
 
 void from_json(const json &obj, well_known &data_type);
@@ -142,8 +142,8 @@ void from_json(const json &obj, well_known &data_type);
 void to_json(json &obj, const well_known &data_type);
 
 struct [[nodiscard]] directory_query {
-  std::string_view room_id;
-  std::vector<std::string_view> servers;
+  std::string room_id;
+  std::vector<std::string> servers;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(directory_query, room_id, servers)
@@ -157,22 +157,22 @@ struct [[nodiscard]] StateEvent {
   json::object_t content;
 
   // Optional as it might be not yet created
-  std::optional<std::string_view> event_id;
+  std::optional<std::string> event_id;
 
   // Optional as it might not be yet created
   std::optional<int> origin_server_ts;
 
   // Optional as it might not be yet created
-  std::optional<std::string_view> room_id;
+  std::optional<std::string> room_id;
 
   // Optional as it might not be yet created
-  std::optional<std::string_view> sender;
+  std::optional<std::string> sender;
 
   // Optional but at parsing defaults to an empty string as per spec
   // This is different from "normal" staste events
-  std::string_view state_key;
+  std::string state_key;
 
-  std::string_view type;
+  std::string type;
 };
 
 void from_json(const json &obj, StateEvent &data_type);
@@ -181,14 +181,14 @@ void to_json(json &obj, const StateEvent &data_type);
 
 struct [[nodiscard]] PowerLevelEventContent {
   std::optional<int> ban;
-  std::optional<std::map<std::string_view, int>> events;
+  std::optional<std::map<std::string, int>> events;
   std::optional<int> events_default;
   std::optional<int> invite;
   std::optional<int> kick;
-  std::optional<std::map<std::string_view, int>> notifications;
+  std::optional<std::map<std::string, int>> notifications;
   std::optional<int> redact;
   std::optional<int> state_default;
-  std::optional<std::map<std::string_view, int>> users;
+  std::optional<std::map<std::string, int>> users;
   std::optional<int> users_default;
 };
 
@@ -197,10 +197,10 @@ void from_json(const json &obj, PowerLevelEventContent &data_type);
 void to_json(json &obj, const PowerLevelEventContent &data_type);
 
 struct [[nodiscard]] Invite3pid {
-  std::string_view address;
-  std::string_view id_access_token;
-  std::string_view id_server;
-  std::string_view medium;
+  std::string address;
+  std::string id_access_token;
+  std::string id_server;
+  std::string medium;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Invite3pid, address, id_access_token,
@@ -209,15 +209,15 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Invite3pid, address, id_access_token,
 struct [[nodiscard]] CreateRoomBody {
   std::optional<json::object_t> creation_content;
   std::optional<std::vector<json>> initial_state;
-  std::optional<std::vector<std::string_view>> invite;
+  std::optional<std::vector<std::string>> invite;
   std::optional<std::vector<Invite3pid>> invite_3pid;
-  std::optional<std::string_view> name;
+  std::optional<std::string> name;
   std::optional<PowerLevelEventContent> power_level_content_override;
-  std::optional<std::string_view> preset;
-  std::optional<std::string_view> room_alias_name;
-  std::optional<std::string_view> room_version;
-  std::optional<std::string_view> topic;
-  std::optional<std::string_view> visibility;
+  std::optional<std::string> preset;
+  std::optional<std::string> room_alias_name;
+  std::optional<std::string> room_version;
+  std::optional<std::string> topic;
+  std::optional<std::string> visibility;
   std::optional<bool> is_direct;
 };
 
@@ -272,7 +272,7 @@ struct [[nodiscard]] login_body {
   std::optional<login_identifier> identifier;
   std::optional<std::string> initial_device_display_name;
   std::optional<std::string> medium;
-  // Password is stored as std::string (not string_view) to ensure it owns the
+  // Password is stored as std::string (not string) to ensure it owns the
   // data, preventing potential UTF-8 issues with dangling references.
   std::optional<std::string> password;
   std::optional<bool> refresh_token;
@@ -286,13 +286,13 @@ void from_json(const json &obj, login_body &data_type);
 void to_json(json &obj, const login_body &data_type);
 
 struct [[nodiscard]] well_known_m_homeserver {
-  std::string_view base_url;
+  std::string base_url;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_m_homeserver, base_url)
 
 struct [[nodiscard]] well_known_identity_server {
-  std::string_view base_url;
+  std::string base_url;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_identity_server, base_url)
@@ -326,11 +326,11 @@ void to_json(json &obj, const login_resp &data_type);
  * https://spec.matrix.org/v1.8/client-server-api/#post_matrixclientv3register
  */
 struct [[nodiscard]] registration_resp {
-  std::optional<std::string_view> access_token;
-  std::optional<std::string_view> device_id;
+  std::optional<std::string> access_token;
+  std::optional<std::string> device_id;
   std::optional<long> expires_in_ms;
-  std::optional<std::string_view> refresh_token;
-  std::string_view user_id;
+  std::optional<std::string> refresh_token;
+  std::string user_id;
 };
 
 void from_json(const json &obj, registration_resp &data_type);
@@ -338,7 +338,7 @@ void from_json(const json &obj, registration_resp &data_type);
 void to_json(json &obj, const registration_resp &data_type);
 
 struct [[nodiscard]] FlowInformation {
-  std::array<std::string_view, 1> stages;
+  std::array<std::string, 1> stages;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FlowInformation, stages)
@@ -356,9 +356,9 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(incomplete_registration_resp, session, flows)
  * https://spec.matrix.org/v1.8/client-server-api/#current-account-information
  */
 struct [[nodiscard]] whoami_resp {
-  std::string_view user_id;
+  std::string user_id;
   bool is_guest;
-  std::optional<std::string_view> device_id;
+  std::optional<std::string> device_id;
 };
 
 void from_json(const json &obj, whoami_resp &data_type);
@@ -371,13 +371,13 @@ void to_json(json &obj, const whoami_resp &data_type);
  * https://spec.matrix.org/v1.8/client-server-api/#get_matrixclientversions
  */
 struct [[nodiscard]] versions_obj {
-  std::array<std::string_view, 2> versions;
+  std::array<std::string, 2> versions;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions_obj, versions)
 
 struct [[nodiscard]] LoginFlow {
-  std::string_view type;
+  std::string type;
   bool get_login_token = false;
 };
 
@@ -390,17 +390,16 @@ struct [[nodiscard]] GetLogin {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(GetLogin, flows)
 
 struct [[nodiscard]] ThirdPartySigned {
-  std::string_view mxid;
-  std::string_view sender;
-  std::string_view token;
-  std::map<std::string_view, std::map<std::string_view, std::string_view>>
-      signatures;
+  std::string mxid;
+  std::string sender;
+  std::string token;
+  std::map<std::string, std::map<std::string, std::string>> signatures;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ThirdPartySigned, mxid, sender, token)
 
 struct [[nodiscard]] JoinBody {
-  std::optional<std::string_view> reason;
+  std::optional<std::string> reason;
   std::optional<ThirdPartySigned> third_party_signed;
 };
 
