@@ -88,4 +88,4 @@ COPY --from=builder /persephone /persephone
 WORKDIR /persephone
 EXPOSE 8008 8448
 
-CMD ["./persephone"]
+CMD ["/bin/persephone"]
