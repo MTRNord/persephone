@@ -80,7 +80,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Final runtime image (Buildx will assemble the correct multi-arch manifest).
 FROM fedora:42
 
-RUN dnf -y install libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
+RUN dnf -y install libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
     dnf clean all
 
 COPY --from=builder /persephone /persephone
