@@ -398,8 +398,7 @@ get_srv_record(const std::string &address) {
  * @return A Task that will eventually contain a ResolvedServer object
  * representing the discovered server.
  */
-[[nodiscard]] Task<ResolvedServer>
-discover_server(std::string_view server_name) {
+[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name) {
   /*
    * If the hostname is an IP literal, then that IP address should be used,
    * together with the given port number, or 8448 if no port is given. The
@@ -410,8 +409,8 @@ discover_server(std::string_view server_name) {
   LOG_DEBUG << "Discovering server: " << server_name;
   // If there is a colon then use the thing after the last colon as the port
   // otherwise make it an empty optional
-  const std::optional<std::string_view> port =
-      [&server_name]() -> std::optional<std::string_view> {
+  const std::optional<std::string> port =
+      [&server_name]() -> std::optional<std::string> {
     if (const auto pos = server_name.find_last_of(':');
         pos != std::string::npos) {
       return server_name.substr(pos + 1);
@@ -424,7 +423,7 @@ discover_server(std::string_view server_name) {
   // Server name with the port removed. If no port is given, this is the same as
   // the server name. Use the port optional to determine if the port should be
   // removed.
-  auto address = [&server_name, &port]() -> std::string_view {
+  auto address = [&server_name, &port]() -> std::string {
     if (port.has_value()) {
       return server_name.substr(0, server_name.find_last_of(':'));
     }
@@ -488,8 +487,8 @@ discover_server(std::string_view server_name) {
         auto delegated_server_name = m_server.value();
         // If there is a colon then use the thing after the last colon as the
         // port otherwise make it an empty optional
-        const std::optional<std::string_view> delegated_port =
-            [&delegated_server_name]() -> std::optional<std::string_view> {
+        const std::optional<std::string> delegated_port =
+            [&delegated_server_name]() -> std::optional<std::string> {
           if (const auto pos = delegated_server_name.find_last_of(':');
               pos != std::string::npos) {
             return delegated_server_name.substr(pos + 1);
@@ -501,7 +500,7 @@ discover_server(std::string_view server_name) {
         // same as the server name. Use the port optional to determine if the
         // port should be removed.
         auto delegated_address = [&delegated_server_name,
-                                  &delegated_port]() -> std::string_view {
+                                  &delegated_port]() -> std::string {
           if (delegated_port.has_value()) {
             return delegated_server_name.substr(
                 0, delegated_server_name.find_last_of(':'));
@@ -853,8 +852,7 @@ parse_xmatrix_header(std::string_view header) {
 
   // Check for X-Matrix prefix
   constexpr std::string_view prefix = "X-Matrix ";
-  if (header.size() < prefix.size() ||
-      header.substr(0, prefix.size()) != prefix) {
+  if (header.size() < prefix.size() || !header.starts_with(prefix)) {
     return std::nullopt;
   }
   header.remove_prefix(prefix.size());
@@ -863,10 +861,11 @@ parse_xmatrix_header(std::string_view header) {
 
   // Parse key=value pairs separated by commas
   // Values are quoted with double quotes
-  auto extract_value = [](std::string_view &str,
-                          std::string_view key) -> std::optional<std::string> {
+  auto extract_value =
+      [](const std::string_view &str,
+         const std::string_view &key) -> std::optional<std::string> {
     // Find key= pattern
-    auto key_pos = str.find(key);
+    const auto key_pos = str.find(key);
     if (key_pos == std::string_view::npos) {
       return std::nullopt;
     }
@@ -889,7 +888,7 @@ parse_xmatrix_header(std::string_view header) {
     value_start++; // Skip opening quote
 
     // Find closing quote
-    auto value_end = str.find('"', value_start);
+    const auto value_end = str.find('"', value_start);
     if (value_end == std::string_view::npos) {
       return std::nullopt;
     }

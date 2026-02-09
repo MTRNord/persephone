@@ -28,7 +28,7 @@ using json = nlohmann::json;
 /// Fetch a server's signing keys from the remote server
 /// Returns the keys JSON response, or nullopt on failure
 static drogon::Task<std::optional<json>>
-fetch_server_keys(const std::string_view server_name) {
+fetch_server_keys(const std::string server_name) {
   try {
     // Resolve the server
     const auto resolved = co_await discover_server(server_name);
@@ -65,8 +65,8 @@ fetch_server_keys(const std::string_view server_name) {
 
 /// Get a server's signing public key, using cache if available
 static drogon::Task<std::optional<std::string>>
-get_server_signing_key(const std::string_view server_name,
-                       const std::string_view key_id) {
+get_server_signing_key(const std::string server_name,
+                       const std::string key_id) {
   const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
                        std::chrono::system_clock::now().time_since_epoch())
                        .count();

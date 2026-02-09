@@ -62,11 +62,11 @@ struct [[nodiscard]] ResolvedServer {
 struct [[nodiscard]] HTTPRequest {
   drogon::HttpClientPtr client;
   drogon::HttpMethod method;
-  std::string_view path;
-  std::string_view key_id;
+  std::string path;
+  std::string key_id;
   std::vector<unsigned char> secret_key;
-  std::string_view origin;
-  std::string_view target;
+  std::string origin;
+  std::string target;
   std::optional<json> content;
   int timeout;
 };
@@ -90,8 +90,7 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                                           const std::string &password);
 
 // Get the localpart of a user's matrix id.
-[[nodiscard]] constexpr std::string_view
-localpart(const std::string_view matrix_id) {
+[[nodiscard]] constexpr std::string localpart(const std::string matrix_id) {
   return matrix_id.substr(1, matrix_id.find(':') - 1);
 }
 
@@ -236,8 +235,7 @@ is_valid_localpart(const std::string_view localpart,
  * @return The server part of the input string.
  * @throws std::runtime_error If no colon is found in the input string.
  */
-[[nodiscard]] constexpr std::string_view
-get_serverpart(const std::string_view input) {
+[[nodiscard]] constexpr std::string get_serverpart(const std::string &input) {
   if (const size_t pos = input.find(':'); pos != std::string::npos) {
     // Case: Colon found in input string
     return input.substr(pos + 1);
@@ -247,17 +245,16 @@ get_serverpart(const std::string_view input) {
 
 [[nodiscard]] std::vector<SRVRecord> get_srv_record(const std::string &address);
 
-[[nodiscard]] Task<ResolvedServer>
-discover_server(std::string_view server_name);
+[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
 
 struct [[nodiscard]] AuthheaderData {
-  const std::string_view server_name;
-  const std::string_view key_id;
+  const std::string server_name;
+  const std::string key_id;
   const std::vector<unsigned char> &secret_key;
-  const std::string_view method;
-  const std::string_view request_uri;
-  const std::string_view origin;
-  const std::string_view target;
+  const std::string method;
+  const std::string request_uri;
+  const std::string origin;
+  const std::string target;
   const std::optional<json> &content;
 };
 
@@ -346,7 +343,7 @@ template <typename... Args> struct debug {
    * Defaults to the current location.
    */
   explicit debug(
-      const std::string_view format_string, Args &&...args,
+      const std::string format_string, Args &&...args,
       const std::source_location &loc = std::source_location::current()) {
     auto str = std::format(
         "{}({}): {}\n", loc.file_name(), loc.line(),
@@ -375,7 +372,7 @@ template <typename... Args> debug(Args &&...) -> debug<Args...>;
  * @param method The drogon::HttpMethod to be converted.
  * @return The string representation of the drogon::HttpMethod.
  */
-[[nodiscard]] constexpr std::string_view
+[[nodiscard]] constexpr std::string
 drogon_to_string_method(const drogon::HttpMethod &method) {
   switch (method) {
   case drogon::HttpMethod::Get:
@@ -399,7 +396,7 @@ drogon_to_string_method(const drogon::HttpMethod &method) {
 }
 
 [[nodiscard]] constexpr std::string
-generate_room_id(const std::string_view server_name) {
+generate_room_id(const std::string server_name) {
   if (server_name.empty()) {
     throw std::invalid_argument(
         "Missing server_name when generating room_id. Please contact the "
