@@ -371,7 +371,7 @@ void to_json(json &obj, const whoami_resp &data_type);
  * https://spec.matrix.org/v1.8/client-server-api/#get_matrixclientversions
  */
 struct [[nodiscard]] versions_obj {
-  std::array<std::string, 2> versions;
+  std::array<std::string_view, 2> versions;
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions_obj, versions)

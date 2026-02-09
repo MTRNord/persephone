@@ -1,72 +1,53 @@
 #include "utils/room_utils.hpp"
 #include <set>
 #include <snitch/snitch.hpp>
-#include <string_view>
 #include <vector>
 
 using json = nlohmann::json;
-using namespace std::string_view_literals;
 
-TEST_CASE("calculate_assumed_createRoom_state_event_count",
-          "[room_utils]") {
+TEST_CASE("calculate_assumed_createRoom_state_event_count", "[room_utils]") {
   SECTION("Minimal room (no optional fields)") {
     // 1 create + 1 member + 1 power_levels + 3 preset = 6
-    auto count =
-        calculate_assumed_createRoom_state_event_count(false, false, false,
-                                                       std::nullopt,
-                                                       std::nullopt,
-                                                       std::nullopt);
+    auto count = calculate_assumed_createRoom_state_event_count(
+        false, false, false, std::nullopt, std::nullopt, std::nullopt);
     REQUIRE(count == 6);
   }
 
   SECTION("With alias, name, and topic") {
     // 6 base + 1 alias + 1 name + 1 topic = 9
-    auto count =
-        calculate_assumed_createRoom_state_event_count(true, true, true,
-                                                       std::nullopt,
-                                                       std::nullopt,
-                                                       std::nullopt);
+    auto count = calculate_assumed_createRoom_state_event_count(
+        true, true, true, std::nullopt, std::nullopt, std::nullopt);
     REQUIRE(count == 9);
   }
 
   SECTION("With invites") {
     // 6 base + 3 invites = 9
-    auto count =
-        calculate_assumed_createRoom_state_event_count(false, false, false,
-                                                       std::size_t{3},
-                                                       std::nullopt,
-                                                       std::nullopt);
+    auto count = calculate_assumed_createRoom_state_event_count(
+        false, false, false, std::size_t{3}, std::nullopt, std::nullopt);
     REQUIRE(count == 9);
   }
 
   SECTION("With initial_state") {
     // 6 base + 2 initial_state = 8
-    auto count =
-        calculate_assumed_createRoom_state_event_count(false, false, false,
-                                                       std::nullopt,
-                                                       std::nullopt,
-                                                       std::size_t{2});
+    auto count = calculate_assumed_createRoom_state_event_count(
+        false, false, false, std::nullopt, std::nullopt, std::size_t{2});
     REQUIRE(count == 8);
   }
 
   SECTION("All options") {
     // 6 base + 1 alias + 1 name + 1 topic + 2 invites + 1 invite_3pid + 3
     // initial_state = 15
-    auto count =
-        calculate_assumed_createRoom_state_event_count(true, true, true,
-                                                       std::size_t{2},
-                                                       std::size_t{1},
-                                                       std::size_t{3});
+    auto count = calculate_assumed_createRoom_state_event_count(
+        true, true, true, std::size_t{2}, std::size_t{1}, std::size_t{3});
     REQUIRE(count == 15);
   }
 }
 
 TEST_CASE("build_createRoom_state minimal", "[room_utils]") {
-  const CreateRoomStateBuildData data{
-      .createRoom_body = {.room_version = "11"sv},
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+  const CreateRoomStateBuildData data{.createRoom_body = {.room_version = "11"},
+                                      .room_id = "!test:localhost",
+                                      .user_id = "@alice:localhost",
+                                      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -96,12 +77,12 @@ TEST_CASE("build_createRoom_state minimal", "[room_utils]") {
 
 TEST_CASE("build_createRoom_state with name and topic", "[room_utils]") {
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.name = "Test Room"sv,
-                          .room_version = "11"sv,
-                          .topic = "A test topic"sv},
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+      .createRoom_body = {.name = "Test Room",
+                          .room_version = "11",
+                          .topic = "A test topic"},
+      .room_id = "!test:localhost",
+      .user_id = "@alice:localhost",
+      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -127,11 +108,11 @@ TEST_CASE("build_createRoom_state with name and topic", "[room_utils]") {
 
 TEST_CASE("build_createRoom_state with room alias", "[room_utils]") {
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.room_alias_name = "#myroom:localhost"sv,
-                          .room_version = "11"sv},
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+      .createRoom_body = {.room_alias_name = "#myroom:localhost",
+                          .room_version = "11"},
+      .room_id = "!test:localhost",
+      .user_id = "@alice:localhost",
+      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -153,14 +134,13 @@ TEST_CASE("build_createRoom_state with initial_state", "[room_utils]") {
        {"state_key", ""}}};
 
   client_server_json::CreateRoomBody body;
-  body.room_version = "11"sv;
+  body.room_version = "11";
   body.initial_state = initial_state;
 
-  const CreateRoomStateBuildData data{
-      .createRoom_body = body,
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+  const CreateRoomStateBuildData data{.createRoom_body = body,
+                                      .room_id = "!test:localhost",
+                                      .user_id = "@alice:localhost",
+                                      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -179,15 +159,14 @@ TEST_CASE("build_createRoom_state with initial_state", "[room_utils]") {
 
 TEST_CASE("build_createRoom_state with invites", "[room_utils]") {
   client_server_json::CreateRoomBody body;
-  body.room_version = "11"sv;
+  body.room_version = "11";
   body.invite =
-      std::vector<std::string_view>{"@bob:example.com"sv, "@carol:example.com"sv};
+      std::vector<std::string>{"@bob:example.com", "@carol:example.com"};
 
-  const CreateRoomStateBuildData data{
-      .createRoom_body = body,
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+  const CreateRoomStateBuildData data{.createRoom_body = body,
+                                      .room_id = "!test:localhost",
+                                      .user_id = "@alice:localhost",
+                                      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -207,20 +186,18 @@ TEST_CASE("build_createRoom_state with invites", "[room_utils]") {
 
 TEST_CASE("build_createRoom_state with power_level_override", "[room_utils]") {
   client_server_json::CreateRoomBody body;
-  body.room_version = "11"sv;
+  body.room_version = "11";
 
   client_server_json::PowerLevelEventContent pl;
   pl.ban = 100;
   pl.invite = 50;
-  pl.users =
-      std::map<std::string_view, int>{{"@superadmin:localhost"sv, 100}};
+  pl.users = std::map<std::string, int>{{"@superadmin:localhost", 100}};
   body.power_level_content_override = pl;
 
-  const CreateRoomStateBuildData data{
-      .createRoom_body = body,
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+  const CreateRoomStateBuildData data{.createRoom_body = body,
+                                      .room_id = "!test:localhost",
+                                      .user_id = "@alice:localhost",
+                                      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 
@@ -240,13 +217,12 @@ TEST_CASE("build_createRoom_state with power_level_override", "[room_utils]") {
 }
 
 TEST_CASE("build_createRoom_state event_ids are unique", "[room_utils]") {
-  const CreateRoomStateBuildData data{
-      .createRoom_body = {.name = "Room"sv,
-                          .room_version = "11"sv,
-                          .topic = "Topic"sv},
-      .room_id = "!test:localhost"sv,
-      .user_id = "@alice:localhost"sv,
-      .room_version = "11"sv};
+  const CreateRoomStateBuildData data{.createRoom_body = {.name = "Room",
+                                                          .room_version = "11",
+                                                          .topic = "Topic"},
+                                      .room_id = "!test:localhost",
+                                      .user_id = "@alice:localhost",
+                                      .room_version = "11"};
 
   auto events = build_createRoom_state(data);
 

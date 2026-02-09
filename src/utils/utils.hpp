@@ -79,8 +79,7 @@ struct [[nodiscard]] VerifyKeyData {
 };
 
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
-                  const std::string_view errorcode,
-                  const std::string_view error,
+                  const std::string errorcode, const std::string error,
                   const HttpStatusCode status_code);
 
 [[nodiscard]] std::string random_string(const std::size_t len);
@@ -310,7 +309,8 @@ struct [[nodiscard]] XMatrixAuth {
 };
 
 /// Parse an X-Matrix Authorization header
-/// Format: X-Matrix origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
+/// Format: X-Matrix
+/// origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
 /// @param header The Authorization header value (including "X-Matrix " prefix)
 /// @return Parsed header, or nullopt if parsing failed
 [[nodiscard]] std::optional<XMatrixAuth>

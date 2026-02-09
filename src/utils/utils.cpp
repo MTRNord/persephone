@@ -49,8 +49,7 @@
  * @param status_code The status code to be set for the response.
  */
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
-                  const std::string_view errorcode,
-                  const std::string_view error,
+                  const std::string errorcode, const std::string error,
                   const HttpStatusCode status_code) {
   generic_json::generic_json_error const json_error{.errcode = errorcode,
                                                     .error = error};
@@ -836,7 +835,8 @@ std::string to_lower(const std::string &original) {
 /**
  * @brief Parses an X-Matrix Authorization header.
  *
- * Format: X-Matrix origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
+ * Format: X-Matrix
+ * origin="server.name",destination="our.server",key="ed25519:key_id",sig="base64sig"
  *
  * @param header The Authorization header value (including "X-Matrix " prefix)
  * @return Parsed XMatrixAuth struct, or nullopt if parsing failed

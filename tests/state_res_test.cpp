@@ -6,7 +6,6 @@
 #include <chrono>
 #include <fstream>
 #include <snitch/snitch.hpp>
-#include <string_view>
 #include <utils/errors.hpp>
 #include <utils/json_utils.hpp>
 #include <utils/room_utils.hpp>
@@ -14,7 +13,6 @@
 #include <vector>
 
 using json = nlohmann::json;
-using namespace std::string_view_literals;
 
 TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
   SECTION("Redact Event Based on v11 Rules") {
@@ -51,7 +49,7 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
       }
     )"_json;
 
-    json redacted_event = redact(event, "11"sv);
+    json redacted_event = redact(event, "11");
 
     // Verify the presence of specific keys that should be preserved
     REQUIRE(redacted_event.contains("event_id"));
@@ -146,7 +144,7 @@ TEST_CASE("Matrix Protocol Room Version 11 Redaction", "[matrix_redaction]") {
       }
     )"_json;
 
-    json redacted_event = redact(event, "11"sv);
+    json redacted_event = redact(event, "11");
 
     // Verify the presence of specific keys that should be preserved
     REQUIRE(redacted_event.contains("event_id"));
@@ -197,7 +195,7 @@ TEST_CASE("EventID", "[event_ids]") {
       }
     )"_json;
 
-    const json generated_event_id = event_id(event, "11"sv);
+    const json generated_event_id = event_id(event, "11");
 
     REQUIRE(generated_event_id ==
             "$P_kn3vgLwKkBMkNtD5snHOQhuCoQTv2K6wSiRtnqXVA");
@@ -283,8 +281,8 @@ TEST_CASE("EventID", "[event_ids]") {
       }
     )"_json;
 
-    const json generated_event_id = event_id(event_a, "11"sv);
-    const json generated_event_id_b = event_id(event_b, "11"sv);
+    const json generated_event_id = event_id(event_a, "11");
+    const json generated_event_id_b = event_id(event_b, "11");
 
     REQUIRE(generated_event_id != generated_event_id_b);
   }
@@ -354,12 +352,12 @@ webserver:
 
   // Generate basic room data
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.name = "Test Room"sv,
-                          .room_version = "11"sv,
-                          .topic = "Test Topic"sv},
-      .room_id = "!test:localhost"sv,
-      .user_id = "@test:localhost"sv,
-      .room_version = "11"sv};
+      .createRoom_body = {.name = "Test Room",
+                          .room_version = "11",
+                          .topic = "Test Topic"},
+      .room_id = "!test:localhost",
+      .user_id = "@test:localhost",
+      .room_version = "11"};
 
   auto room_state = build_createRoom_state(data);
 
@@ -437,8 +435,8 @@ TEST_CASE("reference_hash", "[reference_hash]") {
       "type": "m.room.member"
     })"_json;
 
-    auto hash1 = reference_hash(event, "11"sv);
-    auto hash2 = reference_hash(event, "11"sv);
+    auto hash1 = reference_hash(event, "11");
+    auto hash2 = reference_hash(event, "11");
 
     REQUIRE(hash1 == hash2);
     REQUIRE_FALSE(hash1.empty());
@@ -469,8 +467,8 @@ TEST_CASE("reference_hash", "[reference_hash]") {
       "type": "m.room.member"
     })"_json;
 
-    auto hash_a = reference_hash(event_a, "11"sv);
-    auto hash_b = reference_hash(event_b, "11"sv);
+    auto hash_a = reference_hash(event_a, "11");
+    auto hash_b = reference_hash(event_b, "11");
 
     REQUIRE(hash_a != hash_b);
   }
@@ -492,8 +490,8 @@ TEST_CASE("reference_hash", "[reference_hash]") {
     event_with_sig["signatures"] = {{"example.com", {{"ed25519:key", "sig"}}}};
     event_with_sig["unsigned"] = {{"age", 1234}};
 
-    auto hash_without = reference_hash(event, "11"sv);
-    auto hash_with = reference_hash(event_with_sig, "11"sv);
+    auto hash_without = reference_hash(event, "11");
+    auto hash_with = reference_hash(event_with_sig, "11");
 
     REQUIRE(hash_without == hash_with);
   }
@@ -523,7 +521,7 @@ TEST_CASE("Redact m.room.create event", "[matrix_redaction]") {
     "type": "m.room.create"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   // m.room.create preserves ALL content keys
   REQUIRE(redacted["content"].contains("creator"));
@@ -553,7 +551,7 @@ TEST_CASE("Redact m.room.join_rules event", "[matrix_redaction]") {
     "type": "m.room.join_rules"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   REQUIRE(redacted["content"].contains("join_rule"));
   REQUIRE(redacted["content"].contains("allow"));
@@ -588,7 +586,7 @@ TEST_CASE("Redact m.room.power_levels event", "[matrix_redaction]") {
     "type": "m.room.power_levels"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   REQUIRE(redacted["content"].contains("ban"));
   REQUIRE(redacted["content"].contains("events"));
@@ -622,7 +620,7 @@ TEST_CASE("Redact m.room.history_visibility event", "[matrix_redaction]") {
     "type": "m.room.history_visibility"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   REQUIRE(redacted["content"].contains("history_visibility"));
   REQUIRE_FALSE(redacted["content"].contains("extra"));
@@ -647,7 +645,7 @@ TEST_CASE("Redact m.room.redaction event", "[matrix_redaction]") {
     "type": "m.room.redaction"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   REQUIRE(redacted["content"].contains("redacts"));
   REQUIRE_FALSE(redacted["content"].contains("reason"));
@@ -671,7 +669,7 @@ TEST_CASE("Redact unknown event type", "[matrix_redaction]") {
     "type": "m.room.message"
   })"_json;
 
-  auto redacted = redact(event, "11"sv);
+  auto redacted = redact(event, "11");
 
   // Unknown event type: content should be empty
   REQUIRE(redacted["content"].empty());
@@ -688,25 +686,23 @@ TEST_CASE("Redact unknown event type", "[matrix_redaction]") {
 
 TEST_CASE("findAuthDifference", "[state_res]") {
   SECTION("Events present in all forks produce empty difference") {
-    json event_a = {{"type", "m.room.create"},
-                    {"state_key", ""},
-                    {"event_id", "$a"}};
+    json event_a = {
+        {"type", "m.room.create"}, {"state_key", ""}, {"event_id", "$a"}};
     json event_b = {{"type", "m.room.member"},
                     {"state_key", "@alice:example.com"},
                     {"event_id", "$b"}};
 
     std::vector<StateEvent> conflicted = {event_a, event_b};
     std::vector<std::vector<StateEvent>> forks = {{event_a, event_b},
-                                                   {event_a, event_b}};
+                                                  {event_a, event_b}};
 
     auto diff = findAuthDifference(conflicted, forks);
     REQUIRE(diff.empty());
   }
 
   SECTION("Events missing from some forks appear in difference") {
-    json event_a = {{"type", "m.room.create"},
-                    {"state_key", ""},
-                    {"event_id", "$a"}};
+    json event_a = {
+        {"type", "m.room.create"}, {"state_key", ""}, {"event_id", "$a"}};
     json event_b = {{"type", "m.room.member"},
                     {"state_key", "@alice:example.com"},
                     {"event_id", "$b"}};
@@ -714,7 +710,7 @@ TEST_CASE("findAuthDifference", "[state_res]") {
     std::vector<StateEvent> conflicted = {event_a, event_b};
     // Fork 2 is missing event_b
     std::vector<std::vector<StateEvent>> forks = {{event_a, event_b},
-                                                   {event_a}};
+                                                  {event_a}};
 
     auto diff = findAuthDifference(conflicted, forks);
     REQUIRE(diff.size() == 1);
@@ -733,9 +729,9 @@ TEST_CASE("select_auth_events_for_join", "[auth_events]") {
                          {"event_id", "$create"},
                          {"content", {{"creator", "@alice:example.com"}}}};
 
-    auto auth_events = select_auth_events_for_join(
-        create_event, std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-        "11"sv);
+    auto auth_events =
+        select_auth_events_for_join(create_event, std::nullopt, std::nullopt,
+                                    std::nullopt, std::nullopt, "11");
 
     // Must include the create event
     REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$create") !=
@@ -756,9 +752,9 @@ TEST_CASE("select_auth_events_for_join", "[auth_events]") {
                        {"event_id", "$jr"},
                        {"content", {{"join_rule", "public"}}}};
 
-    auto auth_events = select_auth_events_for_join(
-        create_event, power_levels, join_rules, std::nullopt, std::nullopt,
-        "11"sv);
+    auto auth_events =
+        select_auth_events_for_join(create_event, power_levels, join_rules,
+                                    std::nullopt, std::nullopt, "11");
 
     REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$create") !=
             auth_events.end());
@@ -773,17 +769,16 @@ TEST_CASE("select_auth_events_for_join", "[auth_events]") {
                          {"state_key", ""},
                          {"event_id", "$create"},
                          {"content", {{"creator", "@alice:example.com"}}}};
-    json target_membership = {
-        {"type", "m.room.member"},
-        {"state_key", "@bob:example.com"},
-        {"event_id", "$bob_member"},
-        {"content", {{"membership", "invite"}}}};
+    json target_membership = {{"type", "m.room.member"},
+                              {"state_key", "@bob:example.com"},
+                              {"event_id", "$bob_member"},
+                              {"content", {{"membership", "invite"}}}};
 
-    auto auth_events = select_auth_events_for_join(
-        create_event, std::nullopt, std::nullopt, target_membership,
-        std::nullopt, "11"sv);
+    auto auth_events =
+        select_auth_events_for_join(create_event, std::nullopt, std::nullopt,
+                                    target_membership, std::nullopt, "11");
 
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(),
-                      "$bob_member") != auth_events.end());
+    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$bob_member") !=
+            auth_events.end());
   }
 }
