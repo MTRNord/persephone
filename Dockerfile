@@ -19,13 +19,13 @@ RUN dnf -y update && \
     dnf -y install \
     libevent-devel libicu-devel libasan libubsan libsodium-devel libpq-devel \
     jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel \
-    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang \
+    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel \
     gcc-aarch64-linux-gnu gcc-c++-aarch64-linux-gnu aarch64-linux-gnu-glibc; \
     else \
     dnf -y install \
     libevent-devel libicu-devel libasan libubsan libsodium-devel libpq-devel \
     jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel \
-    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang \
+    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel \
     gcc gcc-c++ make; \
     fi && \
     dnf clean all
@@ -80,7 +80,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Final runtime image (Buildx will assemble the correct multi-arch manifest).
 FROM fedora:42
 
-RUN dnf -y install libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
+RUN dnf -y install spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
     dnf clean all
 
 COPY --from=builder /persephone /persephone

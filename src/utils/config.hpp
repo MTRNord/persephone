@@ -114,22 +114,22 @@ struct [[nodiscard]] Config {
     }
 
     const YAML::Node config = YAML::LoadFile(path);
-    LOG_DEBUG << "Config file loaded";
-    LOG_DEBUG << "Loading log_level configuration";
+    LOG_INFO << "Config file loaded";
+    LOG_INFO << "Loading log_level configuration";
     if (config["log_level"].IsDefined()) {
       log_level = config["log_level"].as<std::string>();
     } else {
       log_level = "info";
     }
-    LOG_DEBUG << "Loading database configuration";
+    LOG_INFO << "Loading database configuration";
     this->load_db(config);
-    LOG_DEBUG << "Database configuration loaded";
-    LOG_DEBUG << "Loading Matrix configuration";
+    LOG_INFO << "Database configuration loaded";
+    LOG_INFO << "Loading Matrix configuration";
     this->load_matrix(config);
-    LOG_DEBUG << "Matrix configuration loaded";
-    LOG_DEBUG << "Loading webserver configuration";
+    LOG_INFO << "Matrix configuration loaded";
+    LOG_INFO << "Loading webserver configuration";
     this->load_webserver(config);
-    LOG_DEBUG << "Webserver configuration loaded";
+    LOG_INFO << "Webserver configuration loaded";
   }
 
 private:
