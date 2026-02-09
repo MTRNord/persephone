@@ -7,6 +7,7 @@
 #include "errors.hpp"
 
 #include "yaml-cpp/yaml.h"
+#include <cstdlib>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -30,7 +31,8 @@ struct [[nodiscard]] DBConfig {
   std::string user;
   std::string password;
   unsigned short port{};
-  std::optional<int> pool_size; // Connection pool size (defaults to max(4, num_cores))
+  std::optional<int>
+      pool_size; // Connection pool size (defaults to max(4, num_cores))
 };
 
 /**
@@ -98,7 +100,13 @@ struct [[nodiscard]] Config {
    */
   [[nodiscard]] explicit Config() {
     LOG_INFO << "Loading config file";
-    auto constexpr path = "./config.yaml";
+
+    // Check if the "PERSEPHONE_CONFIG" environment variable is set and use that
+    // as basepath if it is
+    const std::string env_var = std::string(std::getenv("PERSEPHONE_CONFIG"));
+    const std::string base_path = env_var.empty() ? "./" : env_var;
+
+    const auto path = base_path + "config.yaml";
     if (!std::filesystem::exists(path)) {
       throw ConfigError("Missing or invalid config.yaml file. Make sure "
                         "to create it prior to running persephone");
