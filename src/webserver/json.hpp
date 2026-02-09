@@ -226,8 +226,8 @@ void from_json(const json &obj, CreateRoomBody &data_type);
 void to_json(json &obj, const CreateRoomBody &data_type);
 
 struct [[nodiscard]] AuthenticationData {
-  std::optional<std::string_view> session;
-  std::string_view type;
+  std::optional<std::string> session;
+  std::optional<std::string> type;
 };
 
 void from_json(const json &obj, AuthenticationData &data_type);
@@ -249,15 +249,15 @@ void from_json(const json &obj, registration_body &data_type);
 void to_json(json &obj, const registration_body &data_type);
 
 struct [[nodiscard]] login_identifier {
-  std::string_view type;
+  std::string type;
   // Union depending on the type for different keys
   // Either m.id.user with a value of "user" or m.id.thirdparty with a value of
   // "medium" and "address" or m.id.phone with a value of "country" and "phone"
-  std::optional<std::string_view> user;
-  std::optional<std::string_view> medium;
-  std::optional<std::string_view> address;
-  std::optional<std::string_view> country;
-  std::optional<std::string_view> phone;
+  std::optional<std::string> user;
+  std::optional<std::string> medium;
+  std::optional<std::string> address;
+  std::optional<std::string> country;
+  std::optional<std::string> phone;
 };
 
 void from_json(const json &obj, login_identifier &data_type);
