@@ -28,8 +28,9 @@
 using namespace client_server_api;
 using json = nlohmann::json;
 
-/// Extract access token from Authorization header or deprecated query parameter.
-/// The query parameter method (?access_token=...) was deprecated in Matrix v1.11.
+/// Extract access token from Authorization header or deprecated query
+/// parameter. The query parameter method (?access_token=...) was deprecated in
+/// Matrix v1.11.
 /// @return The access token if found, or empty string if not present.
 [[nodiscard]] static std::string
 extract_access_token(const HttpRequestPtr &req) {
@@ -261,8 +262,7 @@ void ClientServerCtrl::login_post(
     } catch (json::parse_error &ex) {
       LOG_WARN << "Failed to parse json in login: " << ex.what() << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?",
-                   k400BadRequest);
+                   "Unable to parse json. Is this valid json?", k400BadRequest);
       co_return;
     }
 
@@ -347,8 +347,7 @@ void ClientServerCtrl::register_user(
       LOG_WARN << "Failed to parse json in register_user: " << ex.what()
                << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?",
-                   k400BadRequest);
+                   "Unable to parse json. Is this valid json?", k400BadRequest);
       co_return;
     }
 
@@ -395,7 +394,7 @@ void ClientServerCtrl::register_user(
       // we need to return flows and a session id.
       // TODO: Keep track of running sessions
       client_server_json::FlowInformation dummy_flow = {
-          .stages = {"m.login.dummy"}};
+          .stages = {"m.login.password"}};
       client_server_json::incomplete_registration_resp const reg_resp = {
           .session = random_string(25),
           .flows = {dummy_flow},
@@ -489,8 +488,7 @@ void client_server_api::ClientServerCtrl::getPushrules(
     std::function<void(const HttpResponsePtr &)> &&callback) const {
   drogon::async_run(
       [req, callback = std::move(callback), this]() -> drogon::Task<> {
-        const auto [isValid, userInfo] =
-            co_await getUserInfo(req, callback);
+        const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
         if (!isValid) {
           co_return;
         }
@@ -563,8 +561,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const std::string &roomIdOrAlias) const {
   drogon::async_run([req, roomIdOrAlias, callback = std::move(callback),
                      this]() -> drogon::Task<> {
-    const auto [isValid, userInfo] =
-        co_await getUserInfo(req, callback);
+    const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
     if (!isValid) {
       co_return;
     }
@@ -577,8 +574,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       LOG_WARN << "Failed to parse json in joinRoomIdOrAlias: " << ex.what()
                << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?",
-                   k400BadRequest);
+                   "Unable to parse json. Is this valid json?", k400BadRequest);
       co_return;
     }
 
@@ -605,7 +601,8 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const auto query_string = req->getQuery();
     const auto parsed_params = parseQueryParamString(query_string);
     std::optional<std::vector<std::string>> server_names;
-    if (auto it = parsed_params.find("server_name"); it != parsed_params.end()) {
+    if (auto it = parsed_params.find("server_name");
+        it != parsed_params.end()) {
       server_names = it->second;
     }
 
@@ -837,8 +834,7 @@ void ClientServerCtrl::createRoom(
     std::function<void(const HttpResponsePtr &)> &&callback) const {
   drogon::async_run([req, callback = std::move(callback),
                      this]() -> drogon::Task<> {
-    const auto [isValid, userInfo] =
-        co_await getUserInfo(req, callback);
+    const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
     if (!isValid) {
       co_return;
     }
@@ -851,8 +847,7 @@ void ClientServerCtrl::createRoom(
     } catch (json::parse_error &ex) {
       LOG_WARN << "Failed to parse json in createRoom: " << ex.what() << '\n';
       return_error(callback, "M_NOT_JSON",
-                   "Unable to parse json. Is this valid json?",
-                   k400BadRequest);
+                   "Unable to parse json. Is this valid json?", k400BadRequest);
       co_return;
     }
 
@@ -990,9 +985,8 @@ void ClientServerCtrl::state(
 
       // Per spec, GET /rooms/{roomId}/state/{eventType}/{stateKey} returns
       // only the event content, not the full event envelope
-      const auto &content = json_data.contains("content")
-                                ? json_data["content"]
-                                : json_data;
+      const auto &content =
+          json_data.contains("content") ? json_data["content"] : json_data;
 
       const auto resp = HttpResponse::newHttpResponse();
       resp->setBody(content.dump());
@@ -1088,8 +1082,8 @@ perform_initial_sync(const std::string &user_id,
       joined.state.events = std::move(state_events);
 
       // Get timeline (last N events)
-      auto timeline =
-          co_await Database::get_room_timeline(membership.room_nid, 0, timeline_limit);
+      auto timeline = co_await Database::get_room_timeline(membership.room_nid,
+                                                           0, timeline_limit);
       joined.timeline.events = std::move(timeline.events);
       joined.timeline.limited = timeline.limited;
       joined.timeline.prev_batch = timeline.prev_batch;
@@ -1103,8 +1097,9 @@ perform_initial_sync(const std::string &user_id,
     } else if (membership.membership == "invite") {
       // Invited: stripped state only
       client_server_json::SyncInvitedRoom invited;
-      invited.invite_state.events = co_await Database::get_invite_stripped_state(
-          membership.room_nid, user_id);
+      invited.invite_state.events =
+          co_await Database::get_invite_stripped_state(membership.room_nid,
+                                                       user_id);
       response.rooms.invite[membership.room_id] = std::move(invited);
 
     } else if (membership.membership == "leave" ||
@@ -1198,8 +1193,8 @@ perform_incremental_sync(const std::string &user_id, int64_t since_event_nid,
 }
 
 /// Check if sync response has any data
-[[nodiscard]] static bool sync_response_has_data(
-    const client_server_json::SyncResponse &response) {
+[[nodiscard]] static bool
+sync_response_has_data(const client_server_json::SyncResponse &response) {
   return !response.rooms.join.empty() || !response.rooms.invite.empty() ||
          !response.rooms.leave.empty() || !response.account_data.events.empty();
 }
@@ -1207,134 +1202,128 @@ perform_incremental_sync(const std::string &user_id, int64_t since_event_nid,
 void ClientServerCtrl::sync(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
-  drogon::async_run(
-      [req, callback = std::move(callback), this]() -> drogon::Task<> {
-        // 1. Authenticate
-        const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
-        if (!isValid) {
+  drogon::async_run([req, callback = std::move(callback),
+                     this]() -> drogon::Task<> {
+    // 1. Authenticate
+    const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
+    if (!isValid) {
+      co_return;
+    }
+
+    // 2. Parse query parameters
+    const auto since_token = req->getOptionalParameter<std::string>("since");
+    const auto filter_param = req->getOptionalParameter<std::string>("filter");
+    const bool full_state = req->getOptionalParameter<std::string>("full_state")
+                                .value_or("false") == "true";
+    auto timeout_ms = req->getOptionalParameter<int64_t>("timeout").value_or(0);
+    // Ignored for now: set_presence
+
+    // Default timeout: 30s if not specified (reasonable for reverse proxies)
+    constexpr int64_t default_timeout_ms = 30000;
+    constexpr int64_t max_timeout_ms = 300000; // 5 minutes max
+    if (timeout_ms == 0) {
+      timeout_ms = default_timeout_ms;
+    }
+    if (timeout_ms > max_timeout_ms) {
+      timeout_ms = max_timeout_ms;
+    }
+
+    // 3. Parse since token
+    std::optional<int64_t> since_event_nid;
+    if (since_token.has_value() && !since_token->empty()) {
+      since_event_nid = parse_sync_token(*since_token);
+      if (!since_event_nid.has_value()) {
+        // Invalid token format - return error rather than treating as initial
+        // sync
+        return_error(callback, "M_INVALID_PARAM", "Invalid since token format",
+                     k400BadRequest);
+        co_return;
+      }
+    }
+
+    // 4. Parse or load filter
+    std::optional<json> filter;
+    if (filter_param.has_value() && !filter_param->empty()) {
+      if (filter_param->starts_with("{")) {
+        // Inline filter JSON
+        try {
+          filter = json::parse(*filter_param);
+        } catch (const json::parse_error &e) {
+          return_error(callback, "M_BAD_JSON", "Invalid filter JSON",
+                       k400BadRequest);
           co_return;
         }
-
-        // 2. Parse query parameters
-        const auto since_token =
-            req->getOptionalParameter<std::string>("since");
-        const auto filter_param =
-            req->getOptionalParameter<std::string>("filter");
-        const bool full_state =
-            req->getOptionalParameter<std::string>("full_state").value_or(
-                "false") == "true";
-        auto timeout_ms =
-            req->getOptionalParameter<int64_t>("timeout").value_or(0);
-        // Ignored for now: set_presence
-
-        // Default timeout: 30s if not specified (reasonable for reverse proxies)
-        constexpr int64_t default_timeout_ms = 30000;
-        constexpr int64_t max_timeout_ms = 300000; // 5 minutes max
-        if (timeout_ms == 0) {
-          timeout_ms = default_timeout_ms;
+      } else {
+        // Filter ID - load from database
+        try {
+          filter =
+              co_await Database::get_filter(userInfo->user_id, *filter_param);
+        } catch (const std::exception &e) {
+          return_error(callback, "M_UNKNOWN", "Filter not found", k404NotFound);
+          co_return;
         }
-        if (timeout_ms > max_timeout_ms) {
-          timeout_ms = max_timeout_ms;
-        }
+      }
+    }
 
-        // 3. Parse since token
-        std::optional<int64_t> since_event_nid;
-        if (since_token.has_value() && !since_token->empty()) {
-          since_event_nid = parse_sync_token(*since_token);
-          if (!since_event_nid.has_value()) {
-            // Invalid token format - return error rather than treating as initial sync
-            return_error(callback, "M_INVALID_PARAM",
-                         "Invalid since token format", k400BadRequest);
-            co_return;
-          }
-        }
+    // 5. Perform sync
+    client_server_json::SyncResponse sync_result;
 
-        // 4. Parse or load filter
-        std::optional<json> filter;
-        if (filter_param.has_value() && !filter_param->empty()) {
-          if (filter_param->starts_with("{")) {
-            // Inline filter JSON
-            try {
-              filter = json::parse(*filter_param);
-            } catch (const json::parse_error &e) {
-              return_error(callback, "M_BAD_JSON", "Invalid filter JSON",
-                           k400BadRequest);
-              co_return;
-            }
-          } else {
-            // Filter ID - load from database
-            try {
-              filter =
-                  co_await Database::get_filter(userInfo->user_id, *filter_param);
-            } catch (const std::exception &e) {
-              return_error(callback, "M_UNKNOWN", "Filter not found",
-                           k404NotFound);
-              co_return;
-            }
-          }
-        }
+    if (!since_event_nid.has_value()) {
+      // Initial sync - return immediately
+      sync_result = co_await perform_initial_sync(userInfo->user_id, filter);
+    } else {
+      // Incremental sync with long-polling
+      const int64_t since_nid = *since_event_nid;
+      const auto deadline = std::chrono::steady_clock::now() +
+                            std::chrono::milliseconds(timeout_ms);
+      constexpr auto poll_interval_ms = std::chrono::milliseconds(500);
 
-        // 5. Perform sync
-        client_server_json::SyncResponse sync_result;
+      // First check if data is immediately available
+      sync_result = co_await perform_incremental_sync(
+          userInfo->user_id, since_nid, full_state, filter);
 
-        if (!since_event_nid.has_value()) {
-          // Initial sync - return immediately
-          sync_result =
-              co_await perform_initial_sync(userInfo->user_id, filter);
-        } else {
-          // Incremental sync with long-polling
-          const int64_t since_nid = *since_event_nid;
-          const auto deadline = std::chrono::steady_clock::now() +
-                                std::chrono::milliseconds(timeout_ms);
-          constexpr auto poll_interval_ms = std::chrono::milliseconds(500);
+      if (!sync_response_has_data(sync_result)) {
+        // No data available - block until new events or timeout
+        while (std::chrono::steady_clock::now() < deadline) {
+          // Wait for poll interval or remaining time, whichever is smaller
+          const auto remaining =
+              std::chrono::duration_cast<std::chrono::milliseconds>(
+                  deadline - std::chrono::steady_clock::now());
+          const auto sleep_time = std::min(poll_interval_ms, remaining);
 
-          // First check if data is immediately available
-          sync_result = co_await perform_incremental_sync(
-              userInfo->user_id, since_nid, full_state, filter);
-
-          if (!sync_response_has_data(sync_result)) {
-            // No data available - block until new events or timeout
-            while (std::chrono::steady_clock::now() < deadline) {
-              // Wait for poll interval or remaining time, whichever is smaller
-              const auto remaining =
-                  std::chrono::duration_cast<std::chrono::milliseconds>(
-                      deadline - std::chrono::steady_clock::now());
-              const auto sleep_time = std::min(poll_interval_ms, remaining);
-
-              if (sleep_time.count() <= 0) {
-                break;
-              }
-
-              co_await drogon::sleepCoro(
-                  trantor::EventLoop::getEventLoopOfCurrentThread(),
-                  sleep_time);
-
-              // Check for new events
-              const int64_t current_max =
-                  co_await Database::get_max_event_nid_for_user_rooms(
-                      userInfo->user_id, since_nid);
-
-              if (current_max > since_nid) {
-                // New events available
-                sync_result = co_await perform_incremental_sync(
-                    userInfo->user_id, since_nid, full_state, filter);
-                break;
-              }
-            }
+          if (sleep_time.count() <= 0) {
+            break;
           }
 
-          // If still no data after timeout, return empty response with same token
-          if (!sync_response_has_data(sync_result)) {
-            sync_result.next_batch = generate_sync_token(since_nid);
+          co_await drogon::sleepCoro(
+              trantor::EventLoop::getEventLoopOfCurrentThread(), sleep_time);
+
+          // Check for new events
+          const int64_t current_max =
+              co_await Database::get_max_event_nid_for_user_rooms(
+                  userInfo->user_id, since_nid);
+
+          if (current_max > since_nid) {
+            // New events available
+            sync_result = co_await perform_incremental_sync(
+                userInfo->user_id, since_nid, full_state, filter);
+            break;
           }
         }
+      }
 
-        // 6. Return response
-        const auto resp = HttpResponse::newHttpResponse();
-        resp->setBody(json(sync_result).dump());
-        resp->setContentTypeString(JSON_CONTENT_TYPE);
-        resp->setStatusCode(k200OK);
-        callback(resp);
-        co_return;
-      });
+      // If still no data after timeout, return empty response with same token
+      if (!sync_response_has_data(sync_result)) {
+        sync_result.next_batch = generate_sync_token(since_nid);
+      }
+    }
+
+    // 6. Return response
+    const auto resp = HttpResponse::newHttpResponse();
+    resp->setBody(json(sync_result).dump());
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
+    resp->setStatusCode(k200OK);
+    callback(resp);
+    co_return;
+  });
 }
