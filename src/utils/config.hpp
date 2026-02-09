@@ -108,8 +108,9 @@ struct [[nodiscard]] Config {
     const std::string path = env_var.empty() ? "./config.yaml" : env_var;
 
     if (!std::filesystem::exists(path)) {
-      throw ConfigError("Missing or invalid config.yaml file. Make sure "
-                        "to create it prior to running persephone");
+      throw ConfigError(
+          "Missing or invalid config.yaml file at \"" + path +
+          "\". Make sure to create it prior to running persephone");
     }
 
     const YAML::Node config = YAML::LoadFile(path);
