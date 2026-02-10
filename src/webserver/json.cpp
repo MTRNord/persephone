@@ -433,15 +433,15 @@ void to_json(json &obj, const login_body &data_type) {
 }
 
 void from_json(const json &obj, well_known &data_type) {
-  data_type.m_homeserver = obj["m.homeserver"].get<well_known_m_homeserver>();
+  data_type.m_server = obj["m.server"].get<well_known_m_server>();
   data_type.m_identity_server =
       obj["m.identity_server"].get<well_known_identity_server>();
 }
 
 void to_json(json &obj, const well_known &data_type) {
   obj = nlohmann::json::object();
-  if (data_type.m_homeserver) {
-    obj["m.homeserver"] = data_type.m_homeserver.value();
+  if (data_type.m_server) {
+    obj["m.server"] = data_type.m_server.value();
   }
   if (data_type.m_identity_server) {
     obj["m.identity_server"] = data_type.m_identity_server.value();

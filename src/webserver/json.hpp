@@ -295,11 +295,11 @@ void from_json(const json &obj, login_body &data_type);
 
 void to_json(json &obj, const login_body &data_type);
 
-struct [[nodiscard]] well_known_m_homeserver {
+struct [[nodiscard]] well_known_m_server {
   std::string base_url;
 };
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_m_homeserver, base_url)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_m_server, base_url)
 
 struct [[nodiscard]] well_known_identity_server {
   std::string base_url;
@@ -308,7 +308,7 @@ struct [[nodiscard]] well_known_identity_server {
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(well_known_identity_server, base_url)
 
 struct [[nodiscard]] well_known {
-  std::optional<well_known_m_homeserver> m_homeserver;
+  std::optional<well_known_m_server> m_server;
   std::optional<well_known_identity_server> m_identity_server;
 };
 
