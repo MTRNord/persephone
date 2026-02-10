@@ -176,10 +176,6 @@ Database::validate_access_token(const std::string auth_token) {
         "FROM device_info d, push_exists p",
         auth_token);
 
-    // TMP logging for complement debugging
-    LOG_DEBUG << "Access token: " << auth_token;
-    LOG_DEBUG << "Query result size: " << query.size();
-
     if (query.empty()) {
       co_return false;
     }

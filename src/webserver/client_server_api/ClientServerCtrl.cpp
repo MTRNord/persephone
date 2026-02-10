@@ -17,6 +17,7 @@
 #include <format>
 #include <functional>
 #include <map>
+#include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -74,8 +75,6 @@ void AccessTokenFilter::doFilter(const HttpRequestPtr &req,
                    k401Unauthorized);
       co_return;
     }
-
-    LOG_DEBUG << "Access token: " << access_token;
 
     // Check if the token is valid
     if (co_await Database::validate_access_token(access_token)) {
