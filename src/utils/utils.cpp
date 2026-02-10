@@ -2,6 +2,7 @@
 #include "utils/json_utils.hpp"
 #include "webserver/json.hpp"
 #include <algorithm>
+#include <common.h>
 #include <coroutine>
 #include <cstddef>
 #include <cstdlib>
@@ -19,7 +20,9 @@
 #include <ldns/ldns.h>
 #include <netinet/in.h>
 #include <optional>
+#include <packet.h>
 #include <random>
+#include <resolver.h>
 #include <sodium/crypto_pwhash.h>
 #include <sodium/crypto_sign.h>
 #include <sodium/crypto_sign_ed25519.h>
@@ -188,7 +191,7 @@ get_srv_record(const std::string &address) {
                                                 LDNS_RR_CLASS_IN, LDNS_RD);
   ldns_rdf_deep_free(domain);
 
-  if (!record_packet) {
+  if (record_packet == nullptr) {
     ldns_resolver_deep_free(res);
     throw std::runtime_error("Failed to resolve SRV record");
   }
@@ -205,7 +208,7 @@ get_srv_record(const std::string &address) {
   ldns_rr_list *srv_record = ldns_pkt_rr_list_by_type(
       record_packet, LDNS_RR_TYPE_SRV, LDNS_SECTION_ANSWER);
 
-  if (!srv_record) {
+  if (srv_record == nullptr || ldns_rr_list_rr_count(srv_record) == 0) {
     ldns_pkt_free(record_packet);
     ldns_resolver_deep_free(res);
     throw std::runtime_error("Failed to parse SRV record");
@@ -399,36 +402,45 @@ get_srv_record(const std::string &address) {
  * representing the discovered server.
  */
 [[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name) {
-  /*
-   * If the hostname is an IP literal, then that IP address should be used,
-   * together with the given port number, or 8448 if no port is given. The
-   * target server must present a valid certificate for the IP address. The Host
-   * header in the request should be set to the server name, including the port
-   * if the server name included one.
-   */
   LOG_DEBUG << "Discovering server: " << server_name;
-  // If there is a colon then use the thing after the last colon as the port
-  // otherwise make it an empty optional
-  const std::optional<std::string> port =
-      [&server_name]() -> std::optional<std::string> {
-    if (const auto pos = server_name.find_last_of(':');
-        pos != std::string::npos) {
-      return server_name.substr(pos + 1);
-    }
-    return std::nullopt;
-  }();
-  LOG_DEBUG << "Port: " << port.value_or("None");
-  LOG_DEBUG << "Server name: " << server_name;
 
-  // Server name with the port removed. If no port is given, this is the same as
-  // the server name. Use the port optional to determine if the port should be
-  // removed.
-  auto address = [&server_name, &port]() -> std::string {
-    if (port.has_value()) {
-      return server_name.substr(0, server_name.find_last_of(':'));
+  // Bracket-aware parsing to correctly handle IPv6 bracketed literals.
+  std::optional<std::string> port;
+  std::string address;
+
+  if (!server_name.empty() && server_name.front() == '[') {
+    // Expected form: [IPv6addr] or [IPv6addr]:port
+    if (const auto close_pos = server_name.find(']');
+        close_pos == std::string::npos) {
+      // malformed bracketed literal — treat entire name as address (will fail
+      // later)
+      address = server_name;
+    } else {
+      if (close_pos + 1 < server_name.size() &&
+          server_name[close_pos + 1] == ':') {
+        port = server_name.substr(close_pos + 2);
+      }
+      address = server_name.substr(0, close_pos + 1); // keep brackets for now
     }
-    return server_name;
-  }();
+  } else {
+    // For non-bracketed names: only treat a single colon as host:port.
+    const auto first_colon = server_name.find(':');
+    if (const auto last_colon = server_name.find_last_of(':');
+        first_colon != std::string::npos && first_colon == last_colon) {
+      // single colon -> likely host:port
+      port = server_name.substr(first_colon + 1);
+      address = server_name.substr(0, first_colon);
+    } else {
+      // no colon or multiple colons (unbracketed IPv6) -> treat as no explicit
+      // port
+      address = server_name;
+    }
+  }
+
+  LOG_DEBUG << "Parsed address: " << address
+            << " port: " << port.value_or("None");
+
+  // If IP literal -> return directly (default port if not present)
   if (auto clean_address = remove_brackets(std::string(address));
       check_if_ip_address(clean_address)) {
     unsigned long integer_port = MATRIX_SSL_PORT;
@@ -450,6 +462,25 @@ get_srv_record(const std::string &address) {
    * present a valid certificate for the hostname.
    */
   if (port.has_value()) {
+    try {
+      if (auto ips = resolve_hostname_to_ips(address); !ips.empty()) {
+        co_return ResolvedServer{
+            .address = ips[0],
+            .port = std::stoul(std::string(port.value())),
+            .server_name = std::string(server_name),
+        };
+      } else {
+        LOG_WARN << "No A/AAAA records found for " << address
+                 << ", returning hostname as address per fallback";
+      }
+    } catch (const std::exception &err) {
+      LOG_WARN << "Error resolving hostname to IP for explicit port: "
+               << err.what();
+    } catch (...) {
+      LOG_WARN << "Unknown error resolving hostname to IP for explicit port";
+    }
+
+    // Fallback: return hostname as address (client may resolve it)
     co_return ResolvedServer{
         .address = std::string(address),
         .port = std::stoul(std::string(port.value())),
@@ -485,28 +516,34 @@ get_srv_record(const std::string &address) {
       if (auto [m_server] = body.get<server_server_json::well_known>();
           m_server) {
         auto delegated_server_name = m_server.value();
-        // If there is a colon then use the thing after the last colon as the
-        // port otherwise make it an empty optional
-        const std::optional<std::string> delegated_port =
-            [&delegated_server_name]() -> std::optional<std::string> {
-          if (const auto pos = delegated_server_name.find_last_of(':');
-              pos != std::string::npos) {
-            return delegated_server_name.substr(pos + 1);
-          }
-          return std::nullopt;
-        }();
 
-        // Server name with the port removed. If no port is given, this is the
-        // same as the server name. Use the port optional to determine if the
-        // port should be removed.
-        auto delegated_address = [&delegated_server_name,
-                                  &delegated_port]() -> std::string {
-          if (delegated_port.has_value()) {
-            return delegated_server_name.substr(
-                0, delegated_server_name.find_last_of(':'));
+        // Parse delegated host:port using same bracket-aware logic
+        std::optional<std::string> delegated_port;
+        std::string delegated_address;
+
+        if (!delegated_server_name.empty() &&
+            delegated_server_name.front() == '[') {
+          if (const auto close_pos = delegated_server_name.find(']');
+              close_pos == std::string::npos) {
+            delegated_address = delegated_server_name;
+          } else {
+            if (close_pos + 1 < delegated_server_name.size() &&
+                delegated_server_name[close_pos + 1] == ':') {
+              delegated_port = delegated_server_name.substr(close_pos + 2);
+            }
+            delegated_address = delegated_server_name.substr(0, close_pos + 1);
           }
-          return delegated_server_name;
-        }();
+        } else {
+          const auto first_colon = delegated_server_name.find(':');
+          if (const auto last_colon = delegated_server_name.find_last_of(':');
+              first_colon != std::string::npos && first_colon == last_colon) {
+            delegated_port = delegated_server_name.substr(first_colon + 1);
+            delegated_address = delegated_server_name.substr(0, first_colon);
+          } else {
+            delegated_address = delegated_server_name;
+          }
+        }
+
         if (auto delegated_clean_address =
                 remove_brackets(std::string(delegated_address));
             check_if_ip_address(delegated_clean_address)) {
@@ -519,7 +556,8 @@ get_srv_record(const std::string &address) {
           co_return ResolvedServer{
               .address = std::string(delegated_address),
               .port = integer_port,
-              // TODO: Verify this is correct
+              // Host header should be original server_name per spec,
+              // server_name field remains the original asked server_name.
               .server_name = std::string(server_name),
           };
         }
@@ -527,54 +565,75 @@ get_srv_record(const std::string &address) {
         if (delegated_port.has_value()) {
           LOG_DEBUG << "Delegated server includes an explicit port: "
                     << delegated_port.value();
+          // Resolve delegated_address to IP(s) and use first if available
+          try {
+            if (auto ips = resolve_hostname_to_ips(delegated_address);
+                !ips.empty()) {
+              co_return ResolvedServer{
+                  .address = ips[0],
+                  .port = std::stoul(std::string(delegated_port.value())),
+                  .server_name = std::string(server_name),
+              };
+            } else {
+              LOG_WARN << "No A/AAAA records for delegated host "
+                       << delegated_address << ", returning delegated hostname";
+            }
+          } catch (const std::exception &err) {
+            LOG_WARN << "Error resolving delegated hostname: " << err.what();
+          } catch (...) {
+            LOG_WARN << "Unknown error resolving delegated hostname";
+          }
+
           co_return ResolvedServer{
               .address = std::string(delegated_address),
               .port = std::stoul(std::string(delegated_port.value())),
-              // TODO: Verify this is correct
               .server_name = std::string(server_name),
           };
         }
 
+        // If delegated host has no explicit port, perform SRV lookups on the
+        // delegated host (not the original server_name).
         try {
           if (auto srv_resp = get_srv_record(
-                  std::format("_matrix-fed._tcp.{}", server_name));
+                  std::format("_matrix-fed._tcp.{}", delegated_address));
               !srv_resp.empty()) {
             auto server = co_await pick_srv_server(srv_resp);
             co_return ResolvedServer{
                 .address = server.host,
                 .port = server.port,
-                // TODO: Verify this is correct
                 .server_name = std::string(server_name),
             };
           }
         } catch (const std::exception &err) {
-          LOG_WARN << "Failed to fetch srv record: " << err.what();
+          LOG_WARN << "Failed to fetch srv record for delegated host: "
+                   << err.what();
         } catch (...) {
-          LOG_WARN << "Failed to fetch srv record";
+          LOG_WARN << "Failed to fetch srv record for delegated host";
         }
 
         try {
-          if (auto srv_resp =
-                  get_srv_record(std::format("_matrix._tcp.{}", server_name));
+          if (auto srv_resp = get_srv_record(
+                  std::format("_matrix._tcp.{}", delegated_address));
               !srv_resp.empty()) {
             auto server = co_await pick_srv_server(srv_resp);
             co_return ResolvedServer{
                 .address = server.host,
                 .port = server.port,
-                // TODO: Verify this is correct
                 .server_name = std::string(server_name),
             };
           }
         } catch (const std::exception &err) {
-          LOG_WARN << "Failed to fetch srv record: " << err.what();
+          LOG_WARN << "Failed to fetch srv record for delegated host: "
+                   << err.what();
         } catch (...) {
-          LOG_WARN << "Failed to fetch srv record";
+          LOG_WARN << "Failed to fetch srv record for delegated host";
         }
 
+        // No SRV records for delegated host; use delegated host with default
+        // port
         co_return ResolvedServer{
             .address = std::string(delegated_address),
             .port = MATRIX_SSL_PORT,
-            // TODO: Verify this is correct
             .server_name = std::string(server_name),
         };
       }
@@ -925,4 +984,76 @@ parse_xmatrix_header(std::string_view header) {
   result.signature = std::move(*sig_opt);
 
   return result;
+}
+
+[[nodiscard]] std::vector<std::string>
+resolve_hostname_to_ips(const std::string &hostname) {
+  LOG_DEBUG << "Resolving A/AAAA records for hostname: " << hostname;
+  std::vector<std::string> ips;
+
+  ldns_resolver *res = nullptr;
+  ldns_rdf *domain = ldns_dname_new_frm_str(hostname.c_str());
+  if (domain == nullptr) {
+    LOG_WARN << "Failed to parse domain for A/AAAA resolution: " << hostname;
+    return {};
+  }
+
+  if (ldns_status const status = ldns_resolver_new_frm_file(&res, nullptr);
+      status != LDNS_STATUS_OK) {
+    ldns_rdf_deep_free(domain);
+    LOG_WARN << "Failed to create resolver for A/AAAA lookup: "
+             << ldns_get_errorstr_by_id(status);
+    return {};
+  }
+
+  // Query AAAA first (IPv6), then A (IPv4)
+  for (const auto rr_type : {LDNS_RR_TYPE_AAAA, LDNS_RR_TYPE_A}) {
+    ldns_pkt *record_packet =
+        ldns_resolver_query(res, domain, rr_type, LDNS_RR_CLASS_IN, LDNS_RD);
+    if (record_packet == nullptr) {
+      // continue to next type
+      continue;
+    }
+
+    if (ldns_pkt_get_rcode(record_packet) != LDNS_RCODE_NOERROR) {
+      ldns_pkt_free(record_packet);
+      continue;
+    }
+
+    ldns_rr_list *rr_list =
+        ldns_pkt_rr_list_by_type(record_packet, rr_type, LDNS_SECTION_ANSWER);
+
+    if (rr_list == nullptr) {
+      ldns_pkt_free(record_packet);
+      continue;
+    }
+
+    for (size_t i = 0; i < ldns_rr_list_rr_count(rr_list); ++i) {
+      const ldns_rr *record_rr = ldns_rr_list_rr(rr_list, i);
+      // rdata index 0 holds the address for A/AAAA
+      if (char *raw_addr = ldns_rdf2str(ldns_rr_rdf(record_rr, 0))) {
+        std::string addr = raw_addr;
+        free(raw_addr);
+        // ldns outputs trailing dot for names in some contexts; trim just in
+        // case
+        if (!addr.empty() && addr.back() == '.') {
+          addr.pop_back();
+        }
+        ips.push_back(std::move(addr));
+      }
+    }
+
+    ldns_rr_list_deep_free(rr_list);
+    ldns_pkt_free(record_packet);
+    // If we found addresses of this type, keep them and don't overwrite with
+    // the other type (we still collected both types in order).
+    // continue to next type to append more addresses.
+  }
+
+  ldns_rdf_deep_free(domain);
+  ldns_resolver_deep_free(res);
+
+  LOG_DEBUG << "Resolved addresses for " << hostname << ": "
+            << (ips.empty() ? "<none>" : std::to_string(ips.size()));
+  return ips;
 }

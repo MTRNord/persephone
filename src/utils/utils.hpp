@@ -592,3 +592,8 @@ generate_room_id(const std::string server_name) {
             {"sender", sender},
             {"underride", underride}}}};
 }
+
+// Resolve a hostname to a list of IP address strings (AAAA then A).
+// Returns empty vector on failure to resolve any A/AAAA records.
+[[nodiscard]] std::vector<std::string>
+resolve_hostname_to_ips(const std::string &hostname);
