@@ -42,14 +42,21 @@ fetch_server_keys(const std::string server_name) {
     const auto client = drogon::HttpClient::newHttpClient(url);
     client->enableCookies(false);
 
-    const auto req = drogon::HttpRequest::newHttpRequest();
-    req->setMethod(drogon::Get);
-    req->setPath("/_matrix/key/v2/server");
-    req->addHeader("Host", std::string(resolved.server_name));
-    req->addHeader("User-Agent", UserAgent);
-
-    const auto resp =
-        co_await client->sendRequestCoro(req, DEFAULT_FEDERATION_TIMEOUT);
+    // Use the shared federation_request helper for consistent signing/headers.
+    // The key endpoint is public and does not require X-Matrix auth, so request
+    // skip_auth = true.
+    const auto resp = co_await federation_request(
+        HTTPRequest{.client = client,
+                    .method = drogon::Get,
+                    .path = "/_matrix/key/v2/server",
+                    .key_id = {},
+                    .secret_key = {},
+                    .origin = server_name,
+                    .target = resolved.server_name,
+                    .host_header = build_host_header(resolved),
+                    .content = std::nullopt,
+                    .timeout = DEFAULT_FEDERATION_TIMEOUT,
+                    .skip_auth = true});
 
     if (resp->getStatusCode() != drogon::k200OK) {
       LOG_ERROR << "Failed to fetch server keys from " << server_name

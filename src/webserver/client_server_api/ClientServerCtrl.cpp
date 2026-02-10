@@ -612,6 +612,9 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
          .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
+         // Ensure Host header follows any delegation (delegated host/IP),
+         // by explicitly setting the host header to the discovered server_name.
+         .host_header = build_host_header(server_address),
          .content = nullptr,
          .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
@@ -674,7 +677,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     }
 
     const auto server_name = get_serverpart(roomIdOrAlias);
-    const auto server_address = co_await discover_server(server_name);
+    auto server_address = co_await discover_server(server_name);
     auto address = std::format("https://{}", server_address.address);
     if (server_address.port.has_value()) {
       address = std::format("https://{}:{}", server_address.address,
@@ -699,6 +702,10 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
            .secret_key = key_data.private_key,
            .origin = _config.matrix_config.server_name,
            .target = server_address.server_name,
+           // Ensure Host header follows any delegation (delegated host/IP),
+           // by explicitly setting the host header to the discovered
+           // server_name.
+           .host_header = build_host_header(server_address),
            .content = nullptr,
            .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
@@ -733,13 +740,18 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       // TODO: Try all possible servers
       auto param_server_address =
           co_await discover_server(param_server_name[0]);
-      auto param_address = std::format("https://{}", server_address.address);
+      auto param_address =
+          std::format("https://{}", param_server_address.address);
       if (param_server_address.port.has_value()) {
-        param_address = std::format("https://{}:{}", server_address.address,
-                                    server_address.port.value());
+        param_address =
+            std::format("https://{}:{}", param_server_address.address,
+                        param_server_address.port.value());
       }
       client = HttpClient::newHttpClient(param_address);
       client->setUserAgent(UserAgent);
+      // Use the discovered param server address for subsequent federation
+      // requests in this flow so targets/Host headers are correct.
+      server_address = param_server_address;
 
       room_id = roomIdOrAlias;
     }
@@ -762,6 +774,9 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
+         // Ensure Host header follows any delegation (delegated host/IP),
+         // by explicitly setting the host header to the discovered server_name.
+         .host_header = build_host_header(server_address),
          .content = nullptr,
          .timeout = DEFAULT_FEDERATION_TIMEOUT});
 
@@ -832,6 +847,9 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
          .target = server_address.server_name,
+         // Ensure Host header follows any delegation (delegated host/IP),
+         // by explicitly setting the host header to the discovered server_name.
+         .host_header = build_host_header(server_address),
          .content = signed_event,
          .timeout = DEFAULT_FEDERATION_TIMEOUT});
 

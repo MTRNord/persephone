@@ -253,16 +253,17 @@ FederationSender::deliver_to_server(const std::string &destination) {
                         resolved.port.value()),
             trantor::EventLoop::getEventLoopOfCurrentThread());
 
-        const auto response =
-            co_await federation_request(HTTPRequest{.client = client,
-                                                    .method = drogon::Put,
-                                                    .path = path,
-                                                    .key_id = _key_id,
-                                                    .secret_key = _secret_key,
-                                                    .origin = _server_name,
-                                                    .target = destination,
-                                                    .content = transaction_body,
-                                                    .timeout = 30});
+        const auto response = co_await federation_request(
+            HTTPRequest{.client = client,
+                        .method = drogon::Put,
+                        .path = path,
+                        .key_id = _key_id,
+                        .secret_key = _secret_key,
+                        .origin = _server_name,
+                        .target = destination,
+                        .host_header = build_host_header(resolved),
+                        .content = transaction_body,
+                        .timeout = 30});
 
         if (response && response->getStatusCode() == drogon::k200OK) {
           // Success - delete queue entries and mark server as healthy

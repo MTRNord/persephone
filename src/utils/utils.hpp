@@ -67,8 +67,19 @@ struct [[nodiscard]] HTTPRequest {
   std::vector<unsigned char> secret_key;
   std::string origin;
   std::string target;
+  // Optional explicit Host header to send with the request. If set, callers
+  // expect federation_request() to use this value for the HTTP `Host` header
+  // instead of `target`. This is useful for cases such as .well-known
+  // delegation to an IP literal or when a delegated hostname must be used in
+  // the Host/SNI fields while the network connection is made to a resolved IP.
+  std::optional<std::string> host_header;
   std::optional<json> content;
   int timeout;
+  // If true, skip adding the X-Matrix server-server Authorization header.
+  // This is useful for public federation endpoints (e.g. GET
+  // /_matrix/key/v2/server) where no signed Authorization is required. Default
+  // false.
+  bool skip_auth = false;
 };
 
 struct [[nodiscard]] VerifyKeyData {
@@ -77,6 +88,12 @@ struct [[nodiscard]] VerifyKeyData {
   const std::string key_id;
   const std::string key_type;
 };
+/// Build a canonical Host header string from a ResolvedServer returned by
+/// discover_server(). This preserves IPv6 brackets and appends the port when
+/// a port is present and the server_name does not already include an explicit
+/// host:port. Callers should use this to ensure Host header construction is
+/// consistent across all federation HTTP clients.
+std::string build_host_header(const ResolvedServer &r);
 
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                   const std::string errorcode, const std::string error,

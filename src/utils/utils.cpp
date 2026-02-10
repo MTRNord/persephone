@@ -553,9 +553,10 @@ get_srv_record(const std::string &address) {
           co_return ResolvedServer{
               .address = std::string(delegated_address),
               .port = integer_port,
-              // Host header should be original server_name per spec,
-              // server_name field remains the original asked server_name.
-              .server_name = std::string(server_name),
+              // For IP delegation use the delegated IP for Host header / SNI
+              // per the Matrix spec: requests must be made with a Host header
+              // containing the IP address (including the port if provided).
+              .server_name = std::string(delegated_address),
           };
         }
 
@@ -569,7 +570,8 @@ get_srv_record(const std::string &address) {
               co_return ResolvedServer{
                   .address = ips[0],
                   .port = std::stoul(std::string(delegated_port.value())),
-                  .server_name = std::string(server_name),
+                  // Use delegated host for Host header / SNI per spec
+                  .server_name = std::string(delegated_address),
               };
             } else {
               LOG_WARN << "No A/AAAA records for delegated host "
@@ -584,7 +586,8 @@ get_srv_record(const std::string &address) {
           co_return ResolvedServer{
               .address = std::string(delegated_address),
               .port = std::stoul(std::string(delegated_port.value())),
-              .server_name = std::string(server_name),
+              // Use delegated host for Host header / SNI per spec
+              .server_name = std::string(delegated_address),
           };
         }
 
@@ -598,7 +601,8 @@ get_srv_record(const std::string &address) {
             co_return ResolvedServer{
                 .address = server.host,
                 .port = server.port,
-                .server_name = std::string(server_name),
+                // Use delegated host for Host header / SNI per spec
+                .server_name = std::string(delegated_address),
             };
           }
         } catch (const std::exception &err) {
@@ -616,7 +620,8 @@ get_srv_record(const std::string &address) {
             co_return ResolvedServer{
                 .address = server.host,
                 .port = server.port,
-                .server_name = std::string(server_name),
+                // Use delegated host for Host header / SNI per spec
+                .server_name = std::string(delegated_address),
             };
           }
         } catch (const std::exception &err) {
@@ -631,7 +636,8 @@ get_srv_record(const std::string &address) {
         co_return ResolvedServer{
             .address = std::string(delegated_address),
             .port = MATRIX_SSL_PORT,
-            .server_name = std::string(server_name),
+            // Use delegated host for Host header / SNI per spec
+            .server_name = std::string(delegated_address),
         };
       }
     }
@@ -801,24 +807,59 @@ parseQueryParamString(const std::string &queryString) {
  * @return A Task that will eventually contain the HTTP response from the
  * server.
  */
+[[nodiscard]] std::string build_host_header(const ResolvedServer &r) {
+  // Build a canonical Host header value from the ResolvedServer.
+  // Preserve IPv6 bracket notation and append the resolved port when present
+  // and the server_name does not already include an explicit host:port.
+  std::string host = r.server_name;
+  if (r.port.has_value()) {
+    const unsigned long port = r.port.value();
+    // If server_name already contains a colon and is NOT a bracketed IPv6
+    // literal (i.e. ']' not present), we assume it already contains an
+    // explicit port and do not append.
+    const bool has_explicit_port = (host.find(':') != std::string::npos &&
+                                    host.find(']') == std::string::npos);
+    if (!has_explicit_port) {
+      host += ":" + std::to_string(port);
+    }
+  }
+  return host;
+}
+
 [[nodiscard]] Task<drogon::HttpResponsePtr>
 federation_request(const HTTPRequest request) {
-  const AuthheaderData authheader_data{
-      .server_name = request.origin,
-      .key_id = request.key_id,
-      .secret_key = request.secret_key,
-      .method = drogon_to_string_method(request.method),
-      .request_uri = request.path,
-      .origin = request.origin,
-      .target = request.target,
-      .content = request.content};
-  const auto auth_header = generate_ss_authheader(authheader_data);
   const auto req = HttpRequest::newHttpRequest();
   req->setMethod(request.method);
   req->setPath(std::string(request.path));
-  req->addHeader("Authorization", auth_header);
+
+  // Add Authorization header unless the caller explicitly requested to skip it.
+  // This allows callers (e.g. GET /_matrix/key/v2/server) to reuse this helper
+  // for unauthenticated federation endpoints.
+  if (!request.skip_auth) {
+    const AuthheaderData authheader_data{
+        .server_name = request.origin,
+        .key_id = request.key_id,
+        .secret_key = request.secret_key,
+        .method = drogon_to_string_method(request.method),
+        .request_uri = request.path,
+        .origin = request.origin,
+        .target = request.target,
+        .content = request.content};
+    const auto auth_header = generate_ss_authheader(authheader_data);
+    req->addHeader("Authorization", auth_header);
+  }
+
   req->removeHeader("Host");
-  req->addHeader("Host", std::string(request.target));
+  // Use explicit host_header if provided by the caller (e.g. delegated
+  // hostname or IP from discovery). Otherwise fall back to the logical
+  // destination (request.target).
+  if (request.host_header.has_value()) {
+    req->addHeader("Host", request.host_header.value());
+  } else {
+    req->addHeader("Host", std::string(request.target));
+  }
+
+  request.client->setUserAgent(UserAgent);
 
   co_return co_await request.client->sendRequestCoro(req, request.timeout);
 }
