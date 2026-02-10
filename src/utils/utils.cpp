@@ -19,7 +19,6 @@
 #include <ldns/ldns.h>
 #include <netinet/in.h>
 #include <optional>
-#include <packet.h>
 #include <random>
 #include <resolver.h>
 #include <sodium/crypto_pwhash.h>
