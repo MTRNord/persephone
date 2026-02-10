@@ -28,8 +28,7 @@ RUN --mount=type=cache,target=/var/cache/dnf \
     jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel \
     uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel c-ares-devel \
     gcc gcc-c++ make ccache; \
-    fi && \
-    dnf clean all
+    fi
 
 # If cross-compiling to arm64, write a simple CMake platform file that points to aarch64 compilers/sysroot.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
@@ -108,8 +107,7 @@ FROM fedora:42 AS runtime
 
 # Install only runtime libraries. Keep package cache for faster layers when possible.
 RUN --mount=type=cache,target=/var/cache/dnf \
-    dnf -y install c-ares spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
-    dnf clean all
+    dnf -y install c-ares spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib
 
 COPY --from=builder /persephone /persephone
 
