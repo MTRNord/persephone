@@ -96,6 +96,25 @@ struct [[nodiscard]] VerifyKeyData {
 std::string build_host_header(const ResolvedServer &r);
 [[nodiscard]] std::string build_server_url(const ResolvedServer &r);
 
+// Strip any IPv6 zone identifier (e.g. \"fe80::1%eth0\" -> \"fe80::1\").
+std::string strip_ipv6_zone_id(const std::string &s);
+
+// Create a drogon HttpClient appropriate for the ResolvedServer. If the
+// delegated server_name is an IP literal, the implementation will use the
+// ip+port constructor (no SNI). If it's a hostname, the hostString
+// constructor will be used so that the client's domain_/SNI is set to the
+// hostname. The optional loop parameter allows specifying the trantor
+// EventLoop.
+drogon::HttpClientPtr
+create_http_client_for_resolved(const ResolvedServer &r,
+                                trantor::EventLoop *loop = nullptr);
+
+// Convenience helpers used by various call sites: create an HttpClient from a
+// host and port, or from a host string (host may include brackets/zone id).
+drogon::HttpClientPtr create_http_client_for_host_port(const std::string &host,
+                                                       uint16_t port);
+drogon::HttpClientPtr create_http_client_for_host(const std::string &host);
+
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                   const std::string errorcode, const std::string error,
                   const HttpStatusCode status_code);

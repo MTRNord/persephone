@@ -35,14 +35,15 @@ fetch_server_keys(const std::string server_name) {
     const auto resolved = co_await discover_server(server_name);
 
     drogon::HttpClientPtr client;
-    // Try to construct the HttpClient using the canonical server URL. If that
-    // for some reason fails (e.g. library-side URL validation), we error.
+    // Construct the HttpClient using the centralized helper which selects the
+    // appropriate drogon constructor (ip+port vs hostString) and normalizes
+    // IPv6 zone ids. If construction fails, return nullopt.
     try {
-      client = drogon::HttpClient::newHttpClient(build_server_url(resolved));
+      client = create_http_client_for_resolved(resolved);
     } catch (const std::exception &e) {
-      LOG_ERROR << "build_server_url() client creation failed for "
-                << server_name << ": " << e.what()
-                << " — falling back to resolved.server_name";
+      LOG_ERROR
+          << "create_http_client_for_resolved() client creation failed for "
+          << server_name << ": " << e.what();
       co_return std::nullopt;
     }
     client->enableCookies(false);

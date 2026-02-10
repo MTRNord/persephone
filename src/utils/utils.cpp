@@ -269,8 +269,8 @@ get_srv_record(const std::string &address) {
 [[nodiscard]] Task<bool> isServerReachable(const SRVRecord server) {
   LOG_DEBUG << "Checking if server is reachable: https://" << server.host << ":"
             << server.port;
-  const auto client = HttpClient::newHttpClient(
-      std::format("https://{}:{}", server.host, server.port));
+  const auto client = create_http_client_for_host_port(
+      server.host, static_cast<uint16_t>(server.port));
   client->setUserAgent(UserAgent);
 
   const auto req = HttpRequest::newHttpRequest();
@@ -486,8 +486,7 @@ get_srv_record(const std::string &address) {
   }
 
   LOG_DEBUG << "Discovering server's well-known endpoint";
-  auto client =
-      HttpClient::newHttpClient(std::format("https://{}", server_name));
+  auto client = create_http_client_for_host(server_name);
   client->setUserAgent(UserAgent);
 
   auto req = HttpRequest::newHttpRequest();
@@ -876,6 +875,119 @@ parseQueryParamString(const std::string &queryString) {
     return std::format("https://{}:{}", host, r.port.value());
   }
   return std::format("https://{}", host);
+}
+
+/**
+ * Helpers to create a drogon HttpClient from discovery results.
+ *
+ * Rules:
+ * - If the delegated server_name is an IP literal, use the ip+port constructor
+ *   (drogon::HttpClient::newHttpClient(ip, port, ...)). This avoids SNI being
+ *   set to an IP literal (SNI should not be an IP) and avoids URL-parsing /
+ *   bracketing/zone-id issues.
+ * - If the delegated server_name is a hostname, use the hostString constructor
+ *   (drogon::HttpClient::newHttpClient("https://host[:port]", ...)) so that the
+ *   library sets `domain_` / SNI to the hostname (required for virtual hosts).
+ *
+ * These helpers centralize the logic so all call sites behave consistently.
+ */
+
+/**
+ * Strip any IPv6 zone identifier (\"%...\") from the provided address string.
+ * For example: \"fe80::1%eth0\" -> \"fe80::1\".
+ */
+std::string strip_ipv6_zone_id(const std::string &s) {
+  const auto pos = s.find('%');
+  if (pos == std::string::npos) {
+    return s;
+  }
+  return s.substr(0, pos);
+}
+
+/**
+ * Create an HttpClient for a ResolvedServer.
+ *
+ * The optional loop parameter can be used to specify the trantor EventLoop to
+ * use. If loop is nullptr, the current thread's EventLoop is used.
+ */
+drogon::HttpClientPtr
+create_http_client_for_resolved(const ResolvedServer &r,
+                                trantor::EventLoop *loop) {
+  using trantor::EventLoop;
+
+  // Choose the event loop to use.
+  trantor::EventLoop *use_loop =
+      (loop == nullptr ? EventLoop::getEventLoopOfCurrentThread() : loop);
+
+  // Prefer the delegated server_name for deciding SNI vs ip connection.
+  // Normalize by removing brackets then strip any IPv6 zone id.
+  std::string server_name = remove_brackets(r.server_name);
+  server_name = strip_ipv6_zone_id(server_name);
+
+  const bool server_name_is_ip = check_if_ip_address(server_name);
+  const uint16_t port = static_cast<uint16_t>(r.port.value_or(MATRIX_SSL_PORT));
+
+  if (server_name_is_ip) {
+    // Debug: show we are using the IP-path (no SNI) and which IP/port.
+    LOG_DEBUG << "create_http_client_for_resolved: using ip path ip="
+              << server_name << " port=" << port;
+    // Use ip+port constructor: no SNI will be set.
+    return drogon::HttpClient::newHttpClient(server_name, port, /*useSSL=*/true,
+                                             use_loop);
+  } else {
+    // Use hostString constructor so SNI=hostname. Include explicit port if
+    // provided.
+    std::string hostString = std::format("https://{}", r.server_name);
+    if (r.port.has_value()) {
+      hostString += ":" + std::to_string(r.port.value());
+    }
+    // Debug: show we are using the hostname path and the exact hostString used.
+    LOG_DEBUG
+        << "create_http_client_for_resolved: using hostname path hostname="
+        << r.server_name << " hostString=" << hostString;
+    return drogon::HttpClient::newHttpClient(hostString, use_loop);
+  }
+}
+
+/**
+ * Create an HttpClient from a host and port. This helper normalizes the host
+ * (removes brackets and IPv6 zone ids) and chooses between ip+port vs
+ * hostString constructors as appropriate.
+ */
+drogon::HttpClientPtr create_http_client_for_host_port(const std::string &host,
+                                                       uint16_t port) {
+  using trantor::EventLoop;
+
+  // Normalize host (remove brackets and any ipv6 zone id) to decide whether
+  // it's an IP literal or hostname.
+  std::string normalized = remove_brackets(host);
+  normalized = strip_ipv6_zone_id(normalized);
+
+  const bool host_is_ip = check_if_ip_address(normalized);
+  if (host_is_ip) {
+    // Debug: show we are using the ip+port constructor for this host/port.
+    LOG_DEBUG << "create_http_client_for_host_port: using ip path ip="
+              << normalized << " port=" << port;
+    // Use ip+port constructor to avoid setting SNI to an IP literal.
+    return drogon::HttpClient::newHttpClient(
+        normalized, port, /*useSSL=*/true,
+        EventLoop::getEventLoopOfCurrentThread());
+  } else {
+    // Host is a hostname; use the hostString constructor so SNI is set.
+    const std::string hostString = std::format("https://{}:{}", host, port);
+    // Debug: show we are using the hostname path and the exact hostString used.
+    LOG_DEBUG
+        << "create_http_client_for_host_port: using hostname path hostString="
+        << hostString;
+    return drogon::HttpClient::newHttpClient(
+        hostString, EventLoop::getEventLoopOfCurrentThread());
+  }
+}
+
+drogon::HttpClientPtr create_http_client_for_host(const std::string &host) {
+  // Default to MATRIX_SSL_PORT when no explicit port is provided.
+  return create_http_client_for_host_port(
+      host, static_cast<uint16_t>(MATRIX_SSL_PORT));
 }
 
 [[nodiscard]] Task<drogon::HttpResponsePtr>

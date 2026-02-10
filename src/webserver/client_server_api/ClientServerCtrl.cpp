@@ -588,8 +588,7 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
     }
 
     const auto server_address = co_await discover_server(server_name);
-    const auto client =
-        HttpClient::newHttpClient(build_server_url(server_address));
+    const auto client = create_http_client_for_resolved(server_address);
     client->setUserAgent(UserAgent);
 
     const auto key_data = get_verify_key_data(_config);
@@ -674,7 +673,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     const auto server_name = get_serverpart(roomIdOrAlias);
     auto server_address = co_await discover_server(server_name);
-    auto client = HttpClient::newHttpClient(build_server_url(server_address));
+    auto client = create_http_client_for_resolved(server_address);
     client->setUserAgent(UserAgent);
 
     std::string room_id;
@@ -731,8 +730,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       // TODO: Try all possible servers
       auto param_server_address =
           co_await discover_server(param_server_name[0]);
-      client =
-          HttpClient::newHttpClient(build_server_url(param_server_address));
+      client = create_http_client_for_resolved(param_server_address);
       client->setUserAgent(UserAgent);
       // Use the discovered param server address for subsequent federation
       // requests in this flow so targets/Host headers are correct.
