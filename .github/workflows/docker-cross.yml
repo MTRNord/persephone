@@ -126,7 +126,7 @@ jobs:
           cache-from: type=gha,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
           cache-to: type=gha,mode=max,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
           build-args: |
-            DROGON_REV=${{ github.event.release.tag_name }}
+            DROGON_REV=master
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=registry,local=false
