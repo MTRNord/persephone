@@ -20,13 +20,13 @@ RUN --mount=type=cache,id=dnf-${TARGETARCH},target=/var/cache/dnf \
     dnf -y install --setopt=keepcache=1 \
     libevent-devel libicu-devel libasan libubsan libsodium-devel libpq-devel \
     jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel \
-    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel \
+    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel c-ares-devel \
     gcc-aarch64-linux-gnu gcc-c++-aarch64-linux-gnu aarch64-linux-gnu-glibc ccache; \
     else \
     dnf -y install --setopt=keepcache=1 \
     libevent-devel libicu-devel libasan libubsan libsodium-devel libpq-devel \
     jsoncpp-devel hiredis-devel ldns ldns-devel yaml-cpp yaml-cpp-devel \
-    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel \
+    uuid-devel zlib-devel clang-tools-extra ninja-build cmake git clang spdlog-devel c-ares-devel \
     gcc gcc-c++ make ccache; \
     fi && \
     dnf clean all
@@ -108,7 +108,7 @@ FROM fedora:42 AS runtime
 
 # Install only runtime libraries. Keep package cache for faster layers when possible.
 RUN --mount=type=cache,id=dnf-${TARGETARCH},target=/var/cache/dnf \
-    dnf -y install spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
+    dnf -y install c-ares spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
     dnf clean all
 
 COPY --from=builder /persephone /persephone
