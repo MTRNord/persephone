@@ -96,7 +96,7 @@ Database::create_user(Database::UserCreationData const data) {
 }
 
 [[nodiscard]] drogon::Task<bool>
-Database::user_exists(std::string_view matrix_id) {
+Database::user_exists(const std::string matrix_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -117,7 +117,7 @@ Database::user_exists(std::string_view matrix_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::UserInfo>>
-Database::get_user_info(const std::string_view auth_token) {
+Database::get_user_info(const std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -155,7 +155,7 @@ Database::get_user_info(const std::string_view auth_token) {
 }
 
 [[nodiscard]] drogon::Task<bool>
-Database::validate_access_token(std::string_view auth_token) {
+Database::validate_access_token(const std::string auth_token) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -270,7 +270,7 @@ Database::login(const LoginData login_data) {
 
 [[nodiscard]] drogon::Task<void>
 Database::add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
-                   std::vector<json> events, const std::string_view room_id) {
+                   std::vector<json> events, const std::string room_id) {
   try {
     for (const auto &event : events) {
       co_await Database::add_event(transaction, event, room_id);
@@ -353,7 +353,7 @@ static drogon::Task<int64_t> calculate_event_depth(
 
 [[nodiscard]] drogon::Task<void>
 Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
-                    json event, const std::string_view room_id) {
+                    json event, const std::string room_id) {
   const std::string auth_events_str = format_auth_events_array(event);
   LOG_DEBUG << "Auth events: " << auth_events_str;
 
@@ -489,9 +489,9 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
  * and not as a full PDU
  */
 [[nodiscard]] drogon::Task<json>
-Database::get_state_event(const std::string_view room_id,
-                          const std::string_view event_type,
-                          const std::string_view state_key) {
+Database::get_state_event(const std::string room_id,
+                          const std::string event_type,
+                          const std::string state_key) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -628,7 +628,7 @@ drogon::Task<json> Database::get_filter(std::string user_id,
 }
 
 [[nodiscard]] drogon::Task<bool>
-Database::room_exists(std::string_view room_id) {
+Database::room_exists(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -650,7 +650,7 @@ Database::room_exists(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<std::string>>
-Database::get_room_version(std::string_view room_id) {
+Database::get_room_version(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -689,7 +689,7 @@ Database::get_room_version(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<std::string>>
-Database::get_membership(std::string_view room_id, std::string_view user_id) {
+Database::get_membership(const std::string room_id, const std::string user_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -729,7 +729,7 @@ Database::get_membership(std::string_view room_id, std::string_view user_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<json>>
-Database::get_join_rules(std::string_view room_id) {
+Database::get_join_rules(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -761,8 +761,8 @@ Database::get_join_rules(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::AuthEventsForJoin>>
-Database::get_auth_events_for_join(std::string_view room_id,
-                                   std::string_view user_id) {
+Database::get_auth_events_for_join(const std::string room_id,
+                                   const std::string user_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -831,7 +831,7 @@ Database::get_auth_events_for_join(std::string_view room_id,
 }
 
 [[nodiscard]] drogon::Task<std::vector<std::string>>
-Database::get_room_heads(std::string_view room_id) {
+Database::get_room_heads(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -880,7 +880,7 @@ Database::get_room_heads(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<int64_t>
-Database::get_max_depth(std::string_view room_id) {
+Database::get_max_depth(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -900,8 +900,8 @@ Database::get_max_depth(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<Database::CachedServerKey>>
-Database::get_cached_server_key(std::string_view server_name,
-                                std::string_view key_id) {
+Database::get_cached_server_key(const std::string server_name,
+                                const std::string key_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -929,10 +929,9 @@ Database::get_cached_server_key(std::string_view server_name,
   }
 }
 
-[[nodiscard]] drogon::Task<void>
-Database::cache_server_key(std::string_view server_name,
-                           std::string_view key_id, std::string_view public_key,
-                           int64_t valid_until_ts) {
+[[nodiscard]] drogon::Task<void> Database::cache_server_key(
+    const std::string server_name, const std::string key_id,
+    const std::string public_key, int64_t valid_until_ts) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -989,14 +988,15 @@ Database::cleanup_expired_server_keys(int64_t max_age_ms) {
 // ============================================================================
 
 [[nodiscard]] drogon::Task<std::vector<Database::RoomMembership>>
-Database::get_user_room_memberships(std::string_view user_id) {
+Database::get_user_room_memberships(const std::string user_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
     std::terminate();
   }
   try {
-    // Get all rooms where user has a membership state event (current state only)
+    // Get all rooms where user has a membership state event (current state
+    // only)
     const auto query = co_await sql->execSqlCoro(
         "SELECT r.room_id, r.room_nid, "
         "ej.json->'content'->>'membership' AS membership, "
@@ -1075,10 +1075,10 @@ Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
     // Cast since_event_nid to int to match SERIAL (int4) column type for
     // Drogon's binary protocol
     const auto since_nid = static_cast<int>(since_event_nid);
-    const auto count_query = co_await sql->execSqlCoro(
-        "SELECT COUNT(*) as total FROM events "
-        "WHERE room_nid = $1 AND event_nid > $2",
-        room_nid, since_nid);
+    const auto count_query =
+        co_await sql->execSqlCoro("SELECT COUNT(*) as total FROM events "
+                                  "WHERE room_nid = $1 AND event_nid > $2",
+                                  room_nid, since_nid);
 
     const int64_t total_events = count_query.at(0)["total"].as<int64_t>();
     result.limited = total_events > limit;
@@ -1106,9 +1106,11 @@ Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
     // Set prev_batch for pagination if limited
     if (result.limited && first_event_nid > 0) {
       // The prev_batch token points to before the first event we returned
-      result.prev_batch = std::format("ps_{}_{}", first_event_nid - 1,
-          std::chrono::duration_cast<std::chrono::milliseconds>(
-              std::chrono::system_clock::now().time_since_epoch()).count());
+      result.prev_batch =
+          std::format("ps_{}_{}", first_event_nid - 1,
+                      std::chrono::duration_cast<std::chrono::milliseconds>(
+                          std::chrono::system_clock::now().time_since_epoch())
+                          .count());
     }
 
     co_return result;
@@ -1155,7 +1157,7 @@ Database::get_state_delta(int room_nid, int64_t from_event_nid,
 }
 
 [[nodiscard]] drogon::Task<std::vector<json>>
-Database::get_account_data(std::string_view user_id) {
+Database::get_account_data(const std::string user_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -1183,8 +1185,8 @@ Database::get_account_data(std::string_view user_id) {
 }
 
 [[nodiscard]] drogon::Task<std::vector<json>>
-Database::get_room_account_data([[maybe_unused]] std::string_view user_id,
-                                [[maybe_unused]] std::string_view room_id) {
+Database::get_room_account_data([[maybe_unused]] const std::string user_id,
+                                [[maybe_unused]] const std::string room_id) {
   // Room-specific account data uses a different table or column
   // For now return empty - can be implemented when room account data is needed
   // TODO: Implement room-specific account data when needed
@@ -1198,8 +1200,8 @@ Database::get_room_account_data([[maybe_unused]] std::string_view user_id,
     std::terminate();
   }
   try {
-    const auto query =
-        co_await sql->execSqlCoro("SELECT COALESCE(MAX(event_nid), 0) AS max_nid FROM events");
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT COALESCE(MAX(event_nid), 0) AS max_nid FROM events");
 
     co_return query.at(0)["max_nid"].as<int64_t>();
   } catch (const drogon::orm::DrogonDbException &e) {
@@ -1209,7 +1211,7 @@ Database::get_room_account_data([[maybe_unused]] std::string_view user_id,
 }
 
 [[nodiscard]] drogon::Task<int64_t>
-Database::get_max_event_nid_for_user_rooms(std::string_view user_id,
+Database::get_max_event_nid_for_user_rooms(const std::string user_id,
                                            int64_t since_event_nid) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
@@ -1244,7 +1246,7 @@ Database::get_max_event_nid_for_user_rooms(std::string_view user_id,
 
 [[nodiscard]] drogon::Task<std::vector<json>>
 Database::get_invite_stripped_state(int room_nid,
-                                    std::string_view invited_user_id) {
+                                    const std::string invited_user_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -1292,7 +1294,7 @@ Database::get_invite_stripped_state(int room_nid,
 }
 
 [[nodiscard]] drogon::Task<std::vector<json>>
-Database::get_auth_chain(std::string_view room_id) {
+Database::get_auth_chain(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -1332,7 +1334,7 @@ Database::get_auth_chain(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::vector<std::string>>
-Database::get_servers_in_room(std::string_view room_id) {
+Database::get_servers_in_room(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -1369,7 +1371,7 @@ Database::get_servers_in_room(std::string_view room_id) {
 }
 
 [[nodiscard]] drogon::Task<std::optional<int>>
-Database::get_room_nid(std::string_view room_id) {
+Database::get_room_nid(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
   if (sql == nullptr) {
     LOG_FATAL << "No database connection available";
@@ -1377,14 +1379,59 @@ Database::get_room_nid(std::string_view room_id) {
   }
   try {
     const auto query = co_await sql->execSqlCoro(
-        "SELECT room_nid FROM rooms WHERE room_id = $1",
-        std::string(room_id));
+        "SELECT room_nid FROM rooms WHERE room_id = $1", std::string(room_id));
 
     if (query.empty()) {
       co_return std::nullopt;
     }
 
     co_return query.at(0)["room_nid"].as<int>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_room_nid failed: " << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::optional<std::string>>
+Database::room_exists_by_alias(const std::string room_alias) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Find the room by it's alias by checking for canonical alias or alias
+    // state events with the given alias. We can use timelines where the end
+    // index is null to get the current canonical alias and aliases for each
+    // room, and then filter in C++.
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT r.room_id, ej.json FROM temporal_state ts "
+        "JOIN rooms r ON r.room_nid = ts.room_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "WHERE et.event_type IN ('m.room.aliases', 'm.room.canonical_alias') "
+        "AND ts.end_index IS NULL");
+    for (const auto &row : query) {
+      const auto room_id = row["room_id"].as<std::string>();
+      const auto event_json = json::parse(row["json"].as<std::string>());
+      const auto event_type = event_json.value("type", "");
+
+      if (const auto content = event_json.value("content", json::object());
+          event_type == "m.room.canonical_alias" && content.contains("alias")) {
+        if (content["alias"].get<std::string>() == room_alias) {
+          co_return room_id;
+        }
+      } else if (event_type == "m.room.aliases" &&
+                 content.contains("aliases")) {
+        for (const auto &alias : content["aliases"]) {
+          if (alias.get<std::string>() == room_alias) {
+            co_return room_id;
+          }
+        }
+      }
+    }
+    co_return std::nullopt;
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << "get_room_nid failed: " << e.base().what();
     co_return std::nullopt;

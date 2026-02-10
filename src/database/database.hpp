@@ -60,29 +60,28 @@ public:
   create_user(UserCreationData const data);
 
   [[nodiscard]] static drogon::Task<bool>
-  user_exists(std::string_view matrix_id);
+  user_exists(const std::string matrix_id);
 
   [[nodiscard]] static drogon::Task<std::optional<Database::UserInfo>>
-  get_user_info(const std::string_view auth_token);
+  get_user_info(const std::string auth_token);
 
   [[nodiscard]] static drogon::Task<bool>
-  validate_access_token(std::string_view auth_token);
+  validate_access_token(const std::string auth_token);
 
   [[nodiscard]] static drogon::Task<client_server_json::login_resp>
   login(LoginData login_data);
 
   [[nodiscard]] static drogon::Task<void>
   add_room(const std::shared_ptr<drogon::orm::Transaction> transaction,
-           std::vector<json> events, const std::string_view room_id);
+           std::vector<json> events, const std::string room_id);
 
   [[nodiscard]] static drogon::Task<void>
   add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
-            json event, const std::string_view room_id);
+            json event, const std::string room_id);
 
   [[nodiscard]] static drogon::Task<json>
-  get_state_event(const std::string_view room_id,
-                  const std::string_view event_type,
-                  const std::string_view state_key);
+  get_state_event(const std::string room_id, const std::string event_type,
+                  const std::string state_key);
 
   [[nodiscard]] static drogon::Task<json>
   get_pushrules_for_user(const std::string user_id);
@@ -94,16 +93,17 @@ public:
                                                      std::string filter_id);
 
   // Room query methods for federation
-  [[nodiscard]] static drogon::Task<bool> room_exists(std::string_view room_id);
+  [[nodiscard]] static drogon::Task<bool>
+  room_exists(const std::string room_id);
 
   [[nodiscard]] static drogon::Task<std::optional<std::string>>
-  get_room_version(std::string_view room_id);
+  get_room_version(const std::string room_id);
 
   [[nodiscard]] static drogon::Task<std::optional<std::string>>
-  get_membership(std::string_view room_id, std::string_view user_id);
+  get_membership(const std::string room_id, const std::string user_id);
 
   [[nodiscard]] static drogon::Task<std::optional<json>>
-  get_join_rules(std::string_view room_id);
+  get_join_rules(const std::string room_id);
 
   /// Get events needed for auth_events in a join event
   /// Returns: create event, power_levels, join_rules, and optionally
@@ -116,15 +116,16 @@ public:
   };
 
   [[nodiscard]] static drogon::Task<std::optional<AuthEventsForJoin>>
-  get_auth_events_for_join(std::string_view room_id, std::string_view user_id);
+  get_auth_events_for_join(const std::string room_id,
+                           const std::string user_id);
 
   /// Get the current room head events (latest events with no children)
   [[nodiscard]] static drogon::Task<std::vector<std::string>>
-  get_room_heads(std::string_view room_id);
+  get_room_heads(const std::string room_id);
 
   /// Get the maximum depth of events in a room
   [[nodiscard]] static drogon::Task<int64_t>
-  get_max_depth(std::string_view room_id);
+  get_max_depth(const std::string room_id);
 
   // Server key caching for federation signature verification
   struct CachedServerKey {
@@ -135,12 +136,13 @@ public:
 
   /// Get a cached server signing key
   [[nodiscard]] static drogon::Task<std::optional<CachedServerKey>>
-  get_cached_server_key(std::string_view server_name, std::string_view key_id);
+  get_cached_server_key(const std::string server_name,
+                        const std::string key_id);
 
   /// Store a server signing key in the cache
   [[nodiscard]] static drogon::Task<void>
-  cache_server_key(std::string_view server_name, std::string_view key_id,
-                   std::string_view public_key, int64_t valid_until_ts);
+  cache_server_key(const std::string server_name, const std::string key_id,
+                   const std::string public_key, int64_t valid_until_ts);
 
   /// Delete expired or stale server keys (valid_until_ts < now or fetched_at
   /// older than max_age_ms)
@@ -161,7 +163,7 @@ public:
 
   /// Get all rooms where user has a membership state event
   [[nodiscard]] static drogon::Task<std::vector<RoomMembership>>
-  get_user_room_memberships(std::string_view user_id);
+  get_user_room_memberships(const std::string user_id);
 
   /// Get current state for a room (all state events where end_index IS NULL)
   [[nodiscard]] static drogon::Task<std::vector<json>>
@@ -187,23 +189,23 @@ public:
 
   /// Get global account data for a user
   [[nodiscard]] static drogon::Task<std::vector<json>>
-  get_account_data(std::string_view user_id);
+  get_account_data(const std::string user_id);
 
   /// Get room-specific account data for a user
   [[nodiscard]] static drogon::Task<std::vector<json>>
-  get_room_account_data(std::string_view user_id, std::string_view room_id);
+  get_room_account_data(const std::string user_id, const std::string room_id);
 
   /// Get the maximum event_nid across all rooms
   [[nodiscard]] static drogon::Task<int64_t> get_max_event_nid();
 
   /// Get the maximum event_nid for rooms the user is in since a given nid
   [[nodiscard]] static drogon::Task<int64_t>
-  get_max_event_nid_for_user_rooms(std::string_view user_id,
+  get_max_event_nid_for_user_rooms(const std::string user_id,
                                    int64_t since_event_nid);
 
   /// Get stripped state for an invite (limited state for invited rooms)
   [[nodiscard]] static drogon::Task<std::vector<json>>
-  get_invite_stripped_state(int room_nid, std::string_view invited_user_id);
+  get_invite_stripped_state(int room_nid, const std::string invited_user_id);
 
   // ============================================================================
   // Federation queries
@@ -211,17 +213,17 @@ public:
 
   /// Get the full auth chain for a room (recursive walk of auth_events)
   [[nodiscard]] static drogon::Task<std::vector<json>>
-  get_auth_chain(std::string_view room_id);
+  get_auth_chain(const std::string room_id);
 
   /// Get distinct server names from joined members in a room
   [[nodiscard]] static drogon::Task<std::vector<std::string>>
-  get_servers_in_room(std::string_view room_id);
+  get_servers_in_room(const std::string room_id);
 
   /// Get room_nid for a room_id
   [[nodiscard]] static drogon::Task<std::optional<int>>
-  get_room_nid(std::string_view room_id);
+  get_room_nid(const std::string room_id);
 
   // Check if room exists by room alias and return room_id
   [[nodiscard]] static drogon::Task<std::optional<std::string>>
-  room_exists_by_alias(std::string_view room_alias);
+  room_exists_by_alias(const std::string room_alias);
 };
