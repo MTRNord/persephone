@@ -584,7 +584,7 @@ void to_json(json &obj, const capabilities_obj &data_type) {
     obj["m.3pid_changes"] = data_type.third_pid_changes.value();
   }
   if (data_type.change_password) {
-    obj["change_password"] = data_type.change_password.value();
+    obj["m.change_password"] = data_type.change_password.value();
   }
   if (data_type.get_login_token) {
     obj["m.get_login_token"] = data_type.get_login_token.value();
