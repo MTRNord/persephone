@@ -926,77 +926,100 @@ parse_xmatrix_header(std::string_view header) {
 
   XMatrixAuth result;
 
-  // Parse key=value pairs separated by commas
-  // Values are quoted with double quotes
-  auto extract_value =
-      [](const std::string_view &str,
-         const std::string_view &key) -> std::optional<std::string> {
-    // Find key= pattern
-    const auto key_pos = str.find(key);
-    if (key_pos == std::string_view::npos) {
-      LOG_WARN << "Key not found: " << key << " in header: " << str;
-      return std::nullopt;
-    }
+  // Convert to mutable string for easier processing
+  const std::string s(header);
 
-    // Move past key=
-    auto value_start = key_pos + key.size();
-    if (value_start >= str.size()) {
-      LOG_WARN << "Value start position is out of bounds for key: " << key
-               << " in header: " << str;
-      return std::nullopt;
+  // helper trim
+  auto trim = [](const std::string_view sv) -> std::string {
+    size_t b = 0;
+    size_t e = sv.size();
+    while (b < e && std::isspace(static_cast<unsigned char>(sv[b]))) {
+      ++b;
     }
-
-    // Skip any whitespace
-    while (value_start < str.size() && std::isspace(str[value_start])) {
-      value_start++;
+    while (e > b && std::isspace(static_cast<unsigned char>(sv[e - 1]))) {
+      --e;
     }
-
-    // Check for opening quote
-    if (value_start >= str.size() || str[value_start] != '"') {
-      LOG_WARN << "Expected opening quote for key: " << key
-               << " in header: " << str;
-      return std::nullopt;
-    }
-    value_start++; // Skip opening quote
-
-    // Find closing quote
-    const auto value_end = str.find('"', value_start);
-    if (value_end == std::string_view::npos) {
-      LOG_WARN << "Closing quote not found for key: " << key
-               << " in header: " << str;
-      return std::nullopt;
-    }
-
-    return std::string(str.substr(value_start, value_end - value_start));
+    return std::string(sv.substr(b, e - b));
   };
 
-  auto origin_opt = extract_value(header, "origin=");
-  if (!origin_opt) {
-    LOG_WARN << "Origin not found: " << header;
-    return std::nullopt;
+  // Split on commas that are not inside double quotes
+  std::vector<std::string> pairs;
+  {
+    std::string cur;
+    bool in_quote = false;
+    for (size_t i = 0; i < s.size(); ++i) {
+      if (char const c = s[i]; c == '"' && (i == 0 || s[i - 1] != '\\')) {
+        in_quote = !in_quote;
+        cur.push_back(c);
+      } else if (c == ',' && !in_quote) {
+        pairs.push_back(trim(cur));
+        cur.clear();
+      } else {
+        cur.push_back(c);
+      }
+    }
+    if (!cur.empty()) {
+      pairs.push_back(trim(cur));
+    }
   }
-  result.origin = std::move(*origin_opt);
 
-  auto destination_opt = extract_value(header, "destination=");
-  if (!destination_opt) {
-    LOG_WARN << "Destination not found: " << header;
-    return std::nullopt;
-  }
-  result.destination = std::move(*destination_opt);
+  bool have_origin = false, have_destination = false, have_key = false,
+       have_sig = false;
 
-  auto key_opt = extract_value(header, "key=");
-  if (!key_opt) {
-    LOG_WARN << "Key ID not found: " << header;
-    return std::nullopt;
-  }
-  result.key_id = std::move(*key_opt);
+  for (auto &pair : pairs) {
+    if (pair.empty()) {
+      continue;
+    }
+    // find first '='
+    const auto eq_pos = pair.find('=');
+    if (eq_pos == std::string::npos) {
+      LOG_WARN << "Skipping malformed pair (no '='): " << pair;
+      continue;
+    }
+    std::string const key = trim(std::string_view(pair.data(), eq_pos));
+    std::string value = trim(
+        std::string_view(pair.data() + eq_pos + 1, pair.size() - eq_pos - 1));
 
-  auto sig_opt = extract_value(header, "sig=");
-  if (!sig_opt) {
-    LOG_WARN << "Signature algorithm not found: " << header;
+    // If value is quoted, remove surrounding quotes (support quoted empty too)
+    if (!value.empty() && value.front() == '"' && value.back() == '"' &&
+        value.size() >= 2) {
+      value = value.substr(1, value.size() - 2);
+    }
+    // Assign by key (keys are expected lowercase per spec)
+    if (key == "origin") {
+      result.origin = std::move(value);
+      have_origin = true;
+    } else if (key == "destination") {
+      result.destination = std::move(value);
+      have_destination = true;
+    } else if (key == "key") {
+      result.key_id = std::move(value);
+      have_key = true;
+    } else if (key == "sig" || key == "signature") {
+      result.signature = std::move(value);
+      have_sig = true;
+    } else {
+      // Unknown keys are tolerated; ignore
+      LOG_DEBUG << "Ignoring unknown X-Matrix auth key: " << key;
+    }
+  }
+
+  if (!have_origin) {
+    LOG_WARN << "Origin not found or parsed in X-Matrix header: " << s;
     return std::nullopt;
   }
-  result.signature = std::move(*sig_opt);
+  if (!have_destination) {
+    LOG_WARN << "Destination not found or parsed in X-Matrix header: " << s;
+    return std::nullopt;
+  }
+  if (!have_key) {
+    LOG_WARN << "Key ID not found or parsed in X-Matrix header: " << s;
+    return std::nullopt;
+  }
+  if (!have_sig) {
+    LOG_WARN << "Signature not found or parsed in X-Matrix header: " << s;
+    return std::nullopt;
+  }
 
   LOG_DEBUG << "Parsed X-Matrix header successfully: origin=" << result.origin
             << " destination=" << result.destination
