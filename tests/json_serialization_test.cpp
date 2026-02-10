@@ -616,7 +616,7 @@ TEST_CASE("client_server_json::well_known serialization",
           "[json_serialization]") {
   SECTION("Full well_known") {
     json input = {
-        {"m.homeserver", {{"base_url", "https://matrix.example.com"}}},
+        {"m.server", {{"base_url", "https://matrix.example.com"}}},
         {"m.identity_server", {{"base_url", "https://identity.example.com"}}}};
 
     auto wk = input.get<client_server_json::well_known>();
@@ -624,7 +624,7 @@ TEST_CASE("client_server_json::well_known serialization",
     REQUIRE(wk.m_identity_server->base_url == "https://identity.example.com");
 
     json output = wk;
-    REQUIRE(output["m.homeserver"]["base_url"] == "https://matrix.example.com");
+    REQUIRE(output["m.server"]["base_url"] == "https://matrix.example.com");
     REQUIRE(output["m.identity_server"]["base_url"] ==
             "https://identity.example.com");
   }
