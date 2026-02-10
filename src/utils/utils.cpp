@@ -20,7 +20,6 @@
 #include <netinet/in.h>
 #include <optional>
 #include <random>
-#include <resolver.h>
 #include <sodium/crypto_pwhash.h>
 #include <sodium/crypto_sign.h>
 #include <sodium/crypto_sign_ed25519.h>
