@@ -55,7 +55,7 @@ struct [[nodiscard]] SRVRecord {
 struct [[nodiscard]] ResolvedServer {
   std::string address;
   // Unsigned long since conversion from string is a little easier here
-  unsigned long port;
+  std::optional<unsigned long> port;
   std::string server_name;
 };
 

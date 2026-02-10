@@ -34,8 +34,9 @@ fetch_server_keys(const std::string server_name) {
     const auto resolved = co_await discover_server(server_name);
 
     auto url = std::format("https://{}", resolved.address);
-    if (resolved.port) {
-      url = std::format("https://{}:{}", resolved.address, resolved.port);
+    if (resolved.port.has_value()) {
+      url =
+          std::format("https://{}:{}", resolved.address, resolved.port.value());
     }
 
     const auto client = drogon::HttpClient::newHttpClient(url);
@@ -44,7 +45,7 @@ fetch_server_keys(const std::string server_name) {
     const auto req = drogon::HttpRequest::newHttpRequest();
     req->setMethod(drogon::Get);
     req->setPath("/_matrix/key/v2/server");
-    req->addHeader("Host", std::string(server_name));
+    req->addHeader("Host", std::string(resolved.server_name));
     req->addHeader("User-Agent", UserAgent);
 
     const auto resp =

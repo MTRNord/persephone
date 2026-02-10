@@ -903,6 +903,8 @@ std::string to_lower(const std::string &original) {
  */
 [[nodiscard]] std::optional<XMatrixAuth>
 parse_xmatrix_header(std::string_view header) {
+  LOG_DEBUG << "Parsing X-Matrix header: " << header;
+
   // Remove leading/trailing whitespace
   while (!header.empty() && std::isspace(header.front())) {
     header.remove_prefix(1);
@@ -911,12 +913,17 @@ parse_xmatrix_header(std::string_view header) {
     header.remove_suffix(1);
   }
 
+  LOG_DEBUG << "Trimmed header: " << header;
+
   // Check for X-Matrix prefix
   constexpr std::string_view prefix = "X-Matrix ";
   if (header.size() < prefix.size() || !header.starts_with(prefix)) {
+    LOG_WARN << "Header does not start with expected prefix: " << header;
     return std::nullopt;
   }
   header.remove_prefix(prefix.size());
+
+  LOG_DEBUG << "Header without prefix: " << header;
 
   XMatrixAuth result;
 
@@ -928,12 +935,15 @@ parse_xmatrix_header(std::string_view header) {
     // Find key= pattern
     const auto key_pos = str.find(key);
     if (key_pos == std::string_view::npos) {
+      LOG_WARN << "Key not found: " << key << " in header: " << str;
       return std::nullopt;
     }
 
     // Move past key=
     auto value_start = key_pos + key.size();
     if (value_start >= str.size()) {
+      LOG_WARN << "Value start position is out of bounds for key: " << key
+               << " in header: " << str;
       return std::nullopt;
     }
 
@@ -944,6 +954,8 @@ parse_xmatrix_header(std::string_view header) {
 
     // Check for opening quote
     if (value_start >= str.size() || str[value_start] != '"') {
+      LOG_WARN << "Expected opening quote for key: " << key
+               << " in header: " << str;
       return std::nullopt;
     }
     value_start++; // Skip opening quote
@@ -951,6 +963,8 @@ parse_xmatrix_header(std::string_view header) {
     // Find closing quote
     const auto value_end = str.find('"', value_start);
     if (value_end == std::string_view::npos) {
+      LOG_WARN << "Closing quote not found for key: " << key
+               << " in header: " << str;
       return std::nullopt;
     }
 
@@ -959,27 +973,35 @@ parse_xmatrix_header(std::string_view header) {
 
   auto origin_opt = extract_value(header, "origin=");
   if (!origin_opt) {
+    LOG_WARN << "Origin not found: " << header;
     return std::nullopt;
   }
   result.origin = std::move(*origin_opt);
 
   auto destination_opt = extract_value(header, "destination=");
   if (!destination_opt) {
+    LOG_WARN << "Destination not found: " << header;
     return std::nullopt;
   }
   result.destination = std::move(*destination_opt);
 
   auto key_opt = extract_value(header, "key=");
   if (!key_opt) {
+    LOG_WARN << "Key ID not found: " << header;
     return std::nullopt;
   }
   result.key_id = std::move(*key_opt);
 
   auto sig_opt = extract_value(header, "sig=");
   if (!sig_opt) {
+    LOG_WARN << "Signature algorithm not found: " << header;
     return std::nullopt;
   }
   result.signature = std::move(*sig_opt);
+
+  LOG_DEBUG << "Parsed X-Matrix header successfully: origin=" << result.origin
+            << " destination=" << result.destination
+            << " key_id=" << result.key_id;
 
   return result;
 }
