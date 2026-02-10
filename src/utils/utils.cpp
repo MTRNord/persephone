@@ -510,6 +510,8 @@ get_srv_record(const std::string &address) {
         if (auto delegated_clean_address =
                 remove_brackets(std::string(delegated_address));
             check_if_ip_address(delegated_clean_address)) {
+          LOG_DEBUG << "Delegated address is an IP address: "
+                    << delegated_clean_address;
           unsigned long integer_port = MATRIX_SSL_PORT;
           if (delegated_port.has_value()) {
             integer_port = std::stoul(std::string(delegated_port.value()));
@@ -523,6 +525,8 @@ get_srv_record(const std::string &address) {
         }
 
         if (delegated_port.has_value()) {
+          LOG_DEBUG << "Delegated server includes an explicit port: "
+                    << delegated_port.value();
           co_return ResolvedServer{
               .address = std::string(delegated_address),
               .port = std::stoul(std::string(delegated_port.value())),
