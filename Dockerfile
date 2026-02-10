@@ -12,8 +12,8 @@ WORKDIR /build
 # Keep package cache persistent across buildkit runs and enable ccache cache mount later.
 # Use buildkit cache mounts so repeated builds are faster and layers are less frequently invalidated.
 # Install build dependencies. Use cross-toolchain when cross-compiling to arm64.
-RUN --mount=type=cache,id=dnf-${TARGETARCH},target=/var/cache/dnf \
-    --mount=type=cache,id=dnf-metadata-${TARGETARCH},target=/var/cache/dnf/metadata \
+RUN --mount=type=cache,target=/var/cache/dnf \
+    --mount=type=cache,target=/var/cache/dnf/metadata \
     dnf -y update && \
     if [ "$TARGETARCH" = "arm64" ]; then \
     dnf -y copr enable lantw44/aarch64-linux-gnu-toolchain || true && \
@@ -54,13 +54,13 @@ RUN sed -i 's%includedir=/usr/include/ldns/ldns%includedir=/usr/include/ldns%g' 
 # Prepare ccache: create cache dir and set reasonable size.
 # Use a buildkit cache mount so the ccache contents persist between builds (when buildx cache is used).
 ENV CCACHE_DIR=/ccache
-RUN --mount=type=cache,id=ccache-${TARGETARCH},target=/ccache \
+RUN --mount=type=cache,target=/ccache \
     mkdir -p "$CCACHE_DIR" && \
     ccache --max-size=2G || true
 
 # Build and install drogon in its own deterministic layer.
 # Pinning drogon by DROGON_REV prevents changes in the repo from busting this layer.
-RUN --mount=type=cache,id=ccache-${TARGETARCH},target=/ccache \
+RUN --mount=type=cache,target=/ccache \
     cd /tmp && \
     git clone https://github.com/drogonframework/drogon drogon && \
     cd drogon && \
@@ -88,8 +88,8 @@ COPY . /build/persephone
 WORKDIR /build/persephone
 
 # Configure and build persephone using ccache. Use cache mounts for ccache and for cmake's intermediate files.
-RUN --mount=type=cache,id=ccache-${TARGETARCH},target=/ccache \
-    --mount=type=cache,id=cmake-${TARGETARCH},target=/root/.cache/cmake \
+RUN --mount=type=cache,target=/ccache \
+    --mount=type=cache,target=/root/.cache/cmake \
     export CCACHE_DIR=/ccache && \
     ccache --max-size=2G || true && \
     if [ "$TARGETARCH" = "arm64" ]; then \
@@ -107,7 +107,7 @@ RUN --mount=type=cache,id=ccache-${TARGETARCH},target=/ccache \
 FROM fedora:42 AS runtime
 
 # Install only runtime libraries. Keep package cache for faster layers when possible.
-RUN --mount=type=cache,id=dnf-${TARGETARCH},target=/var/cache/dnf \
+RUN --mount=type=cache,target=/var/cache/dnf \
     dnf -y install c-ares spdlog libicu libasan libubsan libsodium libpq jsoncpp hiredis ldns yaml-cpp uuid zlib && \
     dnf clean all
 

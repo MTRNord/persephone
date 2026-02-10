@@ -71,8 +71,8 @@ jobs:
             ${{ steps.vars.outputs.image }}:main
             ${{ steps.vars.outputs.image }}:${{ github.sha }}
           # Use a stable GHA-backed build cache scope per repository + ref to persist across runs.
-          cache-from: type=gha,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
-          cache-to: type=gha,mode=max,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             DROGON_REV=master
           labels: |
@@ -123,8 +123,8 @@ jobs:
             ${{ steps.vars.outputs.image }}:${{ github.event.release.tag_name }}
             ${{ steps.vars.outputs.image }}:${{ github.sha }}
           # Reuse the same cache scope approach for release builds; this keeps caches per-ref and shareable.
-          cache-from: type=gha,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
-          cache-to: type=gha,mode=max,scope=${{ steps.vars.outputs.image }}-cache-${{ steps.vars.outputs.ref_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             DROGON_REV=master
           labels: |
