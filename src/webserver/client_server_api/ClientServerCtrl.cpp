@@ -571,7 +571,7 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
                      k404NotFound);
         co_return;
       }
-      const auto room_id = room_id_opt.value();
+      const auto &room_id = room_id_opt.value();
       const server_server_json::DirectoryQueryResp directory_query_resp{
           // TODO: Figure out also the other servers
           .room_id = room_id,
