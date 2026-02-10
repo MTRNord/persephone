@@ -7,6 +7,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 #ifdef __GNUC__
 // Ignore false positives (see https://github.com/nlohmann/json/issues/3808)
 #pragma GCC diagnostic push

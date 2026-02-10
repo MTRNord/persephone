@@ -548,57 +548,58 @@ void to_json(json &obj, const room_versions_capability &data_type) {
 }
 
 void from_json(const json &obj, capabilities_obj &data_type) {
-  if (obj.contains("third_pid_changes")) {
+  if (obj.contains("m.3pid_changes")) {
     data_type.third_pid_changes =
-        obj["third_pid_changes"].get<boolean_capability>();
+        obj["m.3pid_changes"].get<boolean_capability>();
   }
-  if (obj.contains("change_password")) {
+  if (obj.contains("m.change_password")) {
     data_type.change_password =
-        obj["change_password"].get<boolean_capability>();
+        obj["m.change_password"].get<boolean_capability>();
   }
-  if (obj.contains("get_login_token")) {
+  if (obj.contains("m.get_login_token")) {
     data_type.get_login_token =
-        obj["get_login_token"].get<boolean_capability>();
+        obj["m.get_login_token"].get<boolean_capability>();
   }
-  if (obj.contains("set_avatar_url")) {
-    data_type.set_avatar_url = obj["set_avatar_url"].get<boolean_capability>();
+  if (obj.contains("m.set_avatar_url")) {
+    data_type.set_avatar_url =
+        obj["m.set_avatar_url"].get<boolean_capability>();
   }
-  if (obj.contains("set_displayname")) {
+  if (obj.contains("m.set_displayname")) {
     data_type.set_displayname =
-        obj["set_displayname"].get<boolean_capability>();
+        obj["m.set_displayname"].get<boolean_capability>();
   }
-  if (obj.contains("profile_fields")) {
+  if (obj.contains("m.profile_fields")) {
     data_type.profile_fields =
-        obj["profile_fields"].get<profile_field_capability>();
+        obj["m.profile_fields"].get<profile_field_capability>();
   }
-  if (obj.contains("room_versions")) {
+  if (obj.contains("m.room_versions")) {
     data_type.room_versions =
-        obj["room_versions"].get<room_versions_capability>();
+        obj["m.room_versions"].get<room_versions_capability>();
   }
 }
 
 void to_json(json &obj, const capabilities_obj &data_type) {
   obj = nlohmann::json::object();
   if (data_type.third_pid_changes) {
-    obj["third_pid_changes"] = data_type.third_pid_changes.value();
+    obj["m.3pid_changes"] = data_type.third_pid_changes.value();
   }
   if (data_type.change_password) {
     obj["change_password"] = data_type.change_password.value();
   }
   if (data_type.get_login_token) {
-    obj["get_login_token"] = data_type.get_login_token.value();
+    obj["m.get_login_token"] = data_type.get_login_token.value();
   }
   if (data_type.set_avatar_url) {
-    obj["set_avatar_url"] = data_type.set_avatar_url.value();
+    obj["m.set_avatar_url"] = data_type.set_avatar_url.value();
   }
   if (data_type.set_displayname) {
-    obj["set_displayname"] = data_type.set_displayname.value();
+    obj["m.set_displayname"] = data_type.set_displayname.value();
   }
   if (data_type.profile_fields) {
-    obj["profile_fields"] = data_type.profile_fields.value();
+    obj["m.profile_fields"] = data_type.profile_fields.value();
   }
   if (data_type.room_versions) {
-    obj["room_versions"] = data_type.room_versions.value();
+    obj["m.room_versions"] = data_type.room_versions.value();
   }
 }
 
