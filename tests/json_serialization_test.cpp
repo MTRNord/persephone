@@ -100,10 +100,9 @@ TEST_CASE("server_server_json::SendJoinResp serialization",
   }
 
   SECTION("Without optional fields (origin, servers_in_room)") {
-    json input = {
-        {"auth_chain", json::array()},
-        {"event", {{"type", "m.room.member"}}},
-        {"state", json::array()}};
+    json input = {{"auth_chain", json::array()},
+                  {"event", {{"type", "m.room.member"}}},
+                  {"state", json::array()}};
 
     auto resp = input.get<server_server_json::SendJoinResp>();
     REQUIRE(resp.auth_chain.empty());
@@ -121,21 +120,19 @@ TEST_CASE("server_server_json::SendJoinResp serialization",
   }
 
   SECTION("members_omitted defaults to false when missing") {
-    json input = {
-        {"auth_chain", json::array()},
-        {"event", {{"type", "m.room.member"}}},
-        {"state", json::array()}};
+    json input = {{"auth_chain", json::array()},
+                  {"event", {{"type", "m.room.member"}}},
+                  {"state", json::array()}};
 
     auto resp = input.get<server_server_json::SendJoinResp>();
     REQUIRE(resp.members_omitted == false);
   }
 
   SECTION("members_omitted true") {
-    json input = {
-        {"auth_chain", json::array()},
-        {"event", {{"type", "m.room.member"}}},
-        {"members_omitted", true},
-        {"state", json::array()}};
+    json input = {{"auth_chain", json::array()},
+                  {"event", {{"type", "m.room.member"}}},
+                  {"members_omitted", true},
+                  {"state", json::array()}};
 
     auto resp = input.get<server_server_json::SendJoinResp>();
     REQUIRE(resp.members_omitted == true);
@@ -151,8 +148,7 @@ TEST_CASE("server_server_json::SendJoinResp serialization",
           {{"type", "m.room.power_levels"}, {"event_id", "$2"}},
           {{"type", "m.room.join_rules"}, {"event_id", "$3"}}}},
         {"event",
-         {{"type", "m.room.member"},
-          {"content", {{"membership", "join"}}}}},
+         {{"type", "m.room.member"}, {"content", {{"membership", "join"}}}}},
         {"origin", "matrix.org"},
         {"servers_in_room", {"matrix.org"}},
         {"state",
@@ -194,8 +190,7 @@ TEST_CASE("server_server_json::well_known serialization",
   }
 }
 
-TEST_CASE("server_server_json::version serialization",
-          "[json_serialization]") {
+TEST_CASE("server_server_json::version serialization", "[json_serialization]") {
   SECTION("Round-trip") {
     json input = {{"server", {{"name", "Persephone"}, {"version", "0.1.0"}}}};
     auto ver = input.get<server_server_json::version>();
@@ -216,8 +211,7 @@ TEST_CASE("server_server_json::keys serialization", "[json_serialization]") {
         {"old_verify_keys",
          {{"ed25519:old1", {{"key", "oldkeydata"}, {"expired_ts", 1000}}}}},
         {"verify_keys", {{"ed25519:abc", {{"key", "keydata"}}}}},
-        {"signatures",
-         {{"example.com", {{"ed25519:abc", "sigdata"}}}}}};
+        {"signatures", {{"example.com", {{"ed25519:abc", "sigdata"}}}}}};
 
     auto keys = input.get<server_server_json::keys>();
     REQUIRE(keys.server_name == "example.com");
@@ -402,14 +396,13 @@ TEST_CASE("client_server_json::AuthenticationData serialization",
 TEST_CASE("client_server_json::registration_body serialization",
           "[json_serialization]") {
   SECTION("Full body") {
-    json input = {
-        {"auth", {{"type", "m.login.dummy"}}},
-        {"device_id", "MYDEVICE"},
-        {"inhibit_login", false},
-        {"initial_device_display_name", "My Phone"},
-        {"password", "secret123"},
-        {"refresh_token", true},
-        {"username", "alice"}};
+    json input = {{"auth", {{"type", "m.login.dummy"}}},
+                  {"device_id", "MYDEVICE"},
+                  {"inhibit_login", false},
+                  {"initial_device_display_name", "My Phone"},
+                  {"password", "secret123"},
+                  {"refresh_token", true},
+                  {"username", "alice"}};
 
     auto body = input.get<client_server_json::registration_body>();
     REQUIRE(body.auth.has_value());
@@ -507,12 +500,10 @@ TEST_CASE("client_server_json::login_body serialization",
 TEST_CASE("client_server_json::login_resp serialization",
           "[json_serialization]") {
   SECTION("Full response") {
-    json input = {{"access_token", "syt_abc123"},
-                  {"device_id", "DEVICEID"},
-                  {"user_id", "@alice:example.com"},
-                  {"expires_in_ms", 3600000},
-                  {"home_server", "example.com"},
-                  {"refresh_token", "ref_abc"}};
+    json input = {
+        {"access_token", "syt_abc123"},    {"device_id", "DEVICEID"},
+        {"user_id", "@alice:example.com"}, {"expires_in_ms", 3600000},
+        {"home_server", "example.com"},    {"refresh_token", "ref_abc"}};
 
     auto resp = input.get<client_server_json::login_resp>();
     REQUIRE(resp.access_token == "syt_abc123");
@@ -626,17 +617,14 @@ TEST_CASE("client_server_json::well_known serialization",
   SECTION("Full well_known") {
     json input = {
         {"m.homeserver", {{"base_url", "https://matrix.example.com"}}},
-        {"m.identity_server",
-         {{"base_url", "https://identity.example.com"}}}};
+        {"m.identity_server", {{"base_url", "https://identity.example.com"}}}};
 
     auto wk = input.get<client_server_json::well_known>();
-    REQUIRE(wk.m_homeserver->base_url == "https://matrix.example.com");
-    REQUIRE(wk.m_identity_server->base_url ==
-            "https://identity.example.com");
+    REQUIRE(wk.m_server->base_url == "https://matrix.example.com");
+    REQUIRE(wk.m_identity_server->base_url == "https://identity.example.com");
 
     json output = wk;
-    REQUIRE(output["m.homeserver"]["base_url"] ==
-            "https://matrix.example.com");
+    REQUIRE(output["m.homeserver"]["base_url"] == "https://matrix.example.com");
     REQUIRE(output["m.identity_server"]["base_url"] ==
             "https://identity.example.com");
   }
@@ -706,9 +694,8 @@ TEST_CASE("client_server_json::Invite3pid serialization",
 TEST_CASE("client_server_json::incomplete_registration_resp serialization",
           "[json_serialization]") {
   SECTION("Round-trip") {
-    json input = {
-        {"session", "sess123"},
-        {"flows", {{{"stages", {"m.login.dummy"}}}}}};
+    json input = {{"session", "sess123"},
+                  {"flows", {{{"stages", {"m.login.dummy"}}}}}};
 
     auto resp = input.get<client_server_json::incomplete_registration_resp>();
     REQUIRE(resp.session == "sess123");
