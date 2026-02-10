@@ -36,15 +36,15 @@ using json = nlohmann::json;
 [[nodiscard]] static std::string
 extract_access_token(const HttpRequestPtr &req) {
   // First, try the Authorization header (preferred method)
-  const auto auth_header = req->getHeader("Authorization");
-  if (!auth_header.empty() && auth_header.starts_with("Bearer ")) {
+  if (const auto auth_header = req->getHeader("Authorization");
+      !auth_header.empty() && auth_header.starts_with("Bearer ")) {
     return auth_header.substr(7);
   }
 
   // Fall back to deprecated query parameter (deprecated in v1.11)
   // See: https://spec.matrix.org/v1.11/client-server-api/#using-access-tokens
-  const auto &query_token = req->getParameter("access_token");
-  if (!query_token.empty()) {
+  if (const auto &query_token = req->getParameter("access_token");
+      !query_token.empty()) {
     const auto user_agent = req->getHeader("User-Agent");
     LOG_WARN << "Client using deprecated access_token query parameter "
              << "(deprecated in Matrix v1.11). User-Agent: "
