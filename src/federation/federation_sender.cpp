@@ -249,8 +249,7 @@ FederationSender::deliver_to_server(const std::string &destination) {
 
       try {
         const auto client = drogon::HttpClient::newHttpClient(
-            std::format("https://{}:{}", resolved.address,
-                        resolved.port.value()),
+            build_server_url(resolved),
             trantor::EventLoop::getEventLoopOfCurrentThread());
 
         const auto response = co_await federation_request(

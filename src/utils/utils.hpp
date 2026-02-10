@@ -94,6 +94,7 @@ struct [[nodiscard]] VerifyKeyData {
 /// host:port. Callers should use this to ensure Host header construction is
 /// consistent across all federation HTTP clients.
 std::string build_host_header(const ResolvedServer &r);
+[[nodiscard]] std::string build_server_url(const ResolvedServer &r);
 
 void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
                   const std::string errorcode, const std::string error,

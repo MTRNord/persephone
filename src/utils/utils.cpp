@@ -826,6 +826,58 @@ parseQueryParamString(const std::string &queryString) {
   return host;
 }
 
+[[nodiscard]] std::string build_server_url(const ResolvedServer &r) {
+  // Construct a valid https:// URL for the resolved address and optional
+  // port. If the resolved address is an IPv6 literal that lacks brackets,
+  // add brackets so the URL is valid (e.g. https://[::1]:8448). If the
+  // address is an IPv4 or hostname, return a normal https://host[:port].
+  // Additionally, strip any IPv6 zone identifier (the '%' suffix like "%eth0")
+  // from link-local addresses because many HTTP client implementations choke
+  // on addresses containing a zone id in the URL.
+  std::string host = r.address;
+
+  // If address looks like an IPv6 literal (contains ':'), ensure it is
+  // bracketed. Use remove_brackets/check_if_ip_address so we canonicalize
+  // without duplicating bracket characters. Also remove any zone identifier
+  // (percent and following) before checking/formatting.
+  if (!host.empty()) {
+    const auto cleaned = remove_brackets(host);
+
+    // Strip IPv6 zone identifier if present (e.g. "fe80::1%eth0" -> "fe80::1")
+    std::string cleaned_no_zone = cleaned;
+    const auto perc_pos = cleaned_no_zone.find('%');
+    if (perc_pos != std::string::npos) {
+      cleaned_no_zone = cleaned_no_zone.substr(0, perc_pos);
+    }
+
+    if (check_if_ip_address(cleaned_no_zone)) {
+      // If IPv6 (contains ':'), ensure brackets and use the zone-stripped form
+      if (cleaned_no_zone.find(':') != std::string::npos) {
+        // If the host is not already bracketed, add brackets around the clean
+        // IPv6 literal. Use the cleaned_no_zone (without zone id) inside
+        // brackets.
+        if (!(host.front() == '[' && host.back() == ']')) {
+          host = std::format("[{}]", cleaned_no_zone);
+        } else {
+          // already bracketed, replace inside with cleaned (zone-stripped)
+          host = std::format("[{}]", cleaned_no_zone);
+        }
+      } else {
+        // IPv4 - use the cleaned_no_zone form
+        host = cleaned_no_zone;
+      }
+    } else {
+      // Not an IP address: this is a hostname. Keep as-is.
+      host = r.address;
+    }
+  }
+
+  if (r.port.has_value()) {
+    return std::format("https://{}:{}", host, r.port.value());
+  }
+  return std::format("https://{}", host);
+}
+
 [[nodiscard]] Task<drogon::HttpResponsePtr>
 federation_request(const HTTPRequest request) {
   const auto req = HttpRequest::newHttpRequest();

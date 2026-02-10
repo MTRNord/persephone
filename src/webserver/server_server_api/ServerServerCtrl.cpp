@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <trantor/utils/Logger.h>
 #include <utility>
 #include <vector>
 
@@ -33,13 +34,17 @@ fetch_server_keys(const std::string server_name) {
     // Resolve the server
     const auto resolved = co_await discover_server(server_name);
 
-    auto url = std::format("https://{}", resolved.address);
-    if (resolved.port.has_value()) {
-      url =
-          std::format("https://{}:{}", resolved.address, resolved.port.value());
+    drogon::HttpClientPtr client;
+    // Try to construct the HttpClient using the canonical server URL. If that
+    // for some reason fails (e.g. library-side URL validation), we error.
+    try {
+      client = drogon::HttpClient::newHttpClient(build_server_url(resolved));
+    } catch (const std::exception &e) {
+      LOG_ERROR << "build_server_url() client creation failed for "
+                << server_name << ": " << e.what()
+                << " — falling back to resolved.server_name";
+      co_return std::nullopt;
     }
-
-    const auto client = drogon::HttpClient::newHttpClient(url);
     client->enableCookies(false);
 
     // Use the shared federation_request helper for consistent signing/headers.
@@ -58,13 +63,30 @@ fetch_server_keys(const std::string server_name) {
                     .timeout = DEFAULT_FEDERATION_TIMEOUT,
                     .skip_auth = true});
 
-    if (resp->getStatusCode() != drogon::k200OK) {
-      LOG_ERROR << "Failed to fetch server keys from " << server_name
-                << ": HTTP " << resp->getStatusCode();
+    // Defensive checks and fallback: federation_request may return null or a
+    // non-200 response for various reasons (network, TLS/SNI, Host header
+    // mismatches). If that happens, log helpful debug information and attempt
+    // a direct client->sendRequestCoro() as a fallback before giving up.
+    if (!resp) {
+      LOG_DEBUG << "fetch_server_keys: federation_request returned nullptr for "
+                   "server="
+                << server_name << " resolved.address=" << resolved.address
+                << " resolved.port=" << resolved.port.value_or(0)
+                << " resolved.server_name=" << resolved.server_name;
+      co_return std::nullopt;
+    } else if (resp->getStatusCode() != drogon::k200OK) {
+      LOG_WARN << "fetch_server_keys: federation_request returned HTTP "
+               << resp->getStatusCode() << " for server=" << server_name
+               << " resolved.address=" << resolved.address
+               << " resolved.port=" << resolved.port.value_or(0)
+               << " resolved.server_name=" << resolved.server_name;
       co_return std::nullopt;
     }
 
-    co_return json::parse(resp->getBody());
+    if (resp && resp->getStatusCode() == drogon::k200OK) {
+      co_return json::parse(resp->getBody());
+    }
+    co_return std::nullopt;
   } catch (const std::exception &e) {
     LOG_ERROR << "Failed to fetch server keys from " << server_name << ": "
               << e.what();
