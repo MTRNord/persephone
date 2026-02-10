@@ -54,7 +54,8 @@ void FederationSender::start(std::string server_name, std::string key_id,
     } catch (const std::exception &e) {
       LOG_ERROR << "FederationSender: Queue loop crashed: " << e.what();
     } catch (...) {
-      LOG_ERROR << "FederationSender: Queue loop crashed with unknown exception";
+      LOG_ERROR
+          << "FederationSender: Queue loop crashed with unknown exception";
     }
   });
 }
@@ -248,7 +249,8 @@ FederationSender::deliver_to_server(const std::string &destination) {
 
       try {
         const auto client = drogon::HttpClient::newHttpClient(
-            std::format("https://{}:{}", resolved.address, resolved.port),
+            std::format("https://{}:{}", resolved.address,
+                        resolved.port.value()),
             trantor::EventLoop::getEventLoopOfCurrentThread());
 
         const auto response =

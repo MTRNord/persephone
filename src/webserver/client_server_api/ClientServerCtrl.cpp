@@ -589,9 +589,9 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
 
     const auto server_address = co_await discover_server(server_name);
     auto address = std::format("https://{}", server_address.address);
-    if (server_address.port) {
+    if (server_address.port.has_value()) {
       address = std::format("https://{}:{}", server_address.address,
-                            server_address.port);
+                            server_address.port.value());
     }
     const auto client = HttpClient::newHttpClient(address);
     client->setUserAgent(UserAgent);
@@ -600,7 +600,7 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
 
     LOG_DEBUG << "Requesting room alias \"" << roomAlias
               << "\" from server: " << server_address.address
-              << " with port: " << server_address.port;
+              << " with port: " << server_address.port.value_or(0);
 
     // Do the request
     const auto resp = co_await federation_request(
@@ -676,9 +676,9 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     const auto server_name = get_serverpart(roomIdOrAlias);
     const auto server_address = co_await discover_server(server_name);
     auto address = std::format("https://{}", server_address.address);
-    if (server_address.port) {
+    if (server_address.port.has_value()) {
       address = std::format("https://{}:{}", server_address.address,
-                            server_address.port);
+                            server_address.port.value());
     }
     auto client = HttpClient::newHttpClient(address);
     client->setUserAgent(UserAgent);
@@ -734,9 +734,9 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       auto param_server_address =
           co_await discover_server(param_server_name[0]);
       auto param_address = std::format("https://{}", server_address.address);
-      if (param_server_address.port) {
+      if (param_server_address.port.has_value()) {
         param_address = std::format("https://{}:{}", server_address.address,
-                                    server_address.port);
+                                    server_address.port.value());
       }
       client = HttpClient::newHttpClient(param_address);
       client->setUserAgent(UserAgent);
