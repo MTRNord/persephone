@@ -220,4 +220,8 @@ public:
   /// Get room_nid for a room_id
   [[nodiscard]] static drogon::Task<std::optional<int>>
   get_room_nid(std::string_view room_id);
+
+  // Check if room exists by room alias and return room_id
+  [[nodiscard]] static drogon::Task<std::optional<std::string>>
+  room_exists_by_alias(std::string_view room_alias);
 };

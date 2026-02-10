@@ -56,6 +56,17 @@ void to_json(json &obj, const SendJoinResp &data_type) {
   obj["state"] = data_type.state;
 }
 
+void from_json(const json &obj, DirectoryQueryResp &data_type) {
+  data_type.room_id = obj["room_id"].get<std::string>();
+  data_type.servers = obj["servers"].get<std::vector<std::string>>();
+}
+
+void to_json(json &obj, const DirectoryQueryResp &data_type) {
+  obj = nlohmann::json::object();
+  obj["room_id"] = data_type.room_id;
+  obj["servers"] = data_type.servers;
+}
+
 } // namespace server_server_json
 
 namespace client_server_json {

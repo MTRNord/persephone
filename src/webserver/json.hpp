@@ -147,6 +147,15 @@ struct [[nodiscard]] directory_query {
 };
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(directory_query, room_id, servers)
+
+/// /_matrix/federation/v1/query/directory response
+struct [[nodiscard]] DirectoryQueryResp {
+  std::string room_id;
+  std::vector<std::string> servers;
+};
+
+void from_json(const json &obj, DirectoryQueryResp &data_type);
+void to_json(json &obj, const DirectoryQueryResp &data_type);
 } // namespace server_server_json
 
 /**

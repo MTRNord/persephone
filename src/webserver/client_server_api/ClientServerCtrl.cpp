@@ -520,6 +520,33 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
     // split off the server name from the room alias
     const auto server_name = get_serverpart(roomAlias);
 
+    // If we are the server requested then we can directly query the database
+    // for the alias
+    if (server_name == _config.matrix_config.server_name) {
+      // TODO: Move this to a util since we need it on server-server api as well
+      const auto room_id_opt =
+          co_await Database::room_exists_by_alias(roomAlias);
+      if (!room_id_opt.has_value()) {
+        return_error(callback, "M_NOT_FOUND", "Room alias not found.",
+                     k404NotFound);
+        co_return;
+      }
+      const auto room_id = room_id_opt.value();
+      const server_server_json::DirectoryQueryResp directory_query_resp{
+          // TODO: Figure out also the other servers
+          .room_id = room_id,
+          .servers = {server_name}};
+
+      const json json_resp = directory_query_resp;
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setStatusCode(k200OK);
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
+      resp->setBody(json_resp.dump());
+      callback(resp);
+      co_return;
+    }
+
     const auto server_address = co_await discover_server(server_name);
     auto address = std::format("https://{}", server_address.address);
     if (server_address.port) {
@@ -536,7 +563,7 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
               << " with port: " << server_address.port;
 
     // Do the request
-    auto resp = co_await federation_request(
+    const auto resp = co_await federation_request(
         {.client = client,
          .method = drogon::Get,
          .path = std::format(
