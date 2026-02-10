@@ -5,6 +5,7 @@
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
 #include "webserver/sync_utils.hpp"
+#include <algorithm>
 #include <chrono>
 #include <drogon/HttpAppFramework.h>
 #include <drogon/HttpClient.h>
@@ -21,6 +22,7 @@
 #include <optional>
 #include <ranges>
 #include <string>
+#include <trantor/net/EventLoop.h>
 #include <trantor/utils/Logger.h>
 #include <utils/room_utils.hpp>
 #include <utils/state_res.hpp>
@@ -1133,12 +1135,12 @@ perform_initial_sync(const std::string &user_id,
   client_server_json::SyncResponse response;
 
   // Get all room memberships for user
-  auto memberships = co_await Database::get_user_room_memberships(user_id);
-
-  constexpr int timeline_limit = 20;
+  const auto memberships =
+      co_await Database::get_user_room_memberships(user_id);
 
   for (const auto &membership : memberships) {
     if (membership.membership == "join") {
+      constexpr int timeline_limit = 20;
       // Joined room: full current state + recent timeline
       client_server_json::SyncJoinedRoom joined;
 
@@ -1187,20 +1189,20 @@ perform_initial_sync(const std::string &user_id,
 
 /// Perform incremental sync (with since token)
 [[nodiscard]] static drogon::Task<client_server_json::SyncResponse>
-perform_incremental_sync(const std::string &user_id, int64_t since_event_nid,
-                         bool full_state,
+perform_incremental_sync(const std::string &user_id,
+                         const int64_t since_event_nid, const bool full_state,
                          [[maybe_unused]] const std::optional<json> &filter) {
   client_server_json::SyncResponse response;
 
   // Get all room memberships for user
-  auto memberships = co_await Database::get_user_room_memberships(user_id);
-
-  constexpr int timeline_limit = 20;
+  const auto memberships =
+      co_await Database::get_user_room_memberships(user_id);
 
   // Get current max event_nid
   const int64_t current_max = co_await Database::get_max_event_nid();
 
   for (const auto &membership : memberships) {
+    constexpr int timeline_limit = 20;
     if (membership.membership == "join") {
       client_server_json::SyncJoinedRoom joined;
 
@@ -1285,12 +1287,12 @@ void ClientServerCtrl::sync(
     // Ignored for now: set_presence
 
     // Default timeout: 30s if not specified (reasonable for reverse proxies)
-    constexpr int64_t default_timeout_ms = 30000;
-    constexpr int64_t max_timeout_ms = 300000; // 5 minutes max
     if (timeout_ms == 0) {
+      constexpr int64_t default_timeout_ms = 30000;
       timeout_ms = default_timeout_ms;
     }
-    if (timeout_ms > max_timeout_ms) {
+    if (constexpr int64_t max_timeout_ms = 300000;
+        timeout_ms > max_timeout_ms) {
       timeout_ms = max_timeout_ms;
     }
 
@@ -1333,6 +1335,25 @@ void ClientServerCtrl::sync(
 
     // 5. Perform sync
     client_server_json::SyncResponse sync_result;
+
+    for (auto &val : sync_result.rooms.join | std::views::values) {
+      for (auto &event : val.state.events) {
+        json_utils::remove_signatures_and_auth(event);
+      }
+      for (auto &event : val.timeline.events) {
+        json_utils::remove_signatures_and_auth(event);
+      }
+    }
+    for (auto &[invite_state] : sync_result.rooms.invite | std::views::values) {
+      for (auto &event : invite_state.events) {
+        json_utils::remove_signatures_and_auth(event);
+      }
+    }
+    for (auto &val : sync_result.rooms.leave | std::views::values) {
+      for (auto &event : val.timeline.events) {
+        json_utils::remove_signatures_and_auth(event);
+      }
+    }
 
     if (!since_event_nid.has_value()) {
       // Initial sync - return immediately

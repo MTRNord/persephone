@@ -296,4 +296,15 @@ decode_base64(const std::string &input) {
 
   return result == 0;
 }
+
+void remove_signatures_and_auth(json &json_data) {
+  if (json_data.is_null()) {
+    throw std::runtime_error(
+        "Json data is null which is impossible for an event");
+  }
+
+  json_data.erase("signatures");
+  json_data.erase("auth_events");
+}
+
 } // namespace json_utils

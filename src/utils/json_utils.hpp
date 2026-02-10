@@ -56,4 +56,7 @@ void ensure_server_keys(const Config &config);
 /// Decode a base64 string (supports both URL-safe and standard variants)
 [[nodiscard]] std::optional<std::vector<unsigned char>>
 decode_base64(const std::string &input);
+
+void remove_signatures_and_auth(json &json_data);
+
 } // namespace json_utils
