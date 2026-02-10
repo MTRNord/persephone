@@ -37,7 +37,7 @@ public:
                 FilterChainCallback &&chain_callback) override;
 };
 
-struct UserValidData {
+struct [[nodiscard]] UserValidData {
   bool isValid;
   std::optional<Database::UserInfo> userInfo;
 };
@@ -48,8 +48,13 @@ public:
   METHOD_LIST_BEGIN
   ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get,
                 Options);
+  ADD_METHOD_TO(ClientServerCtrl::capabilities,
+                "/_matrix/client/v3/capabilities", Get, Options);
+  // User info
   ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
                 Get, Options, "client_server_api::AccessTokenFilter");
+
+  // Login and registration
   ADD_METHOD_TO(ClientServerCtrl::user_available,
                 "/_matrix/client/v3/register/available?username={1}", Get,
                 Options);
@@ -100,14 +105,18 @@ public:
   explicit ClientServerCtrl(Config config) : _config(std::move(config)) {}
 
 protected:
-  /// Get user info from access token in Authorization header or query parameter.
-  /// Supports deprecated ?access_token= query parameter (deprecated in v1.11).
+  /// Get user info from access token in Authorization header or query
+  /// parameter. Supports deprecated ?access_token= query parameter (deprecated
+  /// in v1.11).
   drogon::Task<UserValidData> getUserInfo(
       const HttpRequestPtr &req,
       const std::function<void(const HttpResponsePtr &)> &callback) const;
 
   void versions(const HttpRequestPtr &,
                 std::function<void(const HttpResponsePtr &)> &&callback) const;
+  void
+  capabilities(const HttpRequestPtr &,
+               std::function<void(const HttpResponsePtr &)> &&callback) const;
 
   void whoami(const HttpRequestPtr &req,
               std::function<void(const HttpResponsePtr &)> &&callback) const;

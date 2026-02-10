@@ -385,6 +385,55 @@ struct [[nodiscard]] versions_obj {
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(versions_obj, versions)
 
+struct [[nodiscard]] boolean_capability {
+  bool enabled;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(boolean_capability, enabled)
+
+struct [[nodiscard]] profile_field_capability {
+  bool enabled;
+  std::vector<std::string> allowed;
+  std::vector<std::string> disallowed;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(profile_field_capability, enabled, allowed,
+                                   disallowed)
+
+struct [[nodiscard]] room_versions_capability {
+  std::string default_;
+  std::map<std::string, std::string> available;
+};
+
+void from_json(const json &obj, room_versions_capability &data_type);
+
+void to_json(json &obj, const room_versions_capability &data_type);
+
+struct [[nodiscard]] capabilities_obj {
+  std::optional<boolean_capability> third_pid_changes;
+  std::optional<boolean_capability> change_password;
+  std::optional<boolean_capability> get_login_token;
+  std::optional<boolean_capability> set_avatar_url;
+  std::optional<boolean_capability> set_displayname;
+  std::optional<profile_field_capability> profile_fields;
+  std::optional<room_versions_capability> room_versions;
+};
+
+void from_json(const json &obj, capabilities_obj &data_type);
+
+void to_json(json &obj, const capabilities_obj &data_type);
+
+/**
+ * @brief JSON Object for the 200 response of the /capabilities endpoint
+ * See:
+ * https://spec.matrix.org/v1.17/client-server-api/#mroom_versions-capability
+ */
+struct [[nodiscard]] capabilities_resp {
+  capabilities_obj capabilities;
+};
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(capabilities_resp, capabilities)
+
 struct [[nodiscard]] LoginFlow {
   std::string type;
   bool get_login_token = false;

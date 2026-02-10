@@ -135,6 +135,45 @@ void ClientServerCtrl::versions(
   callback(resp);
 }
 
+void ClientServerCtrl ::capabilities(
+    const HttpRequestPtr &,
+    std::function<void(const HttpResponsePtr &)> &&callback) const {
+  const auto resp = HttpResponse::newHttpResponse();
+  static const client_server_json::room_versions_capability room_versions = {
+      .default_ = "11", .available = {{"11", "Unstable"}}};
+
+  static const client_server_json::capabilities_obj capabilities_obj = {
+      .third_pid_changes =
+          client_server_json::boolean_capability{.enabled = false},
+      // TODO: Activate once supported
+      .change_password =
+          client_server_json::boolean_capability{.enabled = false},
+      // TODO: Activate once supported
+      .get_login_token =
+          client_server_json::boolean_capability{.enabled = false},
+      // TODO: Activate once supported
+      .set_avatar_url =
+          client_server_json::boolean_capability{.enabled = false},
+      // TODO: Activate once supported
+      .set_displayname =
+          client_server_json::boolean_capability{.enabled = false},
+      // TODO: Activate once supported
+      .profile_fields =
+          client_server_json::profile_field_capability{
+              .enabled = false, .allowed = {}, .disallowed = {}},
+      .room_versions = room_versions,
+  };
+
+  static const client_server_json::capabilities_resp capabilities_resp = {
+      .capabilities = capabilities_obj};
+
+  const json j = capabilities_resp;
+
+  resp->setBody(j.dump());
+  resp->setContentTypeString(JSON_CONTENT_TYPE);
+  callback(resp);
+}
+
 void ClientServerCtrl::whoami(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
