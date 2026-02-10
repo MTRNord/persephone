@@ -14,10 +14,6 @@ permissions:
   packages: write
   id-token: write
 
-concurrency:
-  group: docker-build-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   PLATFORMS: linux/amd64,linux/arm64
 
