@@ -956,7 +956,8 @@ void ClientServerCtrl::createRoom(
       state_events = build_createRoom_state({.createRoom_body = createRoom_body,
                                              .room_id = room_id,
                                              .user_id = userInfo->user_id,
-                                             .room_version = room_version});
+                                             .room_version = room_version},
+                                            _config.matrix_config.server_name);
     } catch (const std::exception &e) {
       LOG_ERROR << "Failed to build room state: " << e.what();
       return_error(callback, "M_UNKNOWN", e.what(), k500InternalServerError);

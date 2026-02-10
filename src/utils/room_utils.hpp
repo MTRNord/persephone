@@ -25,7 +25,8 @@ struct [[nodiscard]] CreateRoomStateBuildData {
 };
 
 [[nodiscard]] std::vector<json>
-build_createRoom_state(const CreateRoomStateBuildData &data);
+build_createRoom_state(const CreateRoomStateBuildData &data,
+                       const std::string &server_name);
 
 [[nodiscard]] std::
     size_t constexpr calculate_assumed_createRoom_state_event_count(

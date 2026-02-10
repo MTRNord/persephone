@@ -352,14 +352,23 @@ webserver:
 
   // Generate basic room data
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.name = "Test Room",
+      .createRoom_body = {.creation_content = std::nullopt,
+                          .initial_state = std::nullopt,
+                          .invite = std::nullopt,
+                          .invite_3pid = std::nullopt,
+                          .name = "Test Room",
+                          .power_level_content_override = std::nullopt,
+                          .preset = std::nullopt,
+                          .room_alias_name = std::nullopt,
                           .room_version = "11",
-                          .topic = "Test Topic"},
+                          .topic = "Test Topic",
+                          .visibility = std::nullopt,
+                          .is_direct = std::nullopt},
       .room_id = "!test:localhost",
       .user_id = "@test:localhost",
       .room_version = "11"};
 
-  auto room_state = build_createRoom_state(data);
+  auto room_state = build_createRoom_state(data, "localhost");
 
   // ensure the key exists
   json_utils::ensure_server_keys(config);

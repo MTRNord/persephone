@@ -49,7 +49,7 @@ TEST_CASE("build_createRoom_state minimal", "[room_utils]") {
                                       .user_id = "@alice:localhost",
                                       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   // Should have at least 3 events: create, member, power_levels
   REQUIRE(events.size() >= 3);
@@ -84,7 +84,7 @@ TEST_CASE("build_createRoom_state with name and topic", "[room_utils]") {
       .user_id = "@alice:localhost",
       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   // Should have base 3 + name + topic = 5
   REQUIRE(events.size() >= 5);
@@ -108,13 +108,12 @@ TEST_CASE("build_createRoom_state with name and topic", "[room_utils]") {
 
 TEST_CASE("build_createRoom_state with room alias", "[room_utils]") {
   const CreateRoomStateBuildData data{
-      .createRoom_body = {.room_alias_name = "#myroom:localhost",
-                          .room_version = "11"},
+      .createRoom_body = {.room_alias_name = "myroom", .room_version = "11"},
       .room_id = "!test:localhost",
       .user_id = "@alice:localhost",
       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   bool found_alias = false;
   for (const auto &event : events) {
@@ -142,7 +141,7 @@ TEST_CASE("build_createRoom_state with initial_state", "[room_utils]") {
                                       .user_id = "@alice:localhost",
                                       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   bool found_history = false;
   for (const auto &event : events) {
@@ -168,7 +167,7 @@ TEST_CASE("build_createRoom_state with invites", "[room_utils]") {
                                       .user_id = "@alice:localhost",
                                       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   int invite_count = 0;
   for (const auto &event : events) {
@@ -199,7 +198,7 @@ TEST_CASE("build_createRoom_state with power_level_override", "[room_utils]") {
                                       .user_id = "@alice:localhost",
                                       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   bool found_pl = false;
   for (const auto &event : events) {
@@ -224,7 +223,7 @@ TEST_CASE("build_createRoom_state event_ids are unique", "[room_utils]") {
                                       .user_id = "@alice:localhost",
                                       .room_version = "11"};
 
-  auto events = build_createRoom_state(data);
+  auto events = build_createRoom_state(data, "localhost");
 
   // All event_ids should be unique
   std::set<std::string> event_ids;

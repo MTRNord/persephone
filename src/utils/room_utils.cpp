@@ -2,6 +2,7 @@
 
 #include "state_res.hpp"
 
+#include <string>
 #include <trantor/utils/Logger.h>
 
 namespace {
@@ -94,7 +95,8 @@ json get_powerlevels_pdu(
 }
 } // namespace
 
-std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data) {
+std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
+                                         const std::string &server_name) {
   // Calculate the expected amount of state events based on the given data in
   // the request This is used to preallocate the state_events vector We expect
   // the following state events:
@@ -199,7 +201,9 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data) {
         {"type", "m.room.canonical_alias"},
         {"content",
          {
-             {"alias", data.createRoom_body.room_alias_name.value()},
+             {"alias", std::format("#{}:{}",
+                                   data.createRoom_body.room_alias_name.value(),
+                                   server_name)},
          }},
         {"origin_server_ts",
          std::chrono::duration_cast<std::chrono::milliseconds>(
