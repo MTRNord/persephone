@@ -2,6 +2,8 @@
 
 #include "state_res.hpp"
 
+#include <exception>
+#include <stdexcept>
 #include <string>
 #include <trantor/utils/Logger.h>
 

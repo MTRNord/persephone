@@ -661,6 +661,9 @@ void ServerServerCtrl::send_join(
         if (json_utils::verify_signature(*pub_key, sig_value, canonical_str)) {
           signature_valid = true;
           break;
+        } else {
+          LOG_WARN << "Signature verification failed for key " << sig_key_id
+                   << " from " << origin_server << " for event " << eventId;
         }
       }
 
