@@ -362,6 +362,9 @@ Database::add_event(const std::shared_ptr<drogon::orm::Transaction> transaction,
   const int64_t calculated_depth =
       co_await calculate_event_depth(transaction, event);
 
+  // Log event for debugging
+  LOG_DEBUG << "Adding event: " << event.dump();
+
   const std::string event_type = event.at("type").get<std::string>();
   const std::string event_id = event.at("event_id").get<std::string>();
 

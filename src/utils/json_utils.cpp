@@ -114,8 +114,8 @@ base64_std_unpadded(const std::vector<unsigned char> &input) {
  * @return The signed JSON object.
  * @throw std::runtime_error If the signing fails.
  */
-[[nodiscard]] json sign_json(const std::string_view server_name,
-                             const std::string_view key_id,
+[[nodiscard]] json sign_json(const std::string &server_name,
+                             const std::string &key_id,
                              const std::vector<unsigned char> &secret_key,
                              json json_data) {
   if (json_data.is_null()) {
@@ -138,7 +138,7 @@ base64_std_unpadded(const std::vector<unsigned char> &input) {
   const std::string canonical_json = json_data.dump();
   std::vector<unsigned char> signature(crypto_sign_BYTES);
 
-  const auto unsigned_char_canonical_json =
+  const auto *const unsigned_char_canonical_json =
       reinterpret_cast<const unsigned char *>(canonical_json.c_str());
 
   const auto result = crypto_sign_detached(
