@@ -9,6 +9,7 @@
 #include "webserver/json.hpp"
 #include <chrono>
 #include <cstdint>
+#include <database/state_ordering.hpp>
 #include <drogon/HttpClient.h>
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
@@ -718,7 +719,11 @@ void ServerServerCtrl::send_join(
                      k500InternalServerError);
         co_return;
       }
+
       const auto room_nid = room_nid_opt.value();
+      if (co_await StateOrdering::needs_reordering(room_nid)) {
+        co_await StateOrdering::reorder_room(room_nid);
+      }
 
       // B. Fetch state BEFORE persisting (spec: state prior to the join)
       const auto state_events =

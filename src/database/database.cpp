@@ -1042,7 +1042,7 @@ Database::get_current_room_state(int room_nid) {
         "SELECT ej.json FROM temporal_state ts "
         "JOIN event_json ej ON ej.event_nid = ts.event_nid "
         "WHERE ts.room_nid = $1 AND ts.end_index IS NULL "
-        "ORDER BY ts.event_nid",
+        "ORDER BY ts.ordering",
         room_nid);
 
     std::vector<json> state_events;
@@ -1050,6 +1050,15 @@ Database::get_current_room_state(int room_nid) {
 
     for (const auto &row : query) {
       state_events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    LOG_DEBUG << "Fetched " << state_events.size()
+              << " current state events for room_nid " << room_nid;
+
+    // Print event ids for debugging
+    for (const auto &event : state_events) {
+      LOG_DEBUG << "Got State event from the DB: "
+                << event["event_id"].get<std::string>();
     }
 
     co_return state_events;
@@ -1187,7 +1196,8 @@ Database::get_account_data(const std::string user_id) {
 Database::get_room_account_data([[maybe_unused]] const std::string user_id,
                                 [[maybe_unused]] const std::string room_id) {
   // Room-specific account data uses a different table or column
-  // For now return empty - can be implemented when room account data is needed
+  // For now return empty - can be implemented when room account data is
+  // needed
   // TODO: Implement room-specific account data when needed
   co_return {};
 }
@@ -1218,8 +1228,8 @@ Database::get_max_event_nid_for_user_rooms(const std::string user_id,
     std::terminate();
   }
   try {
-    // Get max event_nid from rooms the user is a member of, since the given nid
-    // Cast since_event_nid to int to match SERIAL (int4) column type for
+    // Get max event_nid from rooms the user is a member of, since the given
+    // nid Cast since_event_nid to int to match SERIAL (int4) column type for
     // Drogon's binary protocol
     const auto since_nid = static_cast<int>(since_event_nid);
     const auto query = co_await sql->execSqlCoro(
@@ -1264,7 +1274,8 @@ Database::get_invite_stripped_state(int room_nid,
         "JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
         "WHERE ts.room_nid = $1 AND ts.end_index IS NULL "
         "AND ("
-        "  et.event_type IN ('m.room.create', 'm.room.name', 'm.room.avatar', "
+        "  et.event_type IN ('m.room.create', 'm.room.name', "
+        "'m.room.avatar', "
         "    'm.room.topic', 'm.room.canonical_alias', 'm.room.encryption', "
         "    'm.room.join_rules') "
         "  OR (et.event_type = 'm.room.member' AND sk.state_key = $2)"
