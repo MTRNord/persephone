@@ -496,19 +496,16 @@ void ServerServerCtrl::make_join(
       const std::string origin =
           colon_pos != std::string::npos ? userId.substr(colon_pos + 1) : "";
 
-      json proto_event = {{"type", "m.room.member"},
-                          {"sender", userId},
-                          {"state_key", userId},
-                          {"room_id", roomId},
-                          {"origin", origin},
-                          {"origin_server_ts", origin_server_ts},
-                          {"depth", max_depth + 1},
-                          {"content", {{"membership", "join"}}},
-                          {"auth_events", auth_event_ids},
-                          {"prev_events", prev_events}};
-
-      const auto event_id_val = event_id(proto_event, room_version);
-      proto_event["event_id"] = event_id_val;
+      const json proto_event = {{"type", "m.room.member"},
+                                {"sender", userId},
+                                {"state_key", userId},
+                                {"room_id", roomId},
+                                {"origin", origin},
+                                {"origin_server_ts", origin_server_ts},
+                                {"depth", max_depth + 1},
+                                {"content", {{"membership", "join"}}},
+                                {"auth_events", auth_event_ids},
+                                {"prev_events", prev_events}};
 
       // 10. Return the response
       const server_server_json::MakeJoinResp response{
@@ -604,9 +601,9 @@ void ServerServerCtrl::send_join(
       const auto &room_version = room_version_opt.value();
 
       // 8. Verify event ID matches computed event_id
+      const auto computed_event_id = event_id(body, room_version);
       try {
-        if (const auto computed_event_id = event_id(body, room_version);
-            computed_event_id != eventId) {
+        if (computed_event_id != eventId) {
           return_error(
               callback, "M_BAD_JSON",
               std::format("Event ID mismatch: path has {}, computed {}",
@@ -731,14 +728,19 @@ void ServerServerCtrl::send_join(
       // C. Co-sign the event
       const auto server_name = std::string(config.matrix_config.server_name);
       const auto key_id_str = verify_key_data.key_id;
-      const auto signed_event = json_utils::sign_json(
+      auto signed_event = json_utils::sign_json(
           server_name, key_id_str, verify_key_data.private_key, body);
+
+      // Add event_id to the signed event
+      const auto signed_event_with_event_id = signed_event["event_id"] =
+          computed_event_id;
 
       // D. Persist the event
       try {
         const auto sql = drogon::app().getDbClient();
         const auto transaction = co_await sql->newTransactionCoro();
-        co_await Database::add_event(transaction, signed_event, roomId);
+        co_await Database::add_event(transaction, signed_event_with_event_id,
+                                     roomId);
       } catch (const std::exception &e) {
         LOG_ERROR << "send_join: Failed to persist event: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to persist event",
