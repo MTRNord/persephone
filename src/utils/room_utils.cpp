@@ -129,13 +129,17 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
   std::vector<json> state_events;
   state_events.reserve(expected_state_events);
 
+  // Merge the creator and room_version into the creation_content if it is set,
+  // otherwise create a new content with
+  json creation_content =
+      data.createRoom_body.creation_content.value_or(json::object());
+  creation_content["creator"] = data.user_id;
+  creation_content["room_version"] = data.room_version;
+
   // Create the m.room.create event
   json create_room_pdu = {
       {"type", "m.room.create"},
-      {"content", data.createRoom_body.creation_content.value_or(json::object({
-                      {"creator", data.user_id},
-                      {"room_version", data.room_version},
-                  }))},
+      {"content", creation_content},
       {"origin_server_ts",
        std::chrono::duration_cast<std::chrono::milliseconds>(
            std::chrono::system_clock::now().time_since_epoch())
