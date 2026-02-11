@@ -1333,25 +1333,6 @@ void ClientServerCtrl::sync(
     // 5. Perform sync
     client_server_json::SyncResponse sync_result;
 
-    for (auto &val : sync_result.rooms.join | std::views::values) {
-      for (auto &event : val.state.events) {
-        json_utils::remove_signatures_and_auth(event);
-      }
-      for (auto &event : val.timeline.events) {
-        json_utils::remove_signatures_and_auth(event);
-      }
-    }
-    for (auto &[invite_state] : sync_result.rooms.invite | std::views::values) {
-      for (auto &event : invite_state.events) {
-        json_utils::remove_signatures_and_auth(event);
-      }
-    }
-    for (auto &val : sync_result.rooms.leave | std::views::values) {
-      for (auto &event : val.timeline.events) {
-        json_utils::remove_signatures_and_auth(event);
-      }
-    }
-
     if (!since_event_nid.has_value()) {
       // Initial sync - return immediately
       sync_result = co_await perform_initial_sync(userInfo->user_id, filter);
@@ -1402,7 +1383,30 @@ void ClientServerCtrl::sync(
       }
     }
 
-    // 6. Return response
+    // 6. Strip federation-only fields from events before returning to client
+    for (auto &val : sync_result.rooms.join | std::views::values) {
+      for (auto &event : val.state.events) {
+        json_utils::strip_federation_fields(event);
+      }
+      for (auto &event : val.timeline.events) {
+        json_utils::strip_federation_fields(event);
+      }
+    }
+    for (auto &[invite_state] : sync_result.rooms.invite | std::views::values) {
+      for (auto &event : invite_state.events) {
+        json_utils::strip_federation_fields(event);
+      }
+    }
+    for (auto &val : sync_result.rooms.leave | std::views::values) {
+      for (auto &event : val.state.events) {
+        json_utils::strip_federation_fields(event);
+      }
+      for (auto &event : val.timeline.events) {
+        json_utils::strip_federation_fields(event);
+      }
+    }
+
+    // 7. Return response
     const auto resp = HttpResponse::newHttpResponse();
     resp->setBody(json(sync_result).dump());
     resp->setContentTypeString(JSON_CONTENT_TYPE);

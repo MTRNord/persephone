@@ -58,6 +58,8 @@ void ensure_server_keys(const Config &config);
 [[nodiscard]] std::optional<std::vector<unsigned char>>
 decode_base64(const std::string &input);
 
-void remove_signatures_and_auth(json &json_data);
+/// Strip federation-only fields from a PDU to produce a ClientEvent.
+/// Removes: auth_events, prev_events, depth, hashes, signatures
+void strip_federation_fields(json &event);
 
 } // namespace json_utils
