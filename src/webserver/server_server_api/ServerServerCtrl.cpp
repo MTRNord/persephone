@@ -653,15 +653,23 @@ void ServerServerCtrl::send_join(
         }
 
         // Build canonical JSON without signatures and unsigned
+        {
+          // Redact according to room version, then explicitly remove both
+          // "signatures" and "unsigned" so the canonical JSON matches the form
+          // used at signing time.
+          auto canonical_json = redact(body, room_version);
+          canonical_json.erase("signatures");
+          canonical_json.erase("unsigned");
+          const auto canonical = canonical_json.dump();
 
-        if (auto canonical = redact(body, room_version).dump();
-            json_utils::verify_signature(pub_key.value(), sig_value,
-                                         canonical)) {
-          signature_valid = true;
-          break;
-        } else {
-          LOG_WARN << "Signature verification failed for key " << sig_key_id
-                   << " from " << origin_server << " for event " << eventId;
+          if (json_utils::verify_signature(pub_key.value(), sig_value,
+                                           canonical)) {
+            signature_valid = true;
+            break;
+          } else {
+            LOG_WARN << "Signature verification failed for key " << sig_key_id
+                     << " from " << origin_server << " for event " << eventId;
+          }
         }
       }
 
