@@ -388,6 +388,9 @@ void ServerServerCtrl::make_join(
       }
       const std::string &room_version = room_version_opt.value();
 
+      LOG_DEBUG << "make_join: roomId=" << roomId << " userId=" << userId
+                << " room_version=" << room_version;
+
       // 3. Check if the room version is supported
       if (!room_version::is_supported(room_version)) {
         const auto resp = HttpResponse::newHttpResponse();
