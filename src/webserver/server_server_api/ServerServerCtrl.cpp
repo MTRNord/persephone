@@ -732,15 +732,13 @@ void ServerServerCtrl::send_join(
           server_name, key_id_str, verify_key_data.private_key, body);
 
       // Add event_id to the signed event
-      const auto signed_event_with_event_id = signed_event["event_id"] =
-          computed_event_id;
+      signed_event["event_id"] = computed_event_id;
 
       // D. Persist the event
       try {
         const auto sql = drogon::app().getDbClient();
         const auto transaction = co_await sql->newTransactionCoro();
-        co_await Database::add_event(transaction, signed_event_with_event_id,
-                                     roomId);
+        co_await Database::add_event(transaction, signed_event, roomId);
       } catch (const std::exception &e) {
         LOG_ERROR << "send_join: Failed to persist event: " << e.what();
         return_error(callback, "M_UNKNOWN", "Failed to persist event",
