@@ -496,16 +496,19 @@ void ServerServerCtrl::make_join(
       const std::string origin =
           colon_pos != std::string::npos ? userId.substr(colon_pos + 1) : "";
 
-      const json proto_event = {{"type", "m.room.member"},
-                                {"sender", userId},
-                                {"state_key", userId},
-                                {"room_id", roomId},
-                                {"origin", origin},
-                                {"origin_server_ts", origin_server_ts},
-                                {"depth", max_depth + 1},
-                                {"content", {{"membership", "join"}}},
-                                {"auth_events", auth_event_ids},
-                                {"prev_events", prev_events}};
+      json proto_event = {{"type", "m.room.member"},
+                          {"sender", userId},
+                          {"state_key", userId},
+                          {"room_id", roomId},
+                          {"origin", origin},
+                          {"origin_server_ts", origin_server_ts},
+                          {"depth", max_depth + 1},
+                          {"content", {{"membership", "join"}}},
+                          {"auth_events", auth_event_ids},
+                          {"prev_events", prev_events}};
+
+      const auto event_id_val = event_id(proto_event, room_version);
+      proto_event["event_id"] = event_id_val;
 
       // 10. Return the response
       const server_server_json::MakeJoinResp response{
