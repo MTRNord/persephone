@@ -653,12 +653,10 @@ void ServerServerCtrl::send_join(
         }
 
         // Build canonical JSON without signatures and unsigned
-        auto canonical = body;
-        canonical.erase("signatures");
-        canonical.erase("unsigned");
-        const auto canonical_str = canonical.dump();
 
-        if (json_utils::verify_signature(*pub_key, sig_value, canonical_str)) {
+        if (auto canonical = redact(body, room_version).dump();
+            json_utils::verify_signature(pub_key.value(), sig_value,
+                                         canonical)) {
           signature_valid = true;
           break;
         } else {

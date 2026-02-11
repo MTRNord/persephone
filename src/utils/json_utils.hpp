@@ -44,14 +44,15 @@ void write_server_key(const Config &config,
 void ensure_server_keys(const Config &config);
 
 /// Verify a signature against a message using Ed25519
-/// @param public_key The public key as base64-encoded string (URL-safe,
+/// @param public_key_base64 The public key as base64-encoded string (URL-safe,
 /// unpadded)
-/// @param signature The signature as base64-encoded string (standard, unpadded)
+/// @param signature_base64 The signature as base64-encoded string (standard,
+/// unpadded)
 /// @param message The message that was signed
 /// @return true if signature is valid, false otherwise
-[[nodiscard]] bool verify_signature(std::string_view public_key_base64,
-                                    std::string_view signature_base64,
-                                    std::string_view message);
+[[nodiscard]] bool verify_signature(const std::string &public_key_base64,
+                                    const std::string &signature_base64,
+                                    const std::string &message);
 
 /// Decode a base64 string (supports both URL-safe and standard variants)
 [[nodiscard]] std::optional<std::vector<unsigned char>>

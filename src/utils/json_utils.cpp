@@ -7,6 +7,7 @@
 #include <format>
 #include <fstream>
 #include <map>
+#include <optional>
 #include <sodium/crypto_sign.h>
 #include <sodium/utils.h>
 #include <stdexcept>
@@ -241,7 +242,7 @@ decode_base64(const std::string &input) {
 
   const size_t b64_str_len = input.size();
   // Allocate max possible size (base64 expands by ~4/3)
-  size_t bin_len = b64_str_len * 3 / 4 + 4;
+  size_t bin_len = (b64_str_len * 3 / 4) + 4;
   std::vector<unsigned char> bin_str(bin_len);
 
   // Try URL-safe variant first
@@ -251,7 +252,7 @@ decode_base64(const std::string &input) {
 
   if (status < 0) {
     // Try standard variant
-    bin_len = b64_str_len * 3 / 4 + 4;
+    bin_len = (b64_str_len * 3 / 4) + 4;
     status = sodium_base642bin(bin_str.data(), bin_len, input.data(),
                                b64_str_len, nullptr, &bin_len, nullptr,
                                sodium_base64_VARIANT_ORIGINAL_NO_PADDING);
@@ -265,9 +266,9 @@ decode_base64(const std::string &input) {
   return bin_str;
 }
 
-[[nodiscard]] bool verify_signature(const std::string_view public_key_base64,
-                                    const std::string_view signature_base64,
-                                    const std::string_view message) {
+[[nodiscard]] bool verify_signature(const std::string &public_key_base64,
+                                    const std::string &signature_base64,
+                                    const std::string &message) {
   // Decode the public key
   const auto public_key_opt = decode_base64(std::string(public_key_base64));
   if (!public_key_opt.has_value() ||
