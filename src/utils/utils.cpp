@@ -486,7 +486,13 @@ get_srv_record(const std::string &address) {
   }
 
   LOG_DEBUG << "Discovering server's well-known endpoint";
-  auto client = create_http_client_for_host(server_name);
+  // Build an explicit hostString for the well-known request on standard HTTPS
+  // port 443 and log it. Using an explicit hostString ensures we show the exact
+  // URL passed to the HTTP client for diagnostics.
+  std::string wellKnownHostString = std::format("https://{}", server_name);
+  LOG_DEBUG << "Well-known request hostString=" << wellKnownHostString;
+  auto client = drogon::HttpClient::newHttpClient(
+      wellKnownHostString, trantor::EventLoop::getEventLoopOfCurrentThread());
   client->setUserAgent(UserAgent);
 
   auto req = HttpRequest::newHttpRequest();
