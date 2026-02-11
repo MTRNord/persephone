@@ -1042,7 +1042,7 @@ Database::get_current_room_state(int room_nid) {
         "SELECT ej.json FROM temporal_state ts "
         "JOIN event_json ej ON ej.event_nid = ts.event_nid "
         "WHERE ts.room_nid = $1 AND ts.end_index IS NULL "
-        "ORDER BY ts.ordering",
+        "ORDER BY ts.event_nid ASC",
         room_nid);
 
     std::vector<json> state_events;

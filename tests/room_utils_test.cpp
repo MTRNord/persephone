@@ -59,7 +59,6 @@ TEST_CASE("build_createRoom_state minimal", "[room_utils]") {
   REQUIRE(events[0]["sender"] == "@alice:localhost");
   REQUIRE(events[0]["room_id"] == "!test:localhost");
   REQUIRE(events[0]["state_key"] == "");
-  REQUIRE(events[0].contains("event_id"));
   REQUIRE(events[0].contains("origin_server_ts"));
 
   // Second event should be m.room.member (join)
@@ -149,7 +148,6 @@ TEST_CASE("build_createRoom_state with initial_state", "[room_utils]") {
       REQUIRE(event["content"]["history_visibility"] == "shared");
       REQUIRE(event["sender"] == "@alice:localhost");
       REQUIRE(event["room_id"] == "!test:localhost");
-      REQUIRE(event.contains("event_id"));
       found_history = true;
     }
   }
@@ -215,7 +213,8 @@ TEST_CASE("build_createRoom_state with power_level_override", "[room_utils]") {
   REQUIRE(found_pl);
 }
 
-TEST_CASE("build_createRoom_state event_ids are unique", "[room_utils]") {
+TEST_CASE("build_createRoom_state all events have required semantic fields",
+          "[room_utils]") {
   const CreateRoomStateBuildData data{.createRoom_body = {.name = "Room",
                                                           .room_version = "11",
                                                           .topic = "Topic"},
@@ -225,13 +224,19 @@ TEST_CASE("build_createRoom_state event_ids are unique", "[room_utils]") {
 
   auto events = build_createRoom_state(data, "localhost");
 
-  // All event_ids should be unique
-  std::set<std::string> event_ids;
+  // All events should have the semantic fields needed for finalization
   for (const auto &event : events) {
-    REQUIRE(event.contains("event_id"));
-    auto eid = event["event_id"].get<std::string>();
-    REQUIRE_FALSE(eid.empty());
-    auto inserted = event_ids.insert(eid).second;
-    REQUIRE(inserted); // insertion should succeed (unique)
+    REQUIRE(event.contains("type"));
+    REQUIRE(event.contains("content"));
+    REQUIRE(event.contains("sender"));
+    REQUIRE(event.contains("state_key"));
+    REQUIRE(event.contains("room_id"));
+    REQUIRE(event.contains("origin_server_ts"));
+    // event_id, auth_events, prev_events, depth, hashes, signatures
+    // are added later by finalize_room_creation_events
+    REQUIRE_FALSE(event.contains("event_id"));
+    REQUIRE_FALSE(event.contains("auth_events"));
+    REQUIRE_FALSE(event.contains("prev_events"));
+    REQUIRE_FALSE(event.contains("depth"));
   }
 }

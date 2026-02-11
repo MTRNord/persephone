@@ -373,17 +373,13 @@ webserver:
   // ensure the key exists
   json_utils::ensure_server_keys(config);
 
-  // Sign all the state events
-
-  // Prepare loading the signing data
+  // Finalize all state events (sets auth_events, prev_events, depth,
+  // computes content hash, event_id, signs each event)
   const auto key_data = get_verify_key_data(config);
 
-  find_auth_event_for_event_on_create(room_state, "11");
-  for (auto &state_event : room_state) {
-    state_event =
-        json_utils::sign_json(config.matrix_config.server_name, key_data.key_id,
-                              key_data.private_key, state_event);
-  }
+  finalize_room_creation_events(room_state, "11",
+                                config.matrix_config.server_name,
+                                key_data.key_id, key_data.private_key);
 
   // Convert the solved_state map to a `std::vector<std::vector<StateEvent>>`
   const std::vector<std::vector<StateEvent>> state_forks = {room_state};
@@ -789,5 +785,342 @@ TEST_CASE("select_auth_events_for_join", "[auth_events]") {
 
     REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$bob_member") !=
             auth_events.end());
+  }
+}
+
+// ============================================================================
+// content_hash tests
+// ============================================================================
+
+TEST_CASE("content_hash", "[content_hash]") {
+  SECTION("Produces consistent hash for same event") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:example.com",
+      "sender": "@alice:example.com",
+      "state_key": "@alice:example.com",
+      "type": "m.room.member"
+    })"_json;
+
+    auto hash1 = content_hash(event, "11");
+    auto hash2 = content_hash(event, "11");
+
+    REQUIRE(hash1 == hash2);
+    REQUIRE_FALSE(hash1.empty());
+  }
+
+  SECTION("Strips unsigned, signatures, and hashes before hashing") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:example.com",
+      "sender": "@alice:example.com",
+      "state_key": "@alice:example.com",
+      "type": "m.room.member"
+    })"_json;
+
+    auto event_with_extras = event;
+    event_with_extras["unsigned"] = {{"age", 1234}};
+    event_with_extras["signatures"] = {
+        {"example.com", {{"ed25519:key", "sig"}}}};
+    event_with_extras["hashes"] = {{"sha256", "oldhash"}};
+
+    auto hash_clean = content_hash(event, "11");
+    auto hash_extras = content_hash(event_with_extras, "11");
+
+    REQUIRE(hash_clean == hash_extras);
+  }
+
+  SECTION("Different events produce different hashes") {
+    auto event_a = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:example.com",
+      "sender": "@alice:example.com",
+      "state_key": "@alice:example.com",
+      "type": "m.room.member"
+    })"_json;
+
+    auto event_b = R"({
+      "auth_events": [],
+      "content": {"membership": "leave"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:example.com",
+      "sender": "@alice:example.com",
+      "state_key": "@alice:example.com",
+      "type": "m.room.member"
+    })"_json;
+
+    REQUIRE(content_hash(event_a, "11") != content_hash(event_b, "11"));
+  }
+
+  SECTION("Unsupported room version throws") {
+    auto event = R"({"type": "m.room.create"})"_json;
+    REQUIRE_THROWS_AS(content_hash(event, "unknown"), MatrixRoomVersionError);
+  }
+
+  SECTION("Null event throws") {
+    REQUIRE_THROWS_AS(content_hash(json(nullptr), "11"),
+                      std::invalid_argument);
+  }
+}
+
+// ============================================================================
+// finalize_event tests
+// ============================================================================
+
+TEST_CASE("finalize_event", "[finalize_event]") {
+  // Load signing keys from config
+  const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+  )";
+
+  std::ofstream file("config.yaml");
+  file << config_file;
+  file.close();
+
+  const Config config{};
+  json_utils::ensure_server_keys(config);
+  const auto key_data = get_verify_key_data(config);
+
+  SECTION("Produces a complete PDU with all required fields") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto finalized = finalize_event(event, "11",
+                                     config.matrix_config.server_name,
+                                     key_data.key_id, key_data.private_key);
+
+    // Must have hashes.sha256
+    REQUIRE(finalized.contains("hashes"));
+    REQUIRE(finalized["hashes"].contains("sha256"));
+    REQUIRE_FALSE(finalized["hashes"]["sha256"].get<std::string>().empty());
+
+    // Must have event_id starting with $
+    REQUIRE(finalized.contains("event_id"));
+    REQUIRE(finalized["event_id"].get<std::string>().starts_with("$"));
+
+    // Must have signatures for our server
+    REQUIRE(finalized.contains("signatures"));
+    REQUIRE(finalized["signatures"].contains("localhost"));
+
+    // Original fields preserved
+    REQUIRE(finalized["type"] == "m.room.member");
+    REQUIRE(finalized["content"]["membership"] == "join");
+    REQUIRE(finalized["depth"] == 1);
+  }
+
+  SECTION("event_id is deterministic") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto finalized1 = finalize_event(event, "11",
+                                      config.matrix_config.server_name,
+                                      key_data.key_id, key_data.private_key);
+    auto finalized2 = finalize_event(event, "11",
+                                      config.matrix_config.server_name,
+                                      key_data.key_id, key_data.private_key);
+
+    REQUIRE(finalized1["event_id"] == finalized2["event_id"]);
+    REQUIRE(finalized1["hashes"]["sha256"] == finalized2["hashes"]["sha256"]);
+  }
+
+  SECTION("event_id computed after hashes are set") {
+    // Verify that the event_id includes hashes in its computation
+    // by checking that adding hashes manually before finalize_event
+    // would produce the same event_id as finalize_event does
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto finalized = finalize_event(event, "11",
+                                     config.matrix_config.server_name,
+                                     key_data.key_id, key_data.private_key);
+
+    // Manually compute: set hashes first, then compute event_id
+    auto manual = event;
+    manual["hashes"] = json::object({{"sha256", content_hash(manual, "11")}});
+    auto manual_event_id = event_id(manual, "11");
+
+    REQUIRE(finalized["event_id"] == manual_event_id);
+  }
+}
+
+// ============================================================================
+// finalize_room_creation_events tests
+// ============================================================================
+
+TEST_CASE("finalize_room_creation_events", "[finalize_room_creation_events]") {
+  const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+  )";
+
+  std::ofstream file("config.yaml");
+  file << config_file;
+  file.close();
+
+  const Config config{};
+  json_utils::ensure_server_keys(config);
+  const auto key_data = get_verify_key_data(config);
+
+  const CreateRoomStateBuildData data{
+      .createRoom_body = {.creation_content = std::nullopt,
+                          .initial_state = std::nullopt,
+                          .invite = std::nullopt,
+                          .invite_3pid = std::nullopt,
+                          .name = std::nullopt,
+                          .power_level_content_override = std::nullopt,
+                          .preset = std::nullopt,
+                          .room_alias_name = std::nullopt,
+                          .room_version = "11",
+                          .topic = std::nullopt,
+                          .visibility = std::nullopt,
+                          .is_direct = std::nullopt},
+      .room_id = "!test:localhost",
+      .user_id = "@test:localhost",
+      .room_version = "11"};
+
+  auto events = build_createRoom_state(data, "localhost");
+
+  finalize_room_creation_events(events, "11", config.matrix_config.server_name,
+                                key_data.key_id, key_data.private_key);
+
+  SECTION("m.room.create has correct structure") {
+    const auto &create = events[0];
+
+    REQUIRE(create["type"] == "m.room.create");
+    REQUIRE(create["auth_events"] == json::array());
+    REQUIRE(create["prev_events"] == json::array());
+    REQUIRE(create["depth"] == 1);
+    REQUIRE(create.contains("hashes"));
+    REQUIRE(create["hashes"].contains("sha256"));
+    REQUIRE(create.contains("event_id"));
+    REQUIRE(create.contains("signatures"));
+    REQUIRE(create["signatures"].contains("localhost"));
+  }
+
+  SECTION("Subsequent events reference previous event") {
+    // m.room.member (index 1) should reference m.room.create (index 0)
+    const auto &create = events[0];
+    const auto &member = events[1];
+
+    REQUIRE(member["prev_events"].size() == 1);
+    REQUIRE(member["prev_events"][0] == create["event_id"]);
+    REQUIRE(member["depth"] == 2);
+  }
+
+  SECTION("Depth increments for each event") {
+    for (size_t i = 0; i < events.size(); ++i) {
+      REQUIRE(events[i]["depth"] == static_cast<int64_t>(i + 1));
+    }
+  }
+
+  SECTION("All events have required PDU fields") {
+    for (const auto &event : events) {
+      REQUIRE(event.contains("auth_events"));
+      REQUIRE(event.contains("prev_events"));
+      REQUIRE(event.contains("depth"));
+      REQUIRE(event.contains("hashes"));
+      REQUIRE(event["hashes"].contains("sha256"));
+      REQUIRE(event.contains("event_id"));
+      REQUIRE(event.contains("signatures"));
+      REQUIRE(event.contains("type"));
+      REQUIRE(event.contains("content"));
+      REQUIRE(event.contains("sender"));
+      REQUIRE(event.contains("room_id"));
+      REQUIRE(event.contains("origin_server_ts"));
+    }
+  }
+
+  SECTION("Auth events are correctly populated") {
+    const auto &create = events[0];
+    const auto &member = events[1];
+    const auto &power_levels = events[2];
+
+    // m.room.create has no auth events
+    REQUIRE(create["auth_events"].empty());
+
+    // m.room.member should have m.room.create in auth_events
+    auto member_auth = member["auth_events"].get<std::vector<std::string>>();
+    REQUIRE(std::find(member_auth.begin(), member_auth.end(),
+                      create["event_id"].get<std::string>()) !=
+            member_auth.end());
+
+    // m.room.power_levels should have m.room.create and m.room.member
+    auto pl_auth =
+        power_levels["auth_events"].get<std::vector<std::string>>();
+    REQUIRE(std::find(pl_auth.begin(), pl_auth.end(),
+                      create["event_id"].get<std::string>()) !=
+            pl_auth.end());
+    REQUIRE(std::find(pl_auth.begin(), pl_auth.end(),
+                      member["event_id"].get<std::string>()) !=
+            pl_auth.end());
+  }
+
+  SECTION("Event IDs are verifiable by recomputing reference hash") {
+    for (const auto &event : events) {
+      auto recomputed_id = event_id(event, "11");
+      REQUIRE(recomputed_id == event["event_id"].get<std::string>());
+    }
   }
 }

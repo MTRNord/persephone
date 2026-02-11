@@ -1,5 +1,6 @@
 #include "state_res.hpp"
 #include "utils/errors.hpp"
+#include "utils/json_utils.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <ctime>
@@ -132,8 +133,10 @@ namespace {
   // Step 1: Redact the event (strips non-preserved keys like "origin")
   json event_copy = v11_redact(event);
 
-  // Step 2: Remove signatures (unsigned is already stripped by redaction)
+  // Step 2: Remove signatures, unsigned, and event_id per spec
   event_copy.erase("signatures");
+  event_copy.erase("unsigned");
+  event_copy.erase("event_id");
 
   // Step 3: Canonical JSON and SHA256
   const auto input = event_copy.dump();
@@ -923,6 +926,181 @@ reference_hash(const json &event, const std::string_view room_version) {
   }
 
   return std::format("${}", base64_str);
+}
+
+[[nodiscard]] std::string content_hash(const json &event,
+                                       const std::string_view room_version) {
+  if (event.is_null()) {
+    throw std::invalid_argument("Event cannot be null");
+  }
+
+  // Currently all supported room versions use the same content hash algorithm.
+  // When a future room version changes this, add a version-specific function
+  // (e.g. content_hash_v12) in the anonymous namespace and dispatch here.
+  if (room_version == "11") {
+    // Copy and remove unsigned, signatures, hashes
+    json event_copy = event;
+    event_copy.erase("unsigned");
+    event_copy.erase("signatures");
+    event_copy.erase("hashes");
+
+    // SHA-256 of canonical JSON
+    const auto canonical = event_copy.dump();
+    unsigned char sha256_hash[crypto_hash_sha256_BYTES];
+    crypto_hash_sha256(
+        sha256_hash,
+        reinterpret_cast<const unsigned char *>(canonical.c_str()),
+        canonical.size());
+
+    // Return as unpadded standard base64
+    return json_utils::base64_std_unpadded(
+        {sha256_hash, sha256_hash + crypto_hash_sha256_BYTES});
+  }
+
+  throw MatrixRoomVersionError(std::string(room_version));
+}
+
+[[nodiscard]] json finalize_event(json event,
+                                  const std::string_view room_version,
+                                  const std::string &server_name,
+                                  const std::string &key_id,
+                                  const std::vector<unsigned char> &private_key) {
+  // 1. Compute content hash and set hashes.sha256
+  event["hashes"] = json::object({{"sha256", content_hash(event, room_version)}});
+
+  // 2. Compute event_id from reference hash (includes hashes, auth_events,
+  //    prev_events, depth)
+  event["event_id"] = event_id(event, room_version);
+
+  // 3. Sign the event
+  return json_utils::sign_json(server_name, key_id, private_key, event);
+}
+
+void finalize_room_creation_events(
+    std::vector<StateEvent> &events, const std::string_view room_version,
+    const std::string &server_name, const std::string &key_id,
+    const std::vector<unsigned char> &private_key) {
+  std::vector<StateEvent> known_events;
+  int64_t current_depth = 0;
+  std::string prev_event_id;
+
+  for (auto &outermost_event : events) {
+    if (outermost_event["type"] == "m.room.create") {
+      outermost_event["auth_events"] = json::array();
+      outermost_event["prev_events"] = json::array();
+      outermost_event["depth"] = 1;
+      current_depth = 1;
+
+      outermost_event =
+          finalize_event(outermost_event, room_version, server_name, key_id,
+                         private_key);
+      prev_event_id = outermost_event["event_id"].get<std::string>();
+      known_events.push_back(outermost_event);
+      continue;
+    }
+
+    // --- Build auth_events (same logic as old find_auth_event_for_event_on_create) ---
+    std::vector<std::string> auth_events;
+
+    // Add m.room.create event_id
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.create") {
+        auth_events.push_back(event["event_id"].get<std::string>());
+      }
+    }
+    if (auth_events.empty()) {
+      throw std::runtime_error("m.room.create event not found in events array");
+    }
+
+    // Add m.room.power_levels event_id
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.power_levels") {
+        auth_events.push_back(event["event_id"].get<std::string>());
+      }
+    }
+
+    // Add sender's m.room.member event_id
+    std::optional<json> sender_membership = std::nullopt;
+    for (const auto &event : known_events) {
+      if (event["type"] == "m.room.member" &&
+          event["state_key"] == outermost_event["sender"]) {
+        sender_membership = event;
+        auth_events.push_back(event["event_id"].get<std::string>());
+      }
+    }
+
+    if (outermost_event["type"] == "m.room.member") {
+      // Add target's m.room.member event_id (if target != sender)
+      for (const auto &target : known_events) {
+        if (target["type"] == "m.room.member" &&
+            target["state_key"] == outermost_event["state_key"]) {
+          if (sender_membership.has_value() &&
+              sender_membership.value()["state_key"] != target["state_key"]) {
+            auth_events.push_back(target["event_id"].get<std::string>());
+          }
+        }
+      }
+
+      // If joining or inviting, add m.room.join_rules
+      if (outermost_event["content"]["membership"] == "join" ||
+          outermost_event["content"]["membership"] == "invite") {
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.join_rules") {
+            auth_events.push_back(event["event_id"].get<std::string>());
+          }
+        }
+      }
+
+      // If inviting with third_party_invite
+      if (outermost_event["content"]["membership"] == "invite" &&
+          outermost_event["content"].contains("third_party_invite")) {
+        const auto current_count = auth_events.size();
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.third_party_invite") {
+            auth_events.push_back(event["event_id"].get<std::string>());
+          }
+        }
+        if (auth_events.size() == current_count) {
+          throw std::runtime_error("Auth events selection failure: could not "
+                                   "find matching third party invite");
+        }
+      }
+
+      // If joining through another server (restricted rooms)
+      if (outermost_event["content"].contains(
+              "join_authorised_via_users_server") &&
+          (room_version == "8" || room_version == "9" ||
+           room_version == "10" || room_version == "11")) {
+        const auto current_count = auth_events.size();
+        for (const auto &event : known_events) {
+          if (event["type"] == "m.room.member" &&
+              event["state_key"] ==
+                  outermost_event["content"]
+                                 ["join_authorised_via_users_server"]) {
+            auth_events.push_back(event["event_id"].get<std::string>());
+          }
+        }
+        if (auth_events.size() == current_count) {
+          throw std::runtime_error(
+              "Auth events selection failure: could not find "
+              "join_authorised_via_users_server membership");
+        }
+      }
+    }
+
+    // Set auth_events, prev_events, depth
+    outermost_event["auth_events"] = auth_events;
+    outermost_event["prev_events"] =
+        json::array({prev_event_id});
+    ++current_depth;
+    outermost_event["depth"] = current_depth;
+
+    // Finalize: content hash, event_id, signature
+    outermost_event = finalize_event(outermost_event, room_version,
+                                     server_name, key_id, private_key);
+    prev_event_id = outermost_event["event_id"].get<std::string>();
+    known_events.push_back(outermost_event);
+  }
 }
 
 /**

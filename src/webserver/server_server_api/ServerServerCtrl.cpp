@@ -730,9 +730,17 @@ void ServerServerCtrl::send_join(
           co_await Database::get_current_room_state(room_nid);
       const auto auth_chain = co_await Database::get_auth_chain(roomId);
 
-      // C. Co-sign the event
+      // C. Verify/compute content hash and co-sign the event
       const auto server_name = std::string(config.matrix_config.server_name);
       const auto key_id_str = verify_key_data.key_id;
+
+      // Ensure hashes.sha256 is present (the joining server should set it,
+      // but compute it ourselves if missing)
+      if (!body.contains("hashes") || !body["hashes"].contains("sha256")) {
+        body["hashes"] =
+            json::object({{"sha256", content_hash(body, room_version)}});
+      }
+
       auto signed_event = json_utils::sign_json(
           server_name, key_id_str, verify_key_data.private_key, body);
 

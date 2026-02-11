@@ -345,6 +345,15 @@ if (NOT DISABLE_TESTS)
             ${TEST_COMPILE_OPTIONS}
     )
 
+    add_executable(send_join_test tests/send_join_test.cpp)
+    target_link_libraries(send_join_test PRIVATE
+            persephone_lib
+            snitch::snitch
+    )
+    target_compile_options(send_join_test PRIVATE
+            ${TEST_COMPILE_OPTIONS}
+    )
+
     add_custom_target(tests
             COMMAND utils_test
             COMMAND state_res_test
@@ -354,6 +363,7 @@ if (NOT DISABLE_TESTS)
             COMMAND json_serialization_test
             COMMAND room_utils_test
             COMMAND state_ordering_test
+            COMMAND send_join_test
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
 
@@ -389,6 +399,10 @@ if (NOT DISABLE_TESTS)
             NAME state_ordering_test
             COMMAND state_ordering_test
     )
+    add_test(
+            NAME send_join_test
+            COMMAND send_join_test
+    )
     target_code_coverage(persephone_lib AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
@@ -398,6 +412,7 @@ if (NOT DISABLE_TESTS)
     target_code_coverage(json_serialization_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(room_utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_ordering_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    target_code_coverage(send_join_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
 
 endif ()
 

@@ -1,7 +1,5 @@
 #include "room_utils.hpp"
 
-#include "state_res.hpp"
-
 #include <exception>
 #include <stdexcept>
 #include <string>
@@ -9,8 +7,7 @@
 
 namespace {
 json get_powerlevels_pdu(
-    const std::string_view room_version, const std::string_view sender,
-    const std::string_view room_id,
+    const std::string_view sender, const std::string_view room_id,
     const std::optional<client_server_json::PowerLevelEventContent>
         &power_level_override) {
   json power_level_event = {
@@ -91,8 +88,6 @@ json get_powerlevels_pdu(
     }
   }
 
-  power_level_event["event_id"] = event_id(power_level_event, room_version);
-
   return power_level_event;
 }
 } // namespace
@@ -151,14 +146,6 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
       {"room_id", data.room_id},
   };
 
-  // Calculate and add event_id
-  try {
-    create_room_pdu["event_id"] = event_id(create_room_pdu, data.room_version);
-  } catch (const std::exception &e) {
-    LOG_ERROR << "Failed to calculate event_id: " << e.what();
-    throw std::runtime_error("Failed to calculate event_id");
-  }
-
   state_events.push_back(create_room_pdu);
 
   // Create room membership event for sender of the create room request
@@ -177,20 +164,12 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
       {"room_id", data.room_id},
   };
 
-  // Calculate and add event_id
-  try {
-    membership_pdu["event_id"] = event_id(membership_pdu, data.room_version);
-  } catch (const std::exception &e) {
-    LOG_ERROR << "Failed to calculate event_id: " << e.what();
-    throw std::runtime_error("Failed to calculate event_id");
-  }
-
   state_events.push_back(membership_pdu);
 
   // Create the default power levels event
   try {
     auto power_levels_pdu =
-        get_powerlevels_pdu(data.room_version, data.user_id, data.room_id,
+        get_powerlevels_pdu(data.user_id, data.room_id,
                             data.createRoom_body.power_level_content_override);
 
     state_events.push_back(power_levels_pdu);
@@ -220,22 +199,12 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
         {"room_id", data.room_id},
     };
 
-    // Calculate and add event_id
-    try {
-      canonical_alias_pdu["event_id"] =
-          event_id(canonical_alias_pdu, data.room_version);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      throw std::runtime_error("Failed to calculate event_id");
-    }
-
     state_events.push_back(canonical_alias_pdu);
   }
 
   // TODO: here handle the preset
 
-  // Add origin_server_ts, room_id, sender and event_id to each initial_state
-  // event and add it to state_events
+  // Add origin_server_ts, room_id, sender to each initial_state event
   for (auto &initial_state :
        data.createRoom_body.initial_state.value_or(std::vector<json>())) {
     initial_state["origin_server_ts"] =
@@ -244,14 +213,6 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
             .count();
     initial_state["room_id"] = data.room_id;
     initial_state["sender"] = data.user_id;
-
-    // Calculate and add event_id
-    try {
-      initial_state["event_id"] = event_id(initial_state, data.room_version);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      throw std::runtime_error("Failed to calculate event_id");
-    }
 
     state_events.push_back(initial_state);
   }
@@ -273,14 +234,6 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
         {"room_id", data.room_id},
     };
 
-    // Calculate and add event_id
-    try {
-      room_name_pdu["event_id"] = event_id(room_name_pdu, data.room_version);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      throw std::runtime_error("Failed to calculate event_id");
-    }
-
     state_events.push_back(room_name_pdu);
   }
 
@@ -300,15 +253,6 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
         {"state_key", ""},
         {"room_id", data.room_id},
     };
-
-    // Calculate and add event_id
-    try {
-      room_topic_pdu["event_id"] = event_id(room_topic_pdu, data.room_version);
-    } catch (const std::exception &e) {
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      LOG_ERROR << "Failed to calculate event_id: " << e.what();
-      throw std::runtime_error("Failed to calculate event_id");
-    }
 
     state_events.push_back(room_topic_pdu);
   }
@@ -332,14 +276,6 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
           {"state_key", invite},
           {"room_id", data.room_id},
       };
-
-      // Calculate and add event_id
-      try {
-        invite_pdu["event_id"] = event_id(invite_pdu, data.room_version);
-      } catch (const std::exception &e) {
-        LOG_ERROR << "Failed to calculate event_id: " << e.what();
-        throw std::runtime_error("Failed to calculate event_id");
-      }
 
       state_events.push_back(invite_pdu);
     }

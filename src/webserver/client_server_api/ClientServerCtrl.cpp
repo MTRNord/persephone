@@ -967,18 +967,14 @@ void ClientServerCtrl::createRoom(
       co_return;
     }
 
-    // Sign all the state events
-
-    // Prepare loading the signing data
+    // Finalize all state events: sets auth_events, prev_events, depth,
+    // computes content hash, event_id, and signs each event.
     const auto key_data = get_verify_key_data(_config);
-    LOG_DEBUG << "Signing state events";
+    LOG_DEBUG << "Finalizing state events";
 
-    find_auth_event_for_event_on_create(state_events, room_version);
-    for (auto &state_event : state_events) {
-      state_event = json_utils::sign_json(_config.matrix_config.server_name,
-                                          key_data.key_id, key_data.private_key,
-                                          state_event);
-    }
+    finalize_room_creation_events(state_events, room_version,
+                                  _config.matrix_config.server_name,
+                                  key_data.key_id, key_data.private_key);
 
     LOG_DEBUG << "Doing state resolution";
     // Call stateres_v2 to get the current state of the room.
