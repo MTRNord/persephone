@@ -30,8 +30,7 @@ RUN echo "\
 RUN mkdir /persephone
 
 COPY . .
-# Install drogon
-RUN cd /tmp && git clone https://github.com/drogonframework/drogon && cd drogon && git submodule update --init && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON .. && make && make install && ln -s /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1 && ln -s /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
+# Drogon is fetched and statically linked via CMake FetchContent during the build.
 RUN pip3 install --break-system-packages ninja
 
 # Build and install persephone

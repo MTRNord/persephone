@@ -69,8 +69,6 @@ jobs:
           # Use a stable GHA-backed build cache scope per repository + ref to persist across runs.
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            DROGON_REV=master
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=registry,local=false
@@ -121,8 +119,6 @@ jobs:
           # Reuse the same cache scope approach for release builds; this keeps caches per-ref and shareable.
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            DROGON_REV=master
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
           outputs: type=registry,local=false

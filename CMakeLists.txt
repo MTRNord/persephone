@@ -242,7 +242,8 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_AUTOREQPROV no)
     set(CPACK_RPM_PACKAGE_REQUIRES "uuid, jsoncpp, zlib, openssl, ldns, libevent, yaml-cpp, icu, libsodium")
 
-    # TODO: Make libdrogon work as a subpackage/direct dependency and statically link it
+    # Drogon is statically linked via FetchContent; its transitive runtime deps
+    # (libevent, jsoncpp, hiredis, spdlog) are covered by the packages above.
 else ()
     set(CPACK_GENERATOR TGZ)
 endif ()

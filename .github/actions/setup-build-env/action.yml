@@ -1,5 +1,5 @@
 name: "Setup Build Environment"
-description: "Install dependencies, LLVM/Clang, and build Drogon for Persephone"
+description: "Install dependencies and LLVM/Clang for Persephone. Drogon is fetched and statically linked via CMake FetchContent."
 
 inputs:
   install-lcov:
@@ -14,13 +14,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Restore cached Drogon
-      id: cache-drogon-restore
-      uses: actions/cache/restore@v4
-      with:
-        path: /tmp/drogon
-        key: ${{ runner.os }}-drogon-v1.9.12
-
     - name: Install LLVM/Clang
       shell: bash
       run: |
@@ -61,43 +54,3 @@ runs:
         sudo apt-get install -y "${PACKAGES[@]}"
         # jsoncpp is a bit weird on ubuntu vs fedora
         sudo ln -sf /usr/include/jsoncpp/json/ /usr/include/json
-
-    - name: Build Drogon
-      shell: bash
-      run: |
-        pushd /tmp
-        if [ ! -d /tmp/drogon ]; then
-          git clone https://github.com/drogonframework/drogon
-        fi
-        pushd drogon
-        git fetch
-        git checkout v1.9.12 || git checkout origin/master
-        git submodule update --init
-        if [ ! -d /tmp/drogon/build ]; then
-          mkdir build
-        fi
-        pushd build
-        CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 \
-        cmake -DCMAKE_BUILD_TYPE=Release \
-              -DBUILD_EXAMPLES=OFF \
-              -DBUILD_CTL=OFF \
-              -DBUILD_POSTGRESQL=ON \
-              -DBUILD_REDIS=OFF \
-              -DBUILD_SQLITE=OFF \
-              -DBUILD_MYSQL=OFF \
-              -DBUILD_ORM=ON \
-              -DBUILD_SHARED_LIBS=ON ..
-        make -j$(nproc)
-        sudo make install
-        sudo ln -sf /usr/local/lib/libdrogon.so.1 /usr/lib/libdrogon.so.1
-        sudo ln -sf /usr/local/lib/libtrantor.so.1 /usr/lib/libtrantor.so.1
-        popd
-        popd
-        popd
-
-    - name: Save Drogon cache
-      uses: actions/cache/save@v4
-      if: steps.cache-drogon-restore.outputs.cache-hit != 'true'
-      with:
-        path: /tmp/drogon
-        key: ${{ runner.os }}-drogon-v1.9.12

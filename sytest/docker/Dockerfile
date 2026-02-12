@@ -36,24 +36,7 @@ RUN if [ -d /usr/include/jsoncpp/json ] && [ ! -d /usr/include/json ]; then \
         ln -s /usr/include/jsoncpp/json /usr/include/json; \
     fi
 
-# Build and install drogon framework
-RUN cd /tmp && \
-    git clone --depth 1 https://github.com/drogonframework/drogon && \
-    cd drogon && \
-    git submodule update --init && \
-    mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release \
-          -DBUILD_POSTGRESQL=ON \
-          -DBUILD_REDIS=OFF \
-          -DBUILD_SQLITE=OFF \
-          -DBUILD_MYSQL=OFF \
-          -DBUILD_ORM=ON \
-          -DBUILD_SHARED_LIBS=ON \
-          .. && \
-    make -j$(nproc) && \
-    make install && \
-    ldconfig && \
-    rm -rf /tmp/drogon
+# Drogon is fetched and statically linked via CMake FetchContent during the build.
 
 # Configure PostgreSQL for trust authentication on localhost
 # Handle multiple possible postgres versions

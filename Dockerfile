@@ -2,11 +2,9 @@
 ARG TARGETARCH
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
-ARG DROGON_REV=master
 
 FROM fedora:42 AS builder
 ARG TARGETARCH
-ARG DROGON_REV
 WORKDIR /build
 
 # Keep package cache persistent across buildkit runs and enable ccache cache mount later.
@@ -57,30 +55,8 @@ RUN --mount=type=cache,target=/ccache \
     mkdir -p "$CCACHE_DIR" && \
     ccache --max-size=2G || true
 
-# Build and install drogon in its own deterministic layer.
-# Pinning drogon by DROGON_REV prevents changes in the repo from busting this layer.
-RUN --mount=type=cache,target=/ccache \
-    cd /tmp && \
-    git clone https://github.com/drogonframework/drogon drogon && \
-    cd drogon && \
-    git fetch --all --tags || true && \
-    git checkout --force "$DROGON_REV" && \
-    git submodule update --init --recursive && \
-    mkdir -p build && cd build && \
-    if [ "$TARGETARCH" = "arm64" ]; then \
-    cmake -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF \
-    -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON \
-    -DCMAKE_TOOLCHAIN_FILE=/usr/share/cmake/Modules/Platform/Linux-aarch64.cmake \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .. ; \
-    else \
-    cmake -DCMAKE_BUILD_TYPE=Release \
-    -DBUILD_POSTGRESQL=ON -DBUILD_REDIS=OFF -DBUILD_SQLITE=OFF -DBUILD_MYSQL=OFF \
-    -DBUILD_ORM=ON -DBUILD_SHARED_LIBS=ON \
-    -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache .. ; \
-    fi && \
-    cmake --build . --config Release -- -j"$(nproc)" && \
-    cmake --install . --config Release
+# Drogon is fetched and statically linked via CMake FetchContent during the build.
+# No separate drogon build step is needed.
 
 # Copy repository last to avoid invalidating the heavy install steps when source changes.
 COPY . /build/persephone
