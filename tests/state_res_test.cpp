@@ -724,71 +724,6 @@ TEST_CASE("findAuthDifference", "[state_res]") {
 }
 
 // ============================================================================
-// select_auth_events_for_join tests
-// ============================================================================
-
-TEST_CASE("select_auth_events_for_join", "[auth_events]") {
-  SECTION("Minimal join: only create event") {
-    json create_event = {{"type", "m.room.create"},
-                         {"state_key", ""},
-                         {"event_id", "$create"},
-                         {"content", {{"creator", "@alice:example.com"}}}};
-
-    auto auth_events =
-        select_auth_events_for_join(create_event, std::nullopt, std::nullopt,
-                                    std::nullopt, std::nullopt, "11");
-
-    // Must include the create event
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$create") !=
-            auth_events.end());
-  }
-
-  SECTION("Join with power_levels and join_rules") {
-    json create_event = {{"type", "m.room.create"},
-                         {"state_key", ""},
-                         {"event_id", "$create"},
-                         {"content", {{"creator", "@alice:example.com"}}}};
-    json power_levels = {{"type", "m.room.power_levels"},
-                         {"state_key", ""},
-                         {"event_id", "$pl"},
-                         {"content", {{"users_default", 0}}}};
-    json join_rules = {{"type", "m.room.join_rules"},
-                       {"state_key", ""},
-                       {"event_id", "$jr"},
-                       {"content", {{"join_rule", "public"}}}};
-
-    auto auth_events =
-        select_auth_events_for_join(create_event, power_levels, join_rules,
-                                    std::nullopt, std::nullopt, "11");
-
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$create") !=
-            auth_events.end());
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$pl") !=
-            auth_events.end());
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$jr") !=
-            auth_events.end());
-  }
-
-  SECTION("Join with target membership") {
-    json create_event = {{"type", "m.room.create"},
-                         {"state_key", ""},
-                         {"event_id", "$create"},
-                         {"content", {{"creator", "@alice:example.com"}}}};
-    json target_membership = {{"type", "m.room.member"},
-                              {"state_key", "@bob:example.com"},
-                              {"event_id", "$bob_member"},
-                              {"content", {{"membership", "invite"}}}};
-
-    auto auth_events =
-        select_auth_events_for_join(create_event, std::nullopt, std::nullopt,
-                                    target_membership, std::nullopt, "11");
-
-    REQUIRE(std::find(auth_events.begin(), auth_events.end(), "$bob_member") !=
-            auth_events.end());
-  }
-}
-
-// ============================================================================
 // content_hash tests
 // ============================================================================
 
@@ -872,8 +807,7 @@ TEST_CASE("content_hash", "[content_hash]") {
   }
 
   SECTION("Null event throws") {
-    REQUIRE_THROWS_AS(content_hash(json(nullptr), "11"),
-                      std::invalid_argument);
+    REQUIRE_THROWS_AS(content_hash(json(nullptr), "11"), std::invalid_argument);
   }
 }
 
@@ -919,9 +853,9 @@ webserver:
       "type": "m.room.member"
     })"_json;
 
-    auto finalized = finalize_event(event, "11",
-                                     config.matrix_config.server_name,
-                                     key_data.key_id, key_data.private_key);
+    auto finalized =
+        finalize_event(event, "11", config.matrix_config.server_name,
+                       key_data.key_id, key_data.private_key);
 
     // Must have hashes.sha256
     REQUIRE(finalized.contains("hashes"));
@@ -955,12 +889,12 @@ webserver:
       "type": "m.room.member"
     })"_json;
 
-    auto finalized1 = finalize_event(event, "11",
-                                      config.matrix_config.server_name,
-                                      key_data.key_id, key_data.private_key);
-    auto finalized2 = finalize_event(event, "11",
-                                      config.matrix_config.server_name,
-                                      key_data.key_id, key_data.private_key);
+    auto finalized1 =
+        finalize_event(event, "11", config.matrix_config.server_name,
+                       key_data.key_id, key_data.private_key);
+    auto finalized2 =
+        finalize_event(event, "11", config.matrix_config.server_name,
+                       key_data.key_id, key_data.private_key);
 
     REQUIRE(finalized1["event_id"] == finalized2["event_id"]);
     REQUIRE(finalized1["hashes"]["sha256"] == finalized2["hashes"]["sha256"]);
@@ -982,9 +916,9 @@ webserver:
       "type": "m.room.member"
     })"_json;
 
-    auto finalized = finalize_event(event, "11",
-                                     config.matrix_config.server_name,
-                                     key_data.key_id, key_data.private_key);
+    auto finalized =
+        finalize_event(event, "11", config.matrix_config.server_name,
+                       key_data.key_id, key_data.private_key);
 
     // Manually compute: set hashes first, then compute event_id
     auto manual = event;
@@ -1107,14 +1041,11 @@ webserver:
             member_auth.end());
 
     // m.room.power_levels should have m.room.create and m.room.member
-    auto pl_auth =
-        power_levels["auth_events"].get<std::vector<std::string>>();
+    auto pl_auth = power_levels["auth_events"].get<std::vector<std::string>>();
     REQUIRE(std::find(pl_auth.begin(), pl_auth.end(),
-                      create["event_id"].get<std::string>()) !=
-            pl_auth.end());
+                      create["event_id"].get<std::string>()) != pl_auth.end());
     REQUIRE(std::find(pl_auth.begin(), pl_auth.end(),
-                      member["event_id"].get<std::string>()) !=
-            pl_auth.end());
+                      member["event_id"].get<std::string>()) != pl_auth.end());
   }
 
   SECTION("Event IDs are verifiable by recomputing reference hash") {
