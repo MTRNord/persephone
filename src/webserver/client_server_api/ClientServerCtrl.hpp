@@ -97,6 +97,12 @@ public:
                 "/_matrix/client/v3/user/{1:userId}/filter/{2:filterId}", Get,
                 Options, "client_server_api::AccessTokenFilter");
 
+  // Send events
+  ADD_METHOD_TO(
+      ClientServerCtrl::sendEvent,
+      "/_matrix/client/v3/rooms/{1:roomId}/send/{2:eventType}/{3:txnId}", Put,
+      Options, "client_server_api::AccessTokenFilter");
+
   // Sync
   ADD_METHOD_TO(ClientServerCtrl::sync, "/_matrix/client/v3/sync", Get, Options,
                 "client_server_api::AccessTokenFilter");
@@ -165,6 +171,11 @@ protected:
   void getFilter(const HttpRequestPtr &req,
                  std::function<void(const HttpResponsePtr &)> &&callback,
                  const std::string &userId, const std::string &filterId) const;
+
+  void sendEvent(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &roomId, const std::string &eventType,
+                 const std::string &txnId) const;
 
   void sync(const HttpRequestPtr &req,
             std::function<void(const HttpResponsePtr &)> &&callback) const;

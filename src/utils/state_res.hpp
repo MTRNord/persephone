@@ -157,23 +157,31 @@ findAuthDifference(const std::vector<StateEvent> &conflictedEvents,
 [[nodiscard]] std::map<EventType, std::map<StateKey, StateEvent>>
 stateres_v2(const std::vector<std::vector<StateEvent>> &forks);
 
-/// Select auth_events for a join event based on current room state
-/// This is used by make_join to build the proto-event
-/// @param create_event The m.room.create event (required)
-/// @param power_levels The current m.room.power_levels event (optional)
-/// @param join_rules The current m.room.join_rules event (optional)
-/// @param target_membership The target user's current m.room.member event
-/// (optional)
-/// @param auth_user_membership For restricted joins, the authorizing user's
-/// membership
+/// Set of candidate state events for auth events selection.
+/// Pass the relevant current state events; the selection algorithm will pick
+/// which ones to include as auth_events based on the event being built.
+struct [[nodiscard]] AuthEventSet {
+  json create_event;
+  std::optional<json> power_levels;
+  std::optional<json> sender_membership;
+  std::optional<json> target_membership;    // for member events (state_key != sender)
+  std::optional<json> join_rules;           // for member join/invite
+  std::optional<json> third_party_invite;   // for 3PID invites
+  std::optional<json> auth_user_membership; // for restricted joins (room v8+)
+};
+
+/// Select auth_events for any event type per the Matrix spec auth events
+/// selection algorithm.
+/// @param event The event being built (needs type, sender, content, state_key)
+/// @param state The candidate state events to select from
 /// @param room_version The room version
 /// @return Vector of event_ids to use as auth_events
-[[nodiscard]] std::vector<std::string> select_auth_events_for_join(
-    const json &create_event, const std::optional<json> &power_levels,
-    const std::optional<json> &join_rules,
-    const std::optional<json> &target_membership,
-    const std::optional<json> &auth_user_membership,
-    std::string_view room_version);
+[[nodiscard]] std::vector<std::string>
+select_auth_events(const json &event, const AuthEventSet &state,
+                   std::string_view room_version);
 
-// find_auth_event_for_event_on_create has been replaced by
-// finalize_room_creation_events (declared above, defined in state_res.cpp)
+/// Get the power level of a sender from a power_levels event.
+/// Checks content.users[sender] first, then falls back to
+/// content.users_default, then 0.
+[[nodiscard]] int get_sender_power_level(const json &power_levels_event,
+                                         const std::string &sender);

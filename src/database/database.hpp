@@ -226,4 +226,32 @@ public:
   // Check if room exists by room alias and return room_id
   [[nodiscard]] static drogon::Task<std::optional<std::string>>
   room_exists_by_alias(const std::string room_alias);
+
+  // ============================================================================
+  // /send endpoint support
+  // ============================================================================
+
+  /// Auth events needed for building a general event
+  struct AuthEventsForEvent {
+    json create_event;
+    std::optional<json> power_levels;
+    std::optional<json> sender_membership;
+  };
+
+  /// Get auth events needed for building a new event in a room
+  [[nodiscard]] static drogon::Task<std::optional<AuthEventsForEvent>>
+  get_auth_events_for_event(const std::string room_id,
+                            const std::string sender);
+
+  /// Check if a transaction ID has already been used, returns cached event_id
+  [[nodiscard]] static drogon::Task<std::optional<std::string>>
+  get_txn_event_id(const std::string user_id, const std::string device_id,
+                   const std::string txn_id, const std::string room_id);
+
+  /// Store a transaction ID -> event_id mapping for idempotency
+  [[nodiscard]] static drogon::Task<void>
+  store_txn_id(const std::shared_ptr<drogon::orm::Transaction> transaction,
+               const std::string user_id, const std::string device_id,
+               const std::string txn_id, const std::string room_id,
+               const std::string event_id);
 };

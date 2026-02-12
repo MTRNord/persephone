@@ -942,10 +942,16 @@ create_http_client_for_resolved(const ResolvedServer &r,
                                              use_loop);
   } else {
     // Use hostString constructor so SNI=hostname. Include explicit port if
-    // provided.
+    // provided and not already present in server_name.
     std::string hostString = std::format("https://{}", r.server_name);
     if (r.port.has_value()) {
-      hostString += ":" + std::to_string(r.port.value());
+      // If server_name already contains a colon and is NOT a bracketed IPv6
+      // literal, it already has an explicit port — don't append again.
+      const bool has_explicit_port = (r.server_name.find(':') != std::string::npos &&
+                                      r.server_name.find(']') == std::string::npos);
+      if (!has_explicit_port) {
+        hostString += ":" + std::to_string(r.port.value());
+      }
     }
     // Debug: show we are using the hostname path and the exact hostString used.
     LOG_DEBUG

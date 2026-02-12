@@ -1415,3 +1415,168 @@ void ClientServerCtrl::sync(
     co_return;
   });
 }
+
+void ClientServerCtrl::sendEvent(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &roomId, const std::string &eventType,
+    const std::string &txnId) const {
+  drogon::async_run([req, callback = std::move(callback), roomId, eventType,
+                     txnId, this]() -> drogon::Task<> {
+    // 1. Authenticate user
+    const auto [isValid, userInfo] = co_await getUserInfo(req, callback);
+    if (!isValid) {
+      co_return;
+    }
+
+    // 2. Parse request body
+    json body;
+    try {
+      body = json::parse(req->body());
+    } catch (const json::parse_error &) {
+      return_error(callback, "M_NOT_JSON",
+                   "Unable to parse json. Is this valid json?", k400BadRequest);
+      co_return;
+    }
+
+    // 3. Check transaction ID idempotency
+    if (userInfo->device_id.has_value()) {
+      const auto cached_event_id = co_await Database::get_txn_event_id(
+          userInfo->user_id, userInfo->device_id.value(), txnId, roomId);
+      if (cached_event_id.has_value()) {
+        const json resp_body = {{"event_id", cached_event_id.value()}};
+        const auto resp = HttpResponse::newHttpResponse();
+        resp->setBody(resp_body.dump());
+        resp->setContentTypeString(JSON_CONTENT_TYPE);
+        resp->setStatusCode(k200OK);
+        callback(resp);
+        co_return;
+      }
+    }
+
+    // 4. Check room exists
+    const bool exists = co_await Database::room_exists(roomId);
+    if (!exists) {
+      return_error(callback, "M_NOT_FOUND", "Room not found", k404NotFound);
+      co_return;
+    }
+
+    // 5. Check room version
+    const auto room_version = co_await Database::get_room_version(roomId);
+    if (!room_version.has_value()) {
+      return_error(callback, "M_NOT_FOUND",
+                   "Could not determine room version", k404NotFound);
+      co_return;
+    }
+
+    // 6. Check membership - user must be joined
+    const auto membership =
+        co_await Database::get_membership(roomId, userInfo->user_id);
+    if (!membership.has_value() || membership.value() != "join") {
+      return_error(callback, "M_FORBIDDEN",
+                   "You are not joined to this room", k403Forbidden);
+      co_return;
+    }
+
+    // 7. Get auth events for the event
+    const auto auth_data = co_await Database::get_auth_events_for_event(
+        roomId, userInfo->user_id);
+    if (!auth_data.has_value()) {
+      return_error(callback, "M_UNKNOWN", "Could not retrieve room state",
+                   k500InternalServerError);
+      co_return;
+    }
+
+    // 8. Power level check
+    if (auth_data->power_levels.has_value()) {
+      const auto &pl = auth_data->power_levels.value();
+      const int sender_pl =
+          get_sender_power_level(pl, userInfo->user_id);
+
+      // Get required power level for this event type
+      int required_pl = 0;
+      if (pl.contains("content")) {
+        const auto &content = pl.at("content");
+        if (content.contains("events") &&
+            content.at("events").contains(eventType)) {
+          required_pl = content.at("events").at(eventType).get<int>();
+        } else if (content.contains("events_default")) {
+          required_pl = content.at("events_default").get<int>();
+        }
+      }
+
+      if (sender_pl < required_pl) {
+        return_error(
+            callback, "M_FORBIDDEN",
+            std::format(
+                "You need power level {} to send {} events, but you have {}",
+                required_pl, eventType, sender_pl),
+            k403Forbidden);
+        co_return;
+      }
+    }
+
+    // 9. Get prev_events and depth
+    const auto prev_events = co_await Database::get_room_heads(roomId);
+    const auto max_depth = co_await Database::get_max_depth(roomId);
+
+    // 10. Build auth_events using select_auth_events
+    const AuthEventSet auth_set{
+        .create_event = auth_data->create_event,
+        .power_levels = auth_data->power_levels,
+        .sender_membership = auth_data->sender_membership,
+    };
+
+    json proto_event = {{"type", eventType},
+                        {"content", body},
+                        {"sender", userInfo->user_id},
+                        {"room_id", roomId},
+                        {"origin_server_ts",
+                         std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::system_clock::now().time_since_epoch())
+                             .count()},
+                        {"prev_events", prev_events},
+                        {"depth", max_depth + 1}};
+
+    const auto auth_event_ids =
+        select_auth_events(proto_event, auth_set, room_version.value());
+    proto_event["auth_events"] = auth_event_ids;
+
+    // 11. Finalize event (content hash, event_id, signature)
+    const auto key_data = get_verify_key_data(_config);
+    json finalized = finalize_event(std::move(proto_event),
+                                    room_version.value(),
+                                    _config.matrix_config.server_name,
+                                    key_data.key_id, key_data.private_key);
+
+    const auto final_event_id = finalized["event_id"].get<std::string>();
+
+    // 12. Store event and transaction ID in a transaction
+    try {
+      const auto sql = drogon::app().getDbClient();
+      const auto transaction = sql->newTransaction();
+
+      co_await Database::add_event(transaction, finalized, roomId);
+
+      if (userInfo->device_id.has_value()) {
+        co_await Database::store_txn_id(transaction, userInfo->user_id,
+                                        userInfo->device_id.value(), txnId,
+                                        roomId, final_event_id);
+      }
+    } catch (const std::exception &e) {
+      LOG_ERROR << "sendEvent: Failed to store event: " << e.what();
+      return_error(callback, "M_UNKNOWN", "Failed to store event",
+                   k500InternalServerError);
+      co_return;
+    }
+
+    // 13. Return event_id
+    const json resp_body = {{"event_id", final_event_id}};
+    const auto resp = HttpResponse::newHttpResponse();
+    resp->setBody(resp_body.dump());
+    resp->setContentTypeString(JSON_CONTENT_TYPE);
+    resp->setStatusCode(k200OK);
+    callback(resp);
+    co_return;
+  });
+}

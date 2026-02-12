@@ -475,12 +475,20 @@ void ServerServerCtrl::make_join(
         co_return;
       }
 
-      // Select auth events using the helper
-      const auto auth_event_ids = select_auth_events_for_join(
-          auth_events_data->create_event, auth_events_data->power_levels,
-          auth_events_data->join_rules, auth_events_data->target_membership,
-          std::nullopt, // No auth_user_membership for non-restricted joins
-          room_version);
+      // Select auth events using the general helper
+      const json join_proto = {{"type", "m.room.member"},
+                               {"sender", userId},
+                               {"state_key", userId},
+                               {"content", {{"membership", "join"}}}};
+      const AuthEventSet auth_set{
+          .create_event = auth_events_data->create_event,
+          .power_levels = auth_events_data->power_levels,
+          .sender_membership = auth_events_data->target_membership,
+          .target_membership = auth_events_data->target_membership,
+          .join_rules = auth_events_data->join_rules,
+      };
+      const auto auth_event_ids =
+          select_auth_events(join_proto, auth_set, room_version);
 
       // 8. Get prev_events and depth
       const auto prev_events = co_await Database::get_room_heads(roomId);

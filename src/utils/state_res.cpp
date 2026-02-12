@@ -20,6 +20,29 @@
 #include <utility>
 #include <vector>
 
+constexpr int DEFAULT_USERS_POWERLEVEL = 0;
+
+int get_sender_power_level(const json &power_levels_event,
+                           const std::string &sender) {
+  if (power_levels_event.is_null() || !power_levels_event.contains("content")) {
+    return DEFAULT_USERS_POWERLEVEL;
+  }
+
+  const auto &content = power_levels_event.at("content");
+
+  // Check content.users[sender] first
+  if (content.contains("users") && content.at("users").contains(sender)) {
+    return content.at("users").at(sender).get<int>();
+  }
+
+  // Fall back to content.users_default
+  if (content.contains("users_default")) {
+    return content.at("users_default").get<int>();
+  }
+
+  return DEFAULT_USERS_POWERLEVEL;
+}
+
 namespace {
 /**
  * @brief Redacts the provided JSON event object based on Matrix Protocol
@@ -279,36 +302,6 @@ splitEvents(const std::vector<std::vector<StateEvent>> &forks) {
   }
 
   return result;
-}
-
-constexpr int DEFAULT_USERS_POWERLEVEL = 0;
-
-/**
- * @brief Gets the power level of a sender from a power_levels event.
- *
- * @param power_levels_event The m.room.power_levels event to look up from.
- * @param sender The user ID of the sender.
- * @return The power level of the sender.
- */
-[[nodiscard]] int get_sender_power_level(const StateEvent &power_levels_event,
-                                         const std::string &sender) {
-  if (power_levels_event.is_null() || !power_levels_event.contains("content")) {
-    return DEFAULT_USERS_POWERLEVEL;
-  }
-
-  const auto &content = power_levels_event.at("content");
-
-  // Check if the sender is explicitly listed in users
-  if (content.contains("users") && content.at("users").contains(sender)) {
-    return content.at("users").at(sender).get<int>();
-  }
-
-  // Fall back to users_default
-  if (content.contains("users_default")) {
-    return content.at("users_default").get<int>();
-  }
-
-  return DEFAULT_USERS_POWERLEVEL;
 }
 
 /**
@@ -841,6 +834,79 @@ sorted_normal_state_events(std::vector<StateEvent> normal_events) {
 }
 } // namespace
 
+std::vector<std::string> select_auth_events(const json &event,
+                                            const AuthEventSet &state,
+                                            std::string_view room_version) {
+  std::vector<std::string> auth_events;
+
+  // 1. Always include the m.room.create event
+  if (!state.create_event.contains("event_id")) {
+    throw std::runtime_error("create_event must have event_id");
+  }
+  auth_events.push_back(state.create_event["event_id"].get<std::string>());
+
+  // 2. Include m.room.power_levels if present
+  if (state.power_levels.has_value() &&
+      state.power_levels->contains("event_id")) {
+    auth_events.push_back(
+        state.power_levels.value()["event_id"].get<std::string>());
+  }
+
+  // 3. Include sender's m.room.member if present
+  if (state.sender_membership.has_value() &&
+      state.sender_membership->contains("event_id")) {
+    auth_events.push_back(
+        state.sender_membership.value()["event_id"].get<std::string>());
+  }
+
+  // 4. Additional auth events for m.room.member events
+  if (event.contains("type") &&
+      event.at("type").get<std::string_view>() == "m.room.member") {
+    // Target's current membership (if target != sender)
+    if (state.target_membership.has_value() &&
+        state.target_membership->contains("event_id")) {
+      auth_events.push_back(
+          state.target_membership.value()["event_id"].get<std::string>());
+    }
+
+    // Join rules for join/invite
+    if (event.contains("content") &&
+        (event.at("content").value("membership", "") == "join" ||
+         event.at("content").value("membership", "") == "invite")) {
+      if (state.join_rules.has_value() &&
+          state.join_rules->contains("event_id")) {
+        auth_events.push_back(
+            state.join_rules.value()["event_id"].get<std::string>());
+      }
+    }
+
+    // Third party invite for invite with third_party_invite content
+    if (event.contains("content") &&
+        event.at("content").value("membership", "") == "invite" &&
+        event.at("content").contains("third_party_invite")) {
+      if (state.third_party_invite.has_value() &&
+          state.third_party_invite->contains("event_id")) {
+        auth_events.push_back(
+            state.third_party_invite.value()["event_id"].get<std::string>());
+      }
+    }
+
+    // Restricted room joins (room versions 8+)
+    if (event.contains("content") &&
+        event.at("content").contains("join_authorised_via_users_server") &&
+        (room_version == "8" || room_version == "9" ||
+         room_version == "10" || room_version == "11")) {
+      if (state.auth_user_membership.has_value() &&
+          state.auth_user_membership->contains("event_id")) {
+        auth_events.push_back(
+            state.auth_user_membership.value()["event_id"].get<std::string>());
+      }
+    }
+  }
+
+  return auth_events;
+}
+
 /**
  * @brief Redacts the provided JSON event object based on the room version.
  *
@@ -999,94 +1065,48 @@ void finalize_room_creation_events(
       continue;
     }
 
-    // --- Build auth_events (same logic as old find_auth_event_for_event_on_create) ---
-    std::vector<std::string> auth_events;
-
-    // Add m.room.create event_id
+    // --- Build auth_events using select_auth_events ---
+    AuthEventSet auth_set;
+    // Extract candidate state events from known_events
     for (const auto &event : known_events) {
-      if (event["type"] == "m.room.create") {
-        auth_events.push_back(event["event_id"].get<std::string>());
+      const auto type = event["type"].get<std::string_view>();
+      if (type == "m.room.create") {
+        auth_set.create_event = event;
+      } else if (type == "m.room.power_levels") {
+        auth_set.power_levels = event;
+      } else if (type == "m.room.member") {
+        const auto sk = event["state_key"].get<std::string_view>();
+        if (sk == outermost_event["sender"].get<std::string_view>()) {
+          auth_set.sender_membership = event;
+        }
+        // Target membership for member events (state_key != sender)
+        if (outermost_event["type"] == "m.room.member" &&
+            sk == outermost_event["state_key"].get<std::string_view>() &&
+            sk != outermost_event["sender"].get<std::string_view>()) {
+          auth_set.target_membership = event;
+        }
+        // Auth user membership for restricted joins
+        if (outermost_event.contains("content") &&
+            outermost_event["content"].contains(
+                "join_authorised_via_users_server") &&
+            sk == outermost_event["content"]
+                                  ["join_authorised_via_users_server"]
+                                      .get<std::string_view>()) {
+          auth_set.auth_user_membership = event;
+        }
+      } else if (type == "m.room.join_rules") {
+        auth_set.join_rules = event;
+      } else if (type == "m.room.third_party_invite") {
+        auth_set.third_party_invite = event;
       }
     }
-    if (auth_events.empty()) {
+
+    if (!auth_set.create_event.contains("event_id")) {
       throw std::runtime_error("m.room.create event not found in events array");
     }
 
-    // Add m.room.power_levels event_id
-    for (const auto &event : known_events) {
-      if (event["type"] == "m.room.power_levels") {
-        auth_events.push_back(event["event_id"].get<std::string>());
-      }
-    }
-
-    // Add sender's m.room.member event_id
-    std::optional<json> sender_membership = std::nullopt;
-    for (const auto &event : known_events) {
-      if (event["type"] == "m.room.member" &&
-          event["state_key"] == outermost_event["sender"]) {
-        sender_membership = event;
-        auth_events.push_back(event["event_id"].get<std::string>());
-      }
-    }
-
-    if (outermost_event["type"] == "m.room.member") {
-      // Add target's m.room.member event_id (if target != sender)
-      for (const auto &target : known_events) {
-        if (target["type"] == "m.room.member" &&
-            target["state_key"] == outermost_event["state_key"]) {
-          if (sender_membership.has_value() &&
-              sender_membership.value()["state_key"] != target["state_key"]) {
-            auth_events.push_back(target["event_id"].get<std::string>());
-          }
-        }
-      }
-
-      // If joining or inviting, add m.room.join_rules
-      if (outermost_event["content"]["membership"] == "join" ||
-          outermost_event["content"]["membership"] == "invite") {
-        for (const auto &event : known_events) {
-          if (event["type"] == "m.room.join_rules") {
-            auth_events.push_back(event["event_id"].get<std::string>());
-          }
-        }
-      }
-
-      // If inviting with third_party_invite
-      if (outermost_event["content"]["membership"] == "invite" &&
-          outermost_event["content"].contains("third_party_invite")) {
-        const auto current_count = auth_events.size();
-        for (const auto &event : known_events) {
-          if (event["type"] == "m.room.third_party_invite") {
-            auth_events.push_back(event["event_id"].get<std::string>());
-          }
-        }
-        if (auth_events.size() == current_count) {
-          throw std::runtime_error("Auth events selection failure: could not "
-                                   "find matching third party invite");
-        }
-      }
-
-      // If joining through another server (restricted rooms)
-      if (outermost_event["content"].contains(
-              "join_authorised_via_users_server") &&
-          (room_version == "8" || room_version == "9" ||
-           room_version == "10" || room_version == "11")) {
-        const auto current_count = auth_events.size();
-        for (const auto &event : known_events) {
-          if (event["type"] == "m.room.member" &&
-              event["state_key"] ==
-                  outermost_event["content"]
-                                 ["join_authorised_via_users_server"]) {
-            auth_events.push_back(event["event_id"].get<std::string>());
-          }
-        }
-        if (auth_events.size() == current_count) {
-          throw std::runtime_error(
-              "Auth events selection failure: could not find "
-              "join_authorised_via_users_server membership");
-        }
-      }
-    }
+    const auto auth_events =
+        select_auth_events(outermost_event, auth_set, room_version);
 
     // Set auth_events, prev_events, depth
     outermost_event["auth_events"] = auth_events;
@@ -1334,48 +1354,3 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   return partial_state;
 }
 
-std::vector<std::string> select_auth_events_for_join(
-    const json &create_event, const std::optional<json> &power_levels,
-    const std::optional<json> &join_rules,
-    const std::optional<json> &target_membership,
-    const std::optional<json> &auth_user_membership,
-    std::string_view room_version) {
-
-  std::vector<std::string> auth_events;
-
-  // 1. Always include the m.room.create event
-  if (!create_event.contains("event_id")) {
-    throw std::runtime_error("create_event must have event_id");
-  }
-  auth_events.push_back(create_event["event_id"].get<std::string>());
-
-  // 2. Include m.room.power_levels if present
-  if (power_levels.has_value() && power_levels->contains("event_id")) {
-    auth_events.push_back(power_levels.value()["event_id"].get<std::string>());
-  }
-
-  // 3. For join events, include m.room.join_rules if present
-  if (join_rules.has_value() && join_rules->contains("event_id")) {
-    auth_events.push_back(join_rules.value()["event_id"].get<std::string>());
-  }
-
-  // 4. Include target's current membership if they have one
-  // (This is the target user's existing m.room.member event, if any)
-  if (target_membership.has_value() &&
-      target_membership->contains("event_id")) {
-    auth_events.push_back(
-        target_membership.value()["event_id"].get<std::string>());
-  }
-
-  // 5. For restricted room joins (room versions 8+), include the authorizing
-  // user's membership if join_authorised_via_users_server will be used
-  if (auth_user_membership.has_value() &&
-      auth_user_membership->contains("event_id") &&
-      (room_version == "8" || room_version == "9" || room_version == "10" ||
-       room_version == "11")) {
-    auth_events.push_back(
-        auth_user_membership.value()["event_id"].get<std::string>());
-  }
-
-  return auth_events;
-}

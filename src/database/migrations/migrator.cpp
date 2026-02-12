@@ -22,6 +22,7 @@ void Migrator::migrate() {
   migration_v12();
   migration_v13();
   migration_v14();
+  migration_v15();
 
   LOG_INFO << "Finished database migration";
 }
@@ -1067,6 +1068,51 @@ void Migrator::migration_v14() {
     const auto query_4 =
         transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (14);");
     query_4.wait();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << e.base().what();
+    std::terminate();
+  }
+}
+
+void Migrator::migration_v15() {
+  LOG_INFO << "Starting database migration v14->v15";
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+
+  try {
+    auto query = sql->execSqlAsyncFuture(
+        "select exists(select 1 from migrations where version = 15) as exists");
+
+    if (query.get().at(0)["exists"].as<bool>()) {
+      LOG_INFO << "Migration v14->v15 already ran";
+      return;
+    }
+    LOG_DEBUG << "First time migrating to v15";
+    const auto transPtr = sql->newTransaction();
+    if (transPtr == nullptr) {
+      LOG_FATAL << "No database connection available";
+      std::terminate();
+    }
+
+    /* Transaction ID idempotency table for /send endpoint */
+    const auto query_1 = transPtr->execSqlAsyncFuture(
+        "CREATE TABLE IF NOT EXISTS transaction_ids ("
+        "user_id TEXT NOT NULL, "
+        "device_id TEXT NOT NULL, "
+        "txn_id TEXT NOT NULL, "
+        "room_id TEXT NOT NULL, "
+        "event_id TEXT NOT NULL, "
+        "created_at BIGINT NOT NULL, "
+        "PRIMARY KEY (user_id, device_id, txn_id, room_id));");
+    query_1.wait();
+
+    /* Mark the migration as completed */
+    const auto query_2 =
+        transPtr->execSqlAsyncFuture("INSERT INTO migrations VALUES (15);");
+    query_2.wait();
   } catch (const drogon::orm::DrogonDbException &e) {
     LOG_ERROR << e.base().what();
     std::terminate();

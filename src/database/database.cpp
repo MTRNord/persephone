@@ -1447,3 +1447,110 @@ Database::room_exists_by_alias(const std::string room_alias) {
     co_return std::nullopt;
   }
 }
+
+// =============================================================================
+// /send endpoint support
+// =============================================================================
+
+drogon::Task<std::optional<Database::AuthEventsForEvent>>
+Database::get_auth_events_for_event(const std::string room_id,
+                                    const std::string sender) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    AuthEventsForEvent result;
+
+    // Get create, power_levels, and sender's membership from current state
+    const auto query = co_await sql->execSqlCoro(
+        "WITH room_info AS ("
+        "  SELECT room_nid FROM rooms WHERE room_id = $1"
+        ") "
+        "SELECT ej.json, et.event_type "
+        "FROM temporal_state ts "
+        "JOIN events e ON e.event_nid = ts.event_nid "
+        "JOIN event_json ej ON ej.event_nid = e.event_nid "
+        "JOIN event_types et ON et.event_type_nid = ts.event_type_nid "
+        "LEFT JOIN state_keys sk ON sk.state_key_nid = ts.state_key_nid "
+        "WHERE ts.room_nid = (SELECT room_nid FROM room_info) "
+        "  AND ts.end_index IS NULL "
+        "  AND ("
+        "    (et.event_type = 'm.room.create') OR "
+        "    (et.event_type = 'm.room.power_levels' AND sk.state_key = '') OR "
+        "    (et.event_type = 'm.room.member' AND sk.state_key = $2)"
+        "  )",
+        room_id, sender);
+
+    bool found_create = false;
+
+    for (const auto &row : query) {
+      const auto event_type = row["event_type"].as<std::string>();
+      const auto json_str = row["json"].as<std::string>();
+
+      if (event_type == "m.room.create" && !found_create) {
+        result.create_event = json::parse(json_str);
+        found_create = true;
+      } else if (event_type == "m.room.power_levels" &&
+                 !result.power_levels.has_value()) {
+        result.power_levels = json::parse(json_str);
+      } else if (event_type == "m.room.member" &&
+                 !result.sender_membership.has_value()) {
+        result.sender_membership = json::parse(json_str);
+      }
+    }
+
+    if (!found_create) {
+      co_return std::nullopt;
+    }
+
+    co_return result;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_auth_events_for_event failed: " << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+drogon::Task<std::optional<std::string>>
+Database::get_txn_event_id(const std::string user_id,
+                           const std::string device_id,
+                           const std::string txn_id,
+                           const std::string room_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT event_id FROM transaction_ids "
+        "WHERE user_id = $1 AND device_id = $2 AND txn_id = $3 AND room_id = $4",
+        user_id, device_id, txn_id, room_id);
+
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+
+    co_return query.at(0)["event_id"].as<std::string>();
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_txn_event_id failed: " << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+drogon::Task<void>
+Database::store_txn_id(const std::shared_ptr<drogon::orm::Transaction> transaction,
+                       const std::string user_id, const std::string device_id,
+                       const std::string txn_id, const std::string room_id,
+                       const std::string event_id) {
+  const long now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                       std::chrono::system_clock::now().time_since_epoch())
+                       .count();
+
+  co_await transaction->execSqlCoro(
+      "INSERT INTO transaction_ids (user_id, device_id, txn_id, room_id, "
+      "event_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) "
+      "ON CONFLICT (user_id, device_id, txn_id, room_id) DO NOTHING",
+      user_id, device_id, txn_id, room_id, event_id, now);
+}
