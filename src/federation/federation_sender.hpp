@@ -33,8 +33,10 @@ public:
 
   /// Enqueue a PDU for delivery to all servers in a room.
   /// Writes to DB, then kicks off async delivery. Returns immediately.
+  /// For room v3+, event_id is stripped from the PDU before sending.
   static void broadcast_pdu(const json &event, const std::string &room_id,
-                            const std::string &exclude_server);
+                            const std::string &exclude_server,
+                            std::string_view room_version);
 
 private:
   /// Background loop: periodically scans queue for deliverable entries.

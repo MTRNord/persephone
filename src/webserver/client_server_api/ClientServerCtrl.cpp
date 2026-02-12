@@ -806,18 +806,24 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
       co_return;
     }
 
-    //  Update origin, origin_server_ts and event_id
-    event["origin"] = _config.matrix_config.server_name;
+    //  Update origin_server_ts, compute content hash, sign, then event_id
     event["origin_server_ts"] =
         std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch())
             .count();
 
-    event["event_id"] = event_id(event, room_version.value());
-    // Sign the make_join response as this is now the event
+    // Compute content hash before signing
+    event["hashes"] = json::object(
+        {{"sha256", content_hash(event, room_version.value())}});
+
+    // Sign using spec-correct redaction-based signing (without event_id)
     auto signed_event =
-        json_utils::sign_json(_config.matrix_config.server_name,
-                              key_data.key_id, key_data.private_key, event);
+        sign_event(event, room_version.value(),
+                   _config.matrix_config.server_name, key_data.key_id,
+                   key_data.private_key);
+
+    // Compute event_id AFTER signing
+    signed_event["event_id"] = event_id(signed_event, room_version.value());
 
     // Send the signed event to the remote server on the v2/send_join endpoint
     auto send_join_resp = co_await federation_request(
@@ -825,7 +831,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
          .method = drogon::Put,
          .path = std::format(
              "/_matrix/federation/v2/send_join/{}/{}?omit_members=false",
-             room_id, event["event_id"].get<std::string>()),
+             room_id, signed_event["event_id"].get<std::string>()),
          .key_id = key_data.key_id,
          .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,

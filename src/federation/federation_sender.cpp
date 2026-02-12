@@ -62,14 +62,17 @@ void FederationSender::start(std::string server_name, std::string key_id,
 
 void FederationSender::broadcast_pdu(const json &event,
                                      const std::string &room_id,
-                                     const std::string &exclude_server) {
-  // Copy values needed in the coroutine
-  const auto &event_copy = event;
+                                     const std::string &exclude_server,
+                                     std::string_view room_version) {
+  // Strip event_id for room v3+ (PDUs sent over federation must not include it)
+  auto pdu = event;
+  pdu.erase("event_id");
+
   const auto &room_id_copy = room_id;
   const auto &exclude_copy = exclude_server;
   const auto &server_name = _server_name;
 
-  drogon::async_run([event_copy, room_id_copy, exclude_copy,
+  drogon::async_run([pdu, room_id_copy, exclude_copy,
                      server_name]() -> drogon::Task<> {
     try {
       const auto servers = co_await Database::get_servers_in_room(room_id_copy);
@@ -80,8 +83,8 @@ void FederationSender::broadcast_pdu(const json &event,
         co_return;
       }
 
-      const auto event_id = event_copy.value("event_id", "");
-      const auto event_json_str = event_copy.dump();
+      const auto event_id = pdu.value("event_id", "");
+      const auto event_json_str = pdu.dump();
       const auto created_at = now_ms();
 
       for (const auto &server : servers) {

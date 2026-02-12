@@ -169,6 +169,11 @@ public:
   [[nodiscard]] static drogon::Task<std::vector<json>>
   get_current_room_state(int room_nid);
 
+  /// Get state for a room at a specific event's depth (for state resolution).
+  /// Returns all state events that were active at the given event's depth.
+  [[nodiscard]] static drogon::Task<std::vector<json>>
+  get_state_at_event(int room_nid, const std::string &event_id);
+
   /// Timeline query result
   struct [[nodiscard]] TimelineResult {
     std::vector<json> events;

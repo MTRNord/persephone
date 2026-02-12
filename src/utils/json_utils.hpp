@@ -59,7 +59,9 @@ void ensure_server_keys(const Config &config);
 decode_base64(const std::string &input);
 
 /// Strip federation-only fields from a PDU to produce a ClientEvent.
-/// Removes: auth_events, prev_events, depth, hashes, signatures
-void strip_federation_fields(json &event);
+/// Removes: auth_events, prev_events, depth, hashes, signatures.
+/// room_version parameter allows version-specific stripping in the future.
+void strip_federation_fields(json &event,
+                             std::string_view room_version = "11");
 
 } // namespace json_utils

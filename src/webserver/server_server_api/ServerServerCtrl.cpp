@@ -502,16 +502,11 @@ void ServerServerCtrl::make_join(
               std::chrono::system_clock::now().time_since_epoch())
               .count();
 
-      // Extract origin server from userId (@user:server.name)
-      const auto colon_pos = userId.find(':');
-      const std::string origin =
-          colon_pos != std::string::npos ? userId.substr(colon_pos + 1) : "";
-
+      // Room v3+ events do not include "origin" -- sender is authoritative
       const json proto_event = {{"type", "m.room.member"},
                                 {"sender", userId},
                                 {"state_key", userId},
                                 {"room_id", roomId},
-                                {"origin", origin},
                                 {"origin_server_ts", origin_server_ts},
                                 {"depth", max_depth + 1},
                                 {"content", {{"membership", "join"}}},
@@ -736,9 +731,39 @@ void ServerServerCtrl::send_join(
       }
 
       // B. Fetch state BEFORE persisting (spec: state prior to the join)
-      const auto state_events =
-          co_await Database::get_current_room_state(room_nid);
+      //    If multiple forward extremities exist, run state resolution.
       const auto auth_chain = co_await Database::get_auth_chain(roomId);
+      std::vector<json> state_events;
+
+      const auto heads = co_await Database::get_room_heads(roomId);
+      if (heads.size() <= 1) {
+        state_events = co_await Database::get_current_room_state(room_nid);
+      } else {
+        LOG_INFO << "send_join: Room " << roomId << " has " << heads.size()
+                 << " forward extremities, running state resolution";
+
+        // Build a state fork for each head using depth-based state lookup
+        std::vector<std::vector<StateEvent>> forks;
+        forks.reserve(heads.size());
+        for (const auto &head_event_id : heads) {
+          auto fork =
+              co_await Database::get_state_at_event(room_nid, head_event_id);
+          forks.push_back(std::move(fork));
+        }
+
+        // Resolve conflicts across forks
+        const auto resolved = stateres_v2(forks);
+
+        // Convert resolved state map to vector<json>
+        state_events.reserve(resolved.size());
+        for (const auto &[type, state_key_map] : resolved) {
+          for (const auto &[state_key, ev] : state_key_map) {
+            state_events.push_back(ev);
+          }
+        }
+        LOG_INFO << "send_join: State resolution produced "
+                 << state_events.size() << " state events";
+      }
 
       // C. Verify/compute content hash and co-sign the event
       const auto server_name = std::string(config.matrix_config.server_name);
@@ -751,10 +776,11 @@ void ServerServerCtrl::send_join(
             json::object({{"sha256", content_hash(body, room_version)}});
       }
 
-      auto signed_event = json_utils::sign_json(
-          server_name, key_id_str, verify_key_data.private_key, body);
+      auto signed_event = sign_event(body, room_version, server_name,
+                                     key_id_str, verify_key_data.private_key);
 
-      // Add event_id to the signed event
+      // Add event_id to the signed event (room v3+ event_id is derived, not
+      // part of the event format)
       signed_event["event_id"] = computed_event_id;
 
       // D. Persist the event
@@ -770,7 +796,8 @@ void ServerServerCtrl::send_join(
       }
 
       // E. Broadcast to other servers (async, non-blocking)
-      FederationSender::broadcast_pdu(signed_event, roomId, origin_server);
+      FederationSender::broadcast_pdu(signed_event, roomId, origin_server,
+                                      room_version);
 
       // F. Get servers in room for response
       const auto servers_in_room =

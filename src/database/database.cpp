@@ -1068,6 +1068,49 @@ Database::get_current_room_state(int room_nid) {
   }
 }
 
+[[nodiscard]] drogon::Task<std::vector<json>>
+Database::get_state_at_event(int room_nid, const std::string &event_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // Get the depth of the target event
+    const auto depth_query = co_await sql->execSqlCoro(
+        "SELECT depth FROM events WHERE event_id = $1 AND room_nid = $2",
+        event_id, room_nid);
+    if (depth_query.empty()) {
+      LOG_WARN << "get_state_at_event: event " << event_id << " not found";
+      co_return {};
+    }
+    const auto depth = depth_query.at(0)["depth"].as<int64_t>();
+
+    // Get all state events active at this depth
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json FROM temporal_state ts "
+        "JOIN event_json ej ON ej.event_nid = ts.event_nid "
+        "WHERE ts.room_nid = $1 AND ts.start_index <= $2 "
+        "AND (ts.end_index > $2 OR ts.end_index IS NULL) "
+        "ORDER BY ts.event_nid ASC",
+        room_nid, depth);
+
+    std::vector<json> state_events;
+    state_events.reserve(query.size());
+    for (const auto &row : query) {
+      state_events.push_back(json::parse(row["json"].as<std::string>()));
+    }
+
+    LOG_DEBUG << "get_state_at_event: " << state_events.size()
+              << " state events at depth " << depth << " for event "
+              << event_id;
+    co_return state_events;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_state_at_event failed: " << e.base().what();
+    co_return {};
+  }
+}
+
 [[nodiscard]] drogon::Task<Database::TimelineResult>
 Database::get_room_timeline(int room_nid, int64_t since_event_nid, int limit) {
   const auto sql = drogon::app().getDbClient();

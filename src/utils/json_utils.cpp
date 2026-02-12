@@ -298,7 +298,8 @@ decode_base64(const std::string &input) {
   return result == 0;
 }
 
-void strip_federation_fields(json &event) {
+void strip_federation_fields(json &event,
+                             [[maybe_unused]] std::string_view room_version) {
   event.erase("auth_events");
   event.erase("prev_events");
   event.erase("depth");

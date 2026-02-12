@@ -60,10 +60,20 @@ reference_hash(const json &event, const std::string_view room_version);
 [[nodiscard]] std::string content_hash(const json &event,
                                        std::string_view room_version);
 
-/// Finalize an event into a complete PDU: computes content hash, event_id, and
-/// signs it. The event must already have all semantic fields set (type, content,
-/// sender, state_key, room_id, origin_server_ts, auth_events, prev_events,
-/// depth).
+/// Sign an event per the Matrix spec: redact according to room version, remove
+/// signatures + unsigned, sign the canonical JSON, then add the signature to the
+/// original (non-redacted) event. Use this for signing Matrix events (not
+/// general JSON like federation request auth headers -- use json_utils::sign_json
+/// for those).
+[[nodiscard]] json sign_event(json event, std::string_view room_version,
+                              const std::string &server_name,
+                              const std::string &key_id,
+                              const std::vector<unsigned char> &private_key);
+
+/// Finalize an event into a complete PDU: computes content hash, signs, and
+/// computes event_id. The event must already have all semantic fields set
+/// (type, content, sender, state_key, room_id, origin_server_ts, auth_events,
+/// prev_events, depth).
 [[nodiscard]] json finalize_event(json event, std::string_view room_version,
                                   const std::string &server_name,
                                   const std::string &key_id,

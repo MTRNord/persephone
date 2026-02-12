@@ -1,6 +1,7 @@
 #include "state_res.hpp"
 #include "utils/errors.hpp"
 #include "utils/json_utils.hpp"
+#include "utils/room_version.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <ctime>
@@ -12,6 +13,7 @@
 #include <ranges>
 #include <set>
 #include <sodium/crypto_hash_sha256.h>
+#include <sodium/crypto_sign.h>
 #include <sodium/utils.h>
 #include <stdexcept>
 #include <string>
@@ -554,7 +556,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 [[nodiscard]] bool auth_against_partial_state_version_11(
     const std::map<EventType, std::map<StateKey, StateEvent>>
         &current_partial_state,
-    StateEvent &event) {
+    StateEvent &event, std::string_view room_version) {
   // If type is m.room.create
   if (event["type"].get<std::string_view>() == "m.room.create") {
     // If it has any prev_events, reject.
@@ -571,7 +573,9 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 
     // If content.room_version is present and is not a recognised version,
     // reject.
-    if (event["content"]["room_version"].get<std::string_view>() != "11") {
+    if (!room_version::is_supported(
+            std::string(event["content"]["room_version"]
+                            .get<std::string_view>()))) {
       return false;
     }
 
@@ -651,25 +655,22 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
  */
 [[nodiscard]] bool auth_against_partial_state(
     std::map<EventType, std::map<StateKey, StateEvent>> &current_partial_state,
-    StateEvent &event) {
+    StateEvent &event, std::string_view room_version) {
+  if (!room_version::is_supported(std::string(room_version))) {
+    return false;
+  }
+
   if (event["type"].get<std::string_view>() == "m.room.create") {
     if (!event["content"].contains("room_version")) {
       return false;
     }
-    if (event["content"]["room_version"].get<std::string_view>() == "11") {
-      return auth_against_partial_state_version_11(current_partial_state,
-                                                   event);
-    }
-  } else {
-    auto create_event = current_partial_state["m.room.create"][""];
-    if (!create_event["content"].contains("room_version")) {
-      return false;
-    }
-    if (create_event["content"]["room_version"].get<std::string_view>() ==
-        "11") {
-      return auth_against_partial_state_version_11(current_partial_state,
-                                                   event);
-    }
+  }
+
+  // Dispatch to version-specific auth check.
+  // Currently only v11 is supported; add new branches here for future versions.
+  if (room_version == "11") {
+    return auth_against_partial_state_version_11(current_partial_state, event,
+                                                 room_version);
   }
 
   return false;
@@ -894,8 +895,7 @@ std::vector<std::string> select_auth_events(const json &event,
     // Restricted room joins (room versions 8+)
     if (event.contains("content") &&
         event.at("content").contains("join_authorised_via_users_server") &&
-        (room_version == "8" || room_version == "9" ||
-         room_version == "10" || room_version == "11")) {
+        room_version::supports_restricted_join(std::string(room_version))) {
       if (state.auth_user_membership.has_value() &&
           state.auth_user_membership->contains("event_id")) {
         auth_events.push_back(
@@ -977,6 +977,11 @@ reference_hash(const json &event, const std::string_view room_version) {
   if (event == nullptr) {
     throw std::invalid_argument("Event cannot be null");
   }
+  if (!room_version::uses_reference_hash(std::string(room_version))) {
+    throw std::runtime_error(
+        std::format("Room version {} does not use reference hash event IDs",
+                    room_version));
+  }
   const auto hash = reference_hash(event, room_version);
 
   const unsigned long long hash_len = hash.size();
@@ -1026,6 +1031,44 @@ reference_hash(const json &event, const std::string_view room_version) {
   throw MatrixRoomVersionError(std::string(room_version));
 }
 
+[[nodiscard]] json sign_event(json event, const std::string_view room_version,
+                              const std::string &server_name,
+                              const std::string &key_id,
+                              const std::vector<unsigned char> &private_key) {
+  if (event.is_null()) {
+    throw std::invalid_argument("Event cannot be null");
+  }
+  if (private_key.empty()) {
+    throw std::runtime_error("Private key is empty");
+  }
+
+  // Matrix spec: redact the event, remove signatures + unsigned, then sign.
+  // The signature is computed over the redacted canonical JSON, but applied
+  // to the original (non-redacted) event.
+  auto redacted = redact(event, room_version);
+  redacted.erase("signatures");
+  redacted.erase("unsigned");
+
+  const std::string canonical_json = redacted.dump();
+  std::vector<unsigned char> signature(crypto_sign_BYTES);
+
+  if (crypto_sign_detached(
+          signature.data(), nullptr,
+          reinterpret_cast<const unsigned char *>(canonical_json.c_str()),
+          canonical_json.size(), private_key.data()) < 0) {
+    throw std::runtime_error("Signing the event failed");
+  }
+
+  // Add the new signature to the original event's existing signatures
+  auto signatures =
+      event.value("signatures", json(json::value_t::object));
+  signatures[server_name][std::format("ed25519:{}", key_id)] =
+      json_utils::base64_std_unpadded(signature);
+  event["signatures"] = signatures;
+
+  return event;
+}
+
 [[nodiscard]] json finalize_event(json event,
                                   const std::string_view room_version,
                                   const std::string &server_name,
@@ -1034,12 +1077,15 @@ reference_hash(const json &event, const std::string_view room_version) {
   // 1. Compute content hash and set hashes.sha256
   event["hashes"] = json::object({{"sha256", content_hash(event, room_version)}});
 
-  // 2. Compute event_id from reference hash (includes hashes, auth_events,
-  //    prev_events, depth)
+  // 2. Sign the event (without event_id -- room v3+ event_id is not part of
+  //    the event format and must not be in the signed content)
+  event = sign_event(event, room_version, server_name, key_id, private_key);
+
+  // 3. Compute event_id AFTER signing (reference_hash strips signatures,
+  //    unsigned, and event_id, so the hash is unaffected by signing)
   event["event_id"] = event_id(event, room_version);
 
-  // 3. Sign the event
-  return json_utils::sign_json(server_name, key_id, private_key, event);
+  return event;
 }
 
 void finalize_room_creation_events(
@@ -1154,6 +1200,18 @@ void finalize_room_creation_events(
 stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
   auto [conflictedEvents, unconflictedEvents] = splitEvents(forks);
   auto partial_state = createPartialState(unconflictedEvents);
+
+  // Extract room version from the create event in partial state
+  std::string_view resolved_room_version = "11"; // default
+  if (partial_state.contains("m.room.create") &&
+      partial_state["m.room.create"].contains("")) {
+    const auto &create_ev = partial_state["m.room.create"][""];
+    if (create_ev.contains("content") &&
+        create_ev["content"].contains("room_version")) {
+      resolved_room_version =
+          create_ev["content"]["room_version"].get<std::string_view>();
+    }
+  }
 
   auto auth_difference = findAuthDifference(conflictedEvents, forks);
 
@@ -1278,7 +1336,8 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   // Step 2: Apply iterative auth checks to get partially resolved state
   for (auto &event : conflicted_control_events_sorted) {
-    if (auth_against_partial_state(partial_state, event)) {
+    if (auth_against_partial_state(partial_state, event,
+                                   resolved_room_version)) {
       auto event_type = event["type"].get<EventType>();
       auto state_key = event["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = event;
@@ -1338,7 +1397,8 @@ stateres_v2(const std::vector<std::vector<StateEvent>> &forks) {
 
   for (auto sorted_others = sorted_normal_state_events(conflicted_others);
        auto &event : sorted_others) {
-    if (auth_against_partial_state(partial_state, event)) {
+    if (auth_against_partial_state(partial_state, event,
+                                   resolved_room_version)) {
       auto event_type = event["type"].get<EventType>();
       auto state_key = event["state_key"].get<StateKey>();
       partial_state[event_type][state_key] = event;
