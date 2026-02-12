@@ -486,7 +486,9 @@ void ServerServerCtrl::make_join(
           .sender_membership = auth_events_data->target_membership,
           .target_membership = auth_events_data->target_membership,
           .join_rules = auth_events_data->join_rules,
-      };
+          // TODO: properly fix
+          .third_party_invite = {},
+          .auth_user_membership = {}};
       const auto auth_event_ids =
           select_auth_events(join_proto, auth_set, room_version);
 
