@@ -1464,8 +1464,8 @@ void ClientServerCtrl::sendEvent(
     // 5. Check room version
     const auto room_version = co_await Database::get_room_version(roomId);
     if (!room_version.has_value()) {
-      return_error(callback, "M_NOT_FOUND",
-                   "Could not determine room version", k404NotFound);
+      return_error(callback, "M_NOT_FOUND", "Could not determine room version",
+                   k404NotFound);
       co_return;
     }
 
@@ -1473,14 +1473,14 @@ void ClientServerCtrl::sendEvent(
     const auto membership =
         co_await Database::get_membership(roomId, userInfo->user_id);
     if (!membership.has_value() || membership.value() != "join") {
-      return_error(callback, "M_FORBIDDEN",
-                   "You are not joined to this room", k403Forbidden);
+      return_error(callback, "M_FORBIDDEN", "You are not joined to this room",
+                   k403Forbidden);
       co_return;
     }
 
     // 7. Get auth events for the event
-    const auto auth_data = co_await Database::get_auth_events_for_event(
-        roomId, userInfo->user_id);
+    const auto auth_data =
+        co_await Database::get_auth_events_for_event(roomId, userInfo->user_id);
     if (!auth_data.has_value()) {
       return_error(callback, "M_UNKNOWN", "Could not retrieve room state",
                    k500InternalServerError);
@@ -1490,8 +1490,7 @@ void ClientServerCtrl::sendEvent(
     // 8. Power level check
     if (auth_data->power_levels.has_value()) {
       const auto &pl = auth_data->power_levels.value();
-      const int sender_pl =
-          get_sender_power_level(pl, userInfo->user_id);
+      const int sender_pl = get_sender_power_level(pl, userInfo->user_id);
 
       // Get required power level for this event type
       int required_pl = 0;
@@ -1525,18 +1524,24 @@ void ClientServerCtrl::sendEvent(
         .create_event = auth_data->create_event,
         .power_levels = auth_data->power_levels,
         .sender_membership = auth_data->sender_membership,
+        // TODO: Fix this properly
+        .target_membership = {},
+        .join_rules = {},
+        .third_party_invite = {},
+        .auth_user_membership = {},
     };
 
-    json proto_event = {{"type", eventType},
-                        {"content", body},
-                        {"sender", userInfo->user_id},
-                        {"room_id", roomId},
-                        {"origin_server_ts",
-                         std::chrono::duration_cast<std::chrono::milliseconds>(
-                             std::chrono::system_clock::now().time_since_epoch())
-                             .count()},
-                        {"prev_events", prev_events},
-                        {"depth", max_depth + 1}};
+    json proto_event = {
+        {"type", eventType},
+        {"content", body},
+        {"sender", userInfo->user_id},
+        {"room_id", roomId},
+        {"origin_server_ts",
+         std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+             .count()},
+        {"prev_events", prev_events},
+        {"depth", max_depth + 1}};
 
     const auto auth_event_ids =
         select_auth_events(proto_event, auth_set, room_version.value());
@@ -1544,10 +1549,10 @@ void ClientServerCtrl::sendEvent(
 
     // 11. Finalize event (content hash, event_id, signature)
     const auto key_data = get_verify_key_data(_config);
-    json finalized = finalize_event(std::move(proto_event),
-                                    room_version.value(),
-                                    _config.matrix_config.server_name,
-                                    key_data.key_id, key_data.private_key);
+    json finalized =
+        finalize_event(std::move(proto_event), room_version.value(),
+                       _config.matrix_config.server_name, key_data.key_id,
+                       key_data.private_key);
 
     const auto final_event_id = finalized["event_id"].get<std::string>();
 
