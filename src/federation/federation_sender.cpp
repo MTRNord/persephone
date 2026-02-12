@@ -1,5 +1,6 @@
 #include "federation_sender.hpp"
 #include "database/database.hpp"
+#include "utils/room_version.hpp"
 #include "utils/utils.hpp"
 #include <algorithm>
 #include <chrono>
@@ -66,7 +67,9 @@ void FederationSender::broadcast_pdu(const json &event,
                                      std::string_view room_version) {
   // Strip event_id for room v3+ (PDUs sent over federation must not include it)
   auto pdu = event;
-  pdu.erase("event_id");
+  if (room_version::uses_reference_hash(std::string(room_version))) {
+    pdu.erase("event_id");
+  }
 
   const auto &room_id_copy = room_id;
   const auto &exclude_copy = exclude_server;

@@ -556,7 +556,7 @@ kahns_algorithm(const std::vector<StateEvent> &full_conflicted_set) {
 [[nodiscard]] bool auth_against_partial_state_version_11(
     const std::map<EventType, std::map<StateKey, StateEvent>>
         &current_partial_state,
-    StateEvent &event, std::string_view room_version) {
+    StateEvent &event, [[maybe_unused]] std::string_view room_version) {
   // If type is m.room.create
   if (event["type"].get<std::string_view>() == "m.room.create") {
     // If it has any prev_events, reject.

@@ -3,9 +3,12 @@
 #include "snitch/snitch_matcher.hpp"
 #include "utils/state_res.hpp"
 
+#include <array>
 #include <chrono>
+#include <format>
 #include <fstream>
 #include <snitch/snitch.hpp>
+#include <sodium/crypto_sign.h>
 #include <utils/errors.hpp>
 #include <utils/json_utils.hpp>
 #include <utils/room_utils.hpp>
@@ -900,10 +903,9 @@ webserver:
     REQUIRE(finalized1["hashes"]["sha256"] == finalized2["hashes"]["sha256"]);
   }
 
-  SECTION("event_id computed after hashes are set") {
-    // Verify that the event_id includes hashes in its computation
-    // by checking that adding hashes manually before finalize_event
-    // would produce the same event_id as finalize_event does
+  SECTION("event_id computed after hashes and signing") {
+    // finalize_event order: content_hash -> sign_event -> event_id
+    // Verify event_id is independent of signatures (reference_hash strips them)
     auto event = R"({
       "auth_events": [],
       "content": {"membership": "join"},
@@ -921,11 +923,17 @@ webserver:
                        key_data.key_id, key_data.private_key);
 
     // Manually compute: set hashes first, then compute event_id
+    // (without signing -- event_id should still match since reference_hash
+    // strips signatures)
     auto manual = event;
     manual["hashes"] = json::object({{"sha256", content_hash(manual, "11")}});
     auto manual_event_id = event_id(manual, "11");
 
     REQUIRE(finalized["event_id"] == manual_event_id);
+
+    // Also verify the finalized event has signatures (was signed before event_id)
+    REQUIRE(finalized.contains("signatures"));
+    REQUIRE(finalized["signatures"].contains("localhost"));
   }
 }
 
@@ -1053,5 +1061,166 @@ webserver:
       auto recomputed_id = event_id(event, "11");
       REQUIRE(recomputed_id == event["event_id"].get<std::string>());
     }
+  }
+}
+
+// ============================================================================
+// sign_event tests
+// ============================================================================
+
+TEST_CASE("sign_event", "[sign_event]") {
+  const auto *const config_file = R"(
+---
+database:
+  host: localhost
+  port: 5432
+  database_name: postgres
+  user: postgres
+  password: mysecretpassword
+matrix:
+  server_name: localhost
+  server_key_location: ./server_key.key
+webserver:
+  ssl: false
+  )";
+
+  std::ofstream file("config.yaml");
+  file << config_file;
+  file.close();
+
+  const Config config{};
+  json_utils::ensure_server_keys(config);
+  const auto key_data = get_verify_key_data(config);
+
+  SECTION("Produces a signed event with valid signature") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto signed_ev = sign_event(event, "11", config.matrix_config.server_name,
+                                key_data.key_id, key_data.private_key);
+
+    // Must have signatures
+    REQUIRE(signed_ev.contains("signatures"));
+    REQUIRE(signed_ev["signatures"].contains("localhost"));
+
+    // Original fields preserved
+    REQUIRE(signed_ev["type"] == "m.room.member");
+    REQUIRE(signed_ev["content"]["membership"] == "join");
+  }
+
+  SECTION("Signature is verifiable after redaction") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "hashes": {"sha256": "test_hash"},
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto signed_ev = sign_event(event, "11", config.matrix_config.server_name,
+                                key_data.key_id, key_data.private_key);
+
+    // Extract the signature
+    auto sig_key =
+        std::format("ed25519:{}", key_data.key_id);
+    auto signature_b64 =
+        signed_ev["signatures"]["localhost"][sig_key].get<std::string>();
+
+    // To verify: redact, remove signatures + unsigned, canonical JSON
+    auto redacted = redact(signed_ev, "11");
+    redacted.erase("signatures");
+    redacted.erase("unsigned");
+    auto canonical = redacted.dump();
+
+    // Get public key from the private key
+    std::array<unsigned char, crypto_sign_PUBLICKEYBYTES> pub_key{};
+    crypto_sign_ed25519_sk_to_pk(pub_key.data(), key_data.private_key.data());
+    auto pub_key_b64 = json_utils::base64_std_unpadded(
+        std::vector<unsigned char>(pub_key.begin(), pub_key.end()));
+
+    REQUIRE(json_utils::verify_signature(pub_key_b64, signature_b64, canonical));
+  }
+
+  SECTION("Non-preserved fields do not affect signature") {
+    // An event with an extra non-preserved field (like "origin")
+    // should produce the same signature as without it, because
+    // sign_event redacts before signing
+    auto event_base = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto event_with_origin = event_base;
+    event_with_origin["origin"] = "localhost";
+
+    auto signed_base =
+        sign_event(event_base, "11", config.matrix_config.server_name,
+                   key_data.key_id, key_data.private_key);
+    auto signed_origin =
+        sign_event(event_with_origin, "11", config.matrix_config.server_name,
+                   key_data.key_id, key_data.private_key);
+
+    // Both should produce the same signature (redaction strips "origin")
+    auto sig_key = std::format("ed25519:{}", key_data.key_id);
+    REQUIRE(signed_base["signatures"]["localhost"][sig_key] ==
+            signed_origin["signatures"]["localhost"][sig_key]);
+  }
+
+  SECTION("event_id is not included in signed content") {
+    auto event = R"({
+      "auth_events": [],
+      "content": {"membership": "join"},
+      "depth": 1,
+      "event_id": "$fake_event_id",
+      "origin_server_ts": 1000,
+      "prev_events": [],
+      "room_id": "!room:localhost",
+      "sender": "@alice:localhost",
+      "state_key": "@alice:localhost",
+      "type": "m.room.member"
+    })"_json;
+
+    auto event_no_id = event;
+    event_no_id.erase("event_id");
+
+    auto signed_with_id =
+        sign_event(event, "11", config.matrix_config.server_name,
+                   key_data.key_id, key_data.private_key);
+    auto signed_without_id =
+        sign_event(event_no_id, "11", config.matrix_config.server_name,
+                   key_data.key_id, key_data.private_key);
+
+    // Signatures should be identical because redaction strips event_id
+    auto sig_key = std::format("ed25519:{}", key_data.key_id);
+    REQUIRE(signed_with_id["signatures"]["localhost"][sig_key] ==
+            signed_without_id["signatures"]["localhost"][sig_key]);
+  }
+
+  SECTION("Rejects null event") {
+    auto null_event = json{};
+    REQUIRE_THROWS(
+        sign_event(null_event, "11", config.matrix_config.server_name,
+                   key_data.key_id, key_data.private_key));
   }
 }
