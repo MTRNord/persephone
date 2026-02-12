@@ -1042,12 +1042,15 @@ reference_hash(const json &event, const std::string_view room_version) {
     throw std::runtime_error("Private key is empty");
   }
 
-  // Matrix spec: redact the event, remove signatures + unsigned, then sign.
-  // The signature is computed over the redacted canonical JSON, but applied
-  // to the original (non-redacted) event.
+  // Matrix spec: redact the event, remove signatures, unsigned, and event_id,
+  // then sign. The signature is computed over the redacted canonical JSON,
+  // but applied to the original (non-redacted) event.
+  // For room v3+, event_id is derived from the reference hash and is NOT part
+  // of the event format, so it must not be in the signed content.
   auto redacted = redact(event, room_version);
   redacted.erase("signatures");
   redacted.erase("unsigned");
+  redacted.erase("event_id");
 
   const std::string canonical_json = redacted.dump();
   std::vector<unsigned char> signature(crypto_sign_BYTES);

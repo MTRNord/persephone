@@ -874,6 +874,14 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
     std::vector<json> state_with_membership = state;
     state_with_membership.push_back(membership_event);
 
+    // Sort by depth to ensure events are inserted in DAG order so that
+    // prev_events and auth_events references resolve correctly.
+    std::sort(state_with_membership.begin(), state_with_membership.end(),
+              [](const json &a, const json &b) {
+                return a.value("depth", static_cast<int64_t>(0)) <
+                       b.value("depth", static_cast<int64_t>(0));
+              });
+
     const auto sql = drogon::app().getDbClient();
     const auto transaction = sql->newTransaction();
     co_await Database::add_room(transaction, state_with_membership, room_id);
@@ -996,13 +1004,21 @@ void ClientServerCtrl::createRoom(
       co_return;
     }
 
-    // Convert the solved_state map to a vector of json objects
+    // Convert the solved_state map to a vector of json objects.
+    // Sort by depth to ensure correct insertion order -- the map is ordered
+    // by event type (alphabetical), but events must be inserted in DAG order
+    // so that prev_events and auth_events references resolve correctly.
     std::vector<json> state_events_vector;
     for (const auto &state_event : solved_state | std::views::values) {
       for (const auto &event : state_event | std::views::values) {
         state_events_vector.push_back(event);
       }
     }
+    std::sort(state_events_vector.begin(), state_events_vector.end(),
+              [](const json &a, const json &b) {
+                return a.value("depth", static_cast<int64_t>(0)) <
+                       b.value("depth", static_cast<int64_t>(0));
+              });
 
     // create room in db
     LOG_DEBUG << "Adding room to db";
