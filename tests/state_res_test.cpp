@@ -1219,8 +1219,9 @@ webserver:
 
   SECTION("Rejects null event") {
     auto null_event = json{};
-    REQUIRE_THROWS(
+    REQUIRE_THROWS_AS(
         sign_event(null_event, "11", config.matrix_config.server_name,
-                   key_data.key_id, key_data.private_key));
+                   key_data.key_id, key_data.private_key),
+        std::invalid_argument);
   }
 }
