@@ -5,6 +5,7 @@
 #include <drogon/utils/coroutine.h>
 #include <string_view>
 #include <utils/utils.hpp>
+using namespace drogon;
 using namespace std::string_view_literals;
 
 DROGON_TEST(DiscoveryTest) {

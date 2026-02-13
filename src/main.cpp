@@ -79,7 +79,7 @@ int main() {
         .setThreadNum(0)
         .setLogLevel(log_level)
         .addDbClient(
-            orm::PostgresConfig{.host = config.db_config.host,
+            drogon::orm::PostgresConfig{.host = config.db_config.host,
                                 .port = config.db_config.port,
                                 .databaseName = config.db_config.database_name,
                                 .username = config.db_config.user,

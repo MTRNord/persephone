@@ -736,7 +736,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
 
     //  Due to drogon we cant use the param handler and need this in the path :/
     auto version_query =
-        generateQueryParamString("ver", {default_room_version});
+        generateQueryParamString("ver", {std::string(default_room_version)});
     auto path = std::format("/_matrix/federation/v1/make_join/{}/{}{}", room_id,
                             userInfo->user_id, version_query);
 
@@ -953,7 +953,8 @@ void ClientServerCtrl::createRoom(
     }
 
     const auto room_version =
-        createRoom_body.room_version.value_or(default_room_version);
+        createRoom_body.room_version.value_or(
+            std::string(default_room_version));
 
     LOG_DEBUG << "Creating room with room version: " << room_version;
 
