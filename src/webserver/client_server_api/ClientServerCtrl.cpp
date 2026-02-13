@@ -30,6 +30,7 @@
 #include <vector>
 
 using namespace client_server_api;
+using namespace drogon;
 using json = nlohmann::json;
 
 /// Extract access token from Authorization header or deprecated query

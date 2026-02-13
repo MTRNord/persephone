@@ -20,9 +20,9 @@
 #include <nlohmann/json.hpp>
 #endif
 
-using namespace drogon;
-
 namespace server_server_api {
+// Needed for drogon macros (Get, Put, etc.) and drogon types in declarations
+using namespace drogon;
 
 /// Filter for verifying X-Matrix Authorization headers on federation endpoints.
 /// This filter verifies that incoming requests are properly signed by the

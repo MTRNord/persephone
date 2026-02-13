@@ -34,6 +34,8 @@
 #include <zconf.h>
 #include <zlib.h>
 
+using namespace drogon;
+
 /**
  * @brief Returns an error response with a given error code, error message, and
  * status code.
@@ -82,10 +84,10 @@ void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
   std::string tmp_s;
   tmp_s.reserve(len);
 
-  const auto size = alphanum.length();
+  std::uniform_int_distribution<std::size_t> dist(0, alphanum.length() - 1);
 
   for (std::size_t i = 0; i < len; ++i) {
-    tmp_s += alphanum.at(mt_gen() % size);
+    tmp_s += alphanum.at(dist(mt_gen));
   }
 
   return tmp_s;

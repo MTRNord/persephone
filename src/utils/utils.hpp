@@ -28,7 +28,6 @@
 #include <vector>
 
 using json = nlohmann::json;
-using namespace drogon;
 
 static constexpr auto UserAgent = "persephone/0.1.0";
 static constexpr auto DEFAULT_FEDERATION_TIMEOUT = 30;
@@ -115,9 +114,10 @@ drogon::HttpClientPtr create_http_client_for_host_port(const std::string &host,
                                                        uint16_t port);
 drogon::HttpClientPtr create_http_client_for_host(const std::string &host);
 
-void return_error(const std::function<void(const HttpResponsePtr &)> &callback,
-                  const std::string errorcode, const std::string error,
-                  const HttpStatusCode status_code);
+void return_error(
+    const std::function<void(const drogon::HttpResponsePtr &)> &callback,
+    const std::string errorcode, const std::string error,
+    const drogon::HttpStatusCode status_code);
 
 [[nodiscard]] std::string random_string(const std::size_t len);
 
@@ -210,7 +210,7 @@ migrate_localpart(const std::string_view localpart) {
  * @param server_name The server name from which to remove brackets.
  * @return The server name with the brackets removed.
  */
-[[nodiscard]] constexpr std::string remove_brackets(std::string server_name) {
+[[nodiscard]] inline std::string remove_brackets(std::string server_name) {
   LOG_DEBUG << "Removing brackets from server name: " << server_name;
   std::erase_if(server_name, [](const char character) {
     switch (character) {
@@ -282,7 +282,8 @@ is_valid_localpart(const std::string_view localpart,
 
 [[nodiscard]] std::vector<SRVRecord> get_srv_record(const std::string &address);
 
-[[nodiscard]] Task<ResolvedServer> discover_server(std::string server_name);
+[[nodiscard]] drogon::Task<ResolvedServer>
+discover_server(std::string server_name);
 
 struct [[nodiscard]] AuthheaderData {
   const std::string server_name;
@@ -313,7 +314,7 @@ struct [[nodiscard]] AuthheaderData {
  * string.
  * @return The generated query parameter string.
  */
-[[nodiscard]] constexpr std::string
+[[nodiscard]] inline std::string
 generateQueryParamString(const std::string &keyName,
                          const std::vector<std::string> &values) {
   std::string query_param_string{};
@@ -350,7 +351,7 @@ struct [[nodiscard]] XMatrixAuth {
 [[nodiscard]] std::optional<XMatrixAuth>
 parse_xmatrix_header(std::string_view header);
 
-[[nodiscard]] Task<drogon::HttpResponsePtr>
+[[nodiscard]] drogon::Task<drogon::HttpResponsePtr>
 federation_request(HTTPRequest request);
 
 [[nodiscard]] VerifyKeyData get_verify_key_data(const Config &config);

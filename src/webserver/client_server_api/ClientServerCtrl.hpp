@@ -25,16 +25,17 @@
 #include <nlohmann/json.hpp>
 #endif
 
-using namespace drogon;
-
 // Define our default room version globally
-static constexpr std::string default_room_version = "11";
+static constexpr std::string_view default_room_version = "11";
 
 namespace client_server_api {
+// Needed for drogon macros (Get, Post, Put, Options, etc.)
+using namespace drogon;
 class AccessTokenFilter final : public drogon::HttpFilter<AccessTokenFilter> {
 public:
-  void doFilter(const HttpRequestPtr &req, FilterCallback &&callback,
-                FilterChainCallback &&chain_callback) override;
+  void doFilter(const drogon::HttpRequestPtr &req,
+                drogon::FilterCallback &&callback,
+                drogon::FilterChainCallback &&chain_callback) override;
 };
 
 struct [[nodiscard]] UserValidData {
