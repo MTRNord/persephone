@@ -180,15 +180,13 @@ void ClientServerCtrl::whoami(
     const HttpRequestPtr &req,
     std::function<void(const HttpResponsePtr &)> &&callback) const {
   drogon::async_run([req, callback = std::move(callback)]() -> drogon::Task<> {
-    // Get the access token from the Authorization header
-    const auto auth_header = req->getHeader("Authorization");
-    if (auth_header.empty()) {
-      return_error(callback, "M_MISSING_TOKEN", "Missing Authorization header",
-                   k401Unauthorized);
+    // Get the access token from the Authorization header or query parameter
+    const auto access_token = extract_access_token(req);
+    if (access_token.empty()) {
+      return_error(callback, "M_MISSING_TOKEN",
+                   "Missing access token", k401Unauthorized);
       co_return;
     }
-    // Remove the "Bearer " prefix
-    const auto access_token = auth_header.substr(7);
 
     const auto resp = HttpResponse::newHttpResponse();
 
@@ -310,14 +308,9 @@ void ClientServerCtrl::login_post(
     client_server_json::login_body login_body;
     try {
       login_body = body.get<client_server_json::login_body>();
-    } catch (...) {
-      const auto ex_re = std::current_exception();
-      try {
-        std::rethrow_exception(ex_re);
-      } catch (std::bad_exception const &ex) {
-        LOG_WARN << "Failed to parse json as login_body in login: " << ex.what()
-                 << '\n';
-      }
+    } catch (const std::exception &ex) {
+      LOG_WARN << "Failed to parse json as login_body in login: " << ex.what()
+               << '\n';
       return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?",
@@ -395,15 +388,10 @@ void ClientServerCtrl::register_user(
     client_server_json::registration_body reg_body;
     try {
       reg_body = body.get<client_server_json::registration_body>();
-    } catch (...) {
-      auto ex_re = std::current_exception();
-      try {
-        std::rethrow_exception(ex_re);
-      } catch (std::bad_exception const &ex) {
-        LOG_WARN
-            << "Failed to parse json as registration_body in register_user: "
-            << ex.what() << '\n';
-      }
+    } catch (const std::exception &ex) {
+      LOG_WARN
+          << "Failed to parse json as registration_body in register_user: "
+          << ex.what() << '\n';
       return_error(
           callback, "M_BAD_JSON",
           "Unable to parse json. Ensure all required fields are present?",
@@ -603,7 +591,8 @@ void client_server_api::ClientServerCtrl::directoryLookupRoomAlias(
         {.client = client,
          .method = drogon::Get,
          .path = std::format(
-             "/_matrix/federation/v1/query/directory?room_alias={}", roomAlias),
+             "/_matrix/federation/v1/query/directory?room_alias={}",
+             drogon::utils::urlEncodeComponent(roomAlias)),
          .key_id = key_data.key_id,
          .secret_key = key_data.private_key,
          .origin = _config.matrix_config.server_name,
@@ -688,7 +677,7 @@ void client_server_api::ClientServerCtrl::joinRoomIdOrAlias(
            .method = drogon::Get,
            .path = std::format(
                "/_matrix/federation/v1/query/directory?room_alias={}",
-               roomIdOrAlias),
+               drogon::utils::urlEncodeComponent(roomIdOrAlias)),
            .key_id = key_data.key_id,
            .secret_key = key_data.private_key,
            .origin = _config.matrix_config.server_name,
@@ -1065,7 +1054,22 @@ void ClientServerCtrl::state(
     const std::optional<std::string> &stateKey) const {
   drogon::async_run([req, callback = std::move(callback), roomId, eventType,
                      stateKey]() -> drogon::Task<> {
-    // TODO: Look up the latest state in the db
+    // Check that the authenticated user is a member of the room
+    const auto access_token = extract_access_token(req);
+    const auto user_info = co_await Database::get_user_info(access_token);
+    if (!user_info) {
+      return_error(callback, "M_UNKNOWN_TOKEN", "Unknown access token",
+                   k401Unauthorized);
+      co_return;
+    }
+
+    const auto membership =
+        co_await Database::get_membership(roomId, user_info->user_id);
+    if (!membership || *membership != "join") {
+      return_error(callback, "M_FORBIDDEN",
+                   "You are not a member of this room", k403Forbidden);
+      co_return;
+    }
 
     try {
       const json json_data = co_await Database::get_state_event(
@@ -1095,6 +1099,15 @@ void ClientServerCtrl::setFilter(
     const std::string &userId) const {
   drogon::async_run(
       [req, callback = std::move(callback), userId]() -> drogon::Task<> {
+        // Verify the authenticated user matches the userId parameter
+        const auto access_token = extract_access_token(req);
+        const auto user_info = co_await Database::get_user_info(access_token);
+        if (!user_info || user_info->user_id != userId) {
+          return_error(callback, "M_FORBIDDEN",
+                       "Cannot set filters for other users", k403Forbidden);
+          co_return;
+        }
+
         try {
           // Parse body as filter json
           const auto filter = json::parse(req->body());
@@ -1123,6 +1136,15 @@ void ClientServerCtrl::getFilter(
     const std::string &userId, const std::string &filterId) const {
   drogon::async_run([req, callback = std::move(callback), userId,
                      filterId]() -> drogon::Task<> {
+    // Verify the authenticated user matches the userId parameter
+    const auto access_token = extract_access_token(req);
+    const auto user_info = co_await Database::get_user_info(access_token);
+    if (!user_info || user_info->user_id != userId) {
+      return_error(callback, "M_FORBIDDEN",
+                   "Cannot get filters for other users", k403Forbidden);
+      co_return;
+    }
+
     try {
       const auto filter = co_await Database::get_filter(userId, filterId);
 
@@ -1306,11 +1328,8 @@ void ClientServerCtrl::sync(
     auto timeout_ms = req->getOptionalParameter<int64_t>("timeout").value_or(0);
     // Ignored for now: set_presence
 
-    // Default timeout: 30s if not specified (reasonable for reverse proxies)
-    if (timeout_ms == 0) {
-      constexpr int64_t default_timeout_ms = 30000;
-      timeout_ms = default_timeout_ms;
-    }
+    // Per spec, timeout=0 means respond immediately (no long-polling).
+    // Cap at 5 minutes to avoid holding connections too long.
     if (constexpr int64_t max_timeout_ms = 300000;
         timeout_ms > max_timeout_ms) {
       timeout_ms = max_timeout_ms;

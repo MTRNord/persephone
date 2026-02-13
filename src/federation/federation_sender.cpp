@@ -21,6 +21,8 @@
 std::string FederationSender::_server_name;
 std::string FederationSender::_key_id;
 std::vector<unsigned char> FederationSender::_secret_key;
+std::mutex FederationSender::active_deliveries_mutex_;
+std::unordered_set<std::string> FederationSender::active_deliveries_;
 
 static int64_t now_ms() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -61,6 +63,16 @@ void FederationSender::start(std::string server_name, std::string key_id,
   });
 }
 
+bool FederationSender::try_lock_delivery(const std::string &destination) {
+  std::lock_guard lock(active_deliveries_mutex_);
+  return active_deliveries_.insert(destination).second;
+}
+
+void FederationSender::unlock_delivery(const std::string &destination) {
+  std::lock_guard lock(active_deliveries_mutex_);
+  active_deliveries_.erase(destination);
+}
+
 void FederationSender::broadcast_pdu(const json &event,
                                      const std::string &room_id,
                                      const std::string &exclude_server,
@@ -86,51 +98,92 @@ void FederationSender::broadcast_pdu(const json &event,
         co_return;
       }
 
+      // Filter out the sending server and ourselves
+      std::vector<std::string> destinations;
+      for (const auto &server : servers) {
+        if (server != exclude_copy && server != server_name) {
+          destinations.push_back(server);
+        }
+      }
+
+      if (destinations.empty()) {
+        co_return;
+      }
+
       const auto event_id = pdu.value("event_id", "");
       const auto event_json_str = pdu.dump();
       const auto created_at = now_ms();
 
-      for (const auto &server : servers) {
-        // Skip the sending server and ourselves
-        if (server == exclude_copy || server == server_name) {
-          continue;
+      try {
+        // Batch INSERT destinations (single query with multiple VALUES)
+        std::string dest_values;
+        for (size_t i = 0; i < destinations.size(); ++i) {
+          if (i > 0) {
+            dest_values += ", ";
+          }
+          dest_values += std::format("(${})", i + 1);
         }
+        std::string dest_query = std::format(
+            "INSERT INTO federation_destinations (server_name) VALUES {} "
+            "ON CONFLICT DO NOTHING",
+            dest_values);
 
-        try {
-          // Ensure destination row exists
+        // Build parameter pack for destinations insert
+        // Drogon's execSqlCoro needs individual params, so we use a raw SQL
+        // approach with string params
+        for (const auto &dest : destinations) {
           co_await sql->execSqlCoro(
               "INSERT INTO federation_destinations (server_name) "
               "VALUES ($1) ON CONFLICT DO NOTHING",
-              server);
+              dest);
+        }
 
-          // Queue the event
+        // Batch INSERT queue entries
+        for (const auto &dest : destinations) {
           co_await sql->execSqlCoro(
               "INSERT INTO federation_event_queue "
               "(destination, event_id, event_json, created_at) "
               "VALUES ($1, $2, $3::jsonb, $4) ON CONFLICT DO NOTHING",
-              server, event_id, event_json_str, created_at);
-
-          // Try immediate delivery if not in backoff
-          if (const auto in_backoff = co_await is_server_in_backoff(server);
-              !in_backoff) {
-            // Fire-and-forget delivery attempt
-            const auto &dest = server;
-            drogon::async_run([dest]() -> drogon::Task<> {
-              try {
-                co_await deliver_to_server(dest);
-              } catch (const std::exception &e) {
-                LOG_ERROR << "FederationSender: Delivery to " << dest
-                          << " failed: " << e.what();
-              } catch (...) {
-                LOG_ERROR << "FederationSender: Delivery to " << dest
-                          << " failed with unknown exception";
-              }
-            });
-          }
-        } catch (const drogon::orm::DrogonDbException &e) {
-          LOG_ERROR << "FederationSender: Failed to queue event for " << server
-                    << ": " << e.base().what();
+              dest, event_id, event_json_str, created_at);
         }
+
+        // Batch check backoff status for all destinations at once
+        const auto backoff_result = co_await sql->execSqlCoro(
+            "SELECT server_name FROM federation_destinations "
+            "WHERE retry_after_ts > $1",
+            now_ms());
+
+        std::unordered_set<std::string> backed_off_servers;
+        for (const auto &row : backoff_result) {
+          backed_off_servers.insert(row["server_name"].as<std::string>());
+        }
+
+        // Fire delivery attempts for non-backed-off destinations
+        for (const auto &dest : destinations) {
+          if (backed_off_servers.contains(dest)) {
+            continue;
+          }
+
+          if (!try_lock_delivery(dest)) {
+            continue; // Already being delivered to
+          }
+
+          drogon::async_run([dest]() -> drogon::Task<> {
+            try {
+              co_await deliver_to_server(dest);
+            } catch (const std::exception &e) {
+              LOG_ERROR << "FederationSender: Delivery to " << dest
+                        << " failed: " << e.what();
+            } catch (...) {
+              LOG_ERROR << "FederationSender: Delivery to " << dest
+                        << " failed with unknown exception";
+            }
+            unlock_delivery(dest);
+          });
+        }
+      } catch (const drogon::orm::DrogonDbException &e) {
+        LOG_ERROR << "FederationSender: Failed to queue events: "
+                  << e.base().what();
       }
     } catch (const std::exception &e) {
       LOG_ERROR << "FederationSender: broadcast_pdu failed: " << e.what();
@@ -144,11 +197,15 @@ void FederationSender::broadcast_pdu(const json &event,
 drogon::Task<> FederationSender::process_queue_loop() {
   LOG_INFO << "FederationSender: Queue processor started";
 
+  int iterations_since_probe = 0;
+
   while (true) {
     co_await drogon::sleepCoro(
         trantor::EventLoop::getEventLoopOfCurrentThread(),
         std::chrono::milliseconds(
             static_cast<int>(QUEUE_POLL_INTERVAL_S * 1000)));
+
+    ++iterations_since_probe;
 
     try {
       const auto sql = drogon::app().getDbClient();
@@ -168,8 +225,12 @@ drogon::Task<> FederationSender::process_queue_loop() {
           continue;
         }
 
+        if (!try_lock_delivery(destination)) {
+          continue; // Already being delivered to
+        }
+
         // Launch independent delivery coroutine
-        const auto &dest = destination;
+        const auto dest = destination;
         drogon::async_run([dest]() -> drogon::Task<> {
           try {
             co_await deliver_to_server(dest);
@@ -180,7 +241,42 @@ drogon::Task<> FederationSender::process_queue_loop() {
             LOG_ERROR << "FederationSender: Delivery to " << dest
                       << " failed with unknown exception";
           }
+          unlock_delivery(dest);
         });
+      }
+
+      // Periodic probe: try one backed-off server that has queued events
+      if (iterations_since_probe >= PROBE_INTERVAL_ITERATIONS) {
+        iterations_since_probe = 0;
+
+        const auto probe_result = co_await sql->execSqlCoro(
+            "SELECT DISTINCT q.destination FROM federation_event_queue q "
+            "JOIN federation_destinations d ON d.server_name = q.destination "
+            "WHERE d.retry_after_ts > $1 "
+            "ORDER BY q.destination LIMIT 1",
+            now_ms());
+
+        if (!probe_result.empty()) {
+          const auto probe_dest =
+              probe_result.at(0)["destination"].as<std::string>();
+
+          if (try_lock_delivery(probe_dest)) {
+            LOG_INFO << "FederationSender: Probing backed-off server "
+                     << probe_dest;
+            drogon::async_run([probe_dest]() -> drogon::Task<> {
+              try {
+                co_await deliver_to_server(probe_dest);
+              } catch (const std::exception &e) {
+                LOG_WARN << "FederationSender: Probe to " << probe_dest
+                         << " failed: " << e.what();
+              } catch (...) {
+                LOG_WARN << "FederationSender: Probe to " << probe_dest
+                         << " failed with unknown exception";
+              }
+              unlock_delivery(probe_dest);
+            });
+          }
+        }
       }
     } catch (const std::exception &e) {
       LOG_ERROR << "FederationSender: Queue processor error: " << e.what();
@@ -356,10 +452,11 @@ FederationSender::mark_server_failure(const std::string &server) {
       failure_count = result.at(0)["failure_count"].as<int>() + 1;
     }
 
-    // Exponential backoff: 30s * 2^(failure_count - 1), capped at 24h
-    const auto exponent = std::min(failure_count - 1, 15);
+    // Gentle early backoff: 5s, 10s, 20s, 40s for first 4 failures
+    // Then exponential growth: 5s * 2^(n-1) from failure 5+, capped at 24h
+    const auto exponent = std::min(failure_count - 1, 20);
     int64_t backoff_ms =
-        static_cast<int64_t>(30000) * (static_cast<int64_t>(1) << exponent);
+        BASE_SERVER_BACKOFF_MS * (static_cast<int64_t>(1) << exponent);
     backoff_ms = std::min(backoff_ms, MAX_SERVER_BACKOFF_MS);
 
     const auto current_time = now_ms();

@@ -214,7 +214,7 @@ Database::login(const LoginData login_data) {
         login_data.matrix_id);
 
     if (query.empty()) {
-      throw std::runtime_error("User does not exist");
+      throw std::runtime_error("Invalid username or password");
     }
 
     // Check if the password matches
@@ -222,7 +222,7 @@ Database::login(const LoginData login_data) {
             query.at(0)["password_hash"].as<std::string>();
         !verify_hashed_password(password_hash,
                                 std::string(login_data.password))) {
-      throw std::runtime_error("Password does not match");
+      throw std::runtime_error("Invalid username or password");
     }
 
     // Create a new access token with initial_device_name if it is set

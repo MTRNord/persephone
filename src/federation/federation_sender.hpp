@@ -13,7 +13,9 @@
 #else
 #include <nlohmann/json.hpp>
 #endif
+#include <mutex>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 using json = nlohmann::json;
@@ -63,9 +65,25 @@ private:
   static constexpr int MAX_RETRY_BACKOFF_MS = 10000;
 
   // Per-server backoff (based on consecutive failures)
-  // Schedule: 30s, 1m, 2m, 4m, ... capped at 24h
+  // First 4 failures: 5s, 10s, 20s, 40s
+  // Then exponential: 5s * 2^(n-4) from failure 5 onward, capped at 24h
+  static constexpr int64_t BASE_SERVER_BACKOFF_MS = 5000;    // 5 seconds
+  static constexpr int GENTLE_BACKOFF_THRESHOLD = 4;
   static constexpr int64_t MAX_SERVER_BACKOFF_MS = 86400000; // 24 hours
 
   // Queue processor polling interval
   static constexpr double QUEUE_POLL_INTERVAL_S = 5.0;
+
+  // Probe interval: try one backed-off server every 60 seconds
+  static constexpr int PROBE_INTERVAL_ITERATIONS =
+      static_cast<int>(60.0 / QUEUE_POLL_INTERVAL_S);
+
+  // Per-destination delivery locking to prevent concurrent deliveries
+  static std::mutex active_deliveries_mutex_;
+  static std::unordered_set<std::string> active_deliveries_;
+
+  /// Try to acquire delivery lock for a destination. Returns true if acquired.
+  static bool try_lock_delivery(const std::string &destination);
+  /// Release delivery lock for a destination.
+  static void unlock_delivery(const std::string &destination);
 };
