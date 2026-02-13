@@ -1372,11 +1372,18 @@ Database::get_auth_chain(const std::string room_id) {
         " JOIN event_json ej ON ej.event_nid = e.event_nid",
         std::string(room_id));
 
+    LOG_DEBUG << "get_auth_chain: query returned " << query.size()
+              << " rows for room " << room_id;
+
     std::vector<json> auth_events;
     auth_events.reserve(query.size());
 
     for (const auto &row : query) {
-      auth_events.push_back(json::parse(row["json"].as<std::string>()));
+      auto parsed = json::parse(row["json"].as<std::string>());
+      LOG_DEBUG << "get_auth_chain: event type="
+                << parsed.value("type", "?")
+                << " event_id=" << parsed.value("event_id", "?");
+      auth_events.push_back(std::move(parsed));
     }
 
     co_return auth_events;

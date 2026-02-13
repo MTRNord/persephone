@@ -732,7 +732,15 @@ void ServerServerCtrl::send_join(
 
       // B. Fetch state BEFORE persisting (spec: state prior to the join)
       //    If multiple forward extremities exist, run state resolution.
+      LOG_DEBUG << "send_join: Fetching auth_chain for room " << roomId;
       const auto auth_chain = co_await Database::get_auth_chain(roomId);
+      LOG_DEBUG << "send_join: auth_chain contains " << auth_chain.size()
+                << " events";
+      for (const auto &ac_event : auth_chain) {
+        LOG_DEBUG << "send_join: auth_chain event: type="
+                  << ac_event.value("type", "?")
+                  << " event_id=" << ac_event.value("event_id", "?");
+      }
       std::vector<json> state_events;
 
       const auto heads = co_await Database::get_room_heads(roomId);
@@ -804,16 +812,44 @@ void ServerServerCtrl::send_join(
           co_await Database::get_servers_in_room(roomId);
 
       // G. Build and return response
-      // Convert auth_chain to vector<json::object_t>
+      //    For room v3+, PDUs in federation responses must NOT include
+      //    event_id (it is derived from the reference hash, not part of the
+      //    event format). Strip it from auth_chain, state, and the signed
+      //    event so that the receiving server can verify signatures correctly
+      //    (signatures are computed without event_id in the signing base).
+      const bool strip_event_id =
+          room_version::uses_reference_hash(room_version);
+
+      LOG_DEBUG << "send_join: Building response with " << auth_chain.size()
+                << " auth_chain events and " << state_events.size()
+                << " state events (strip_event_id=" << strip_event_id << ")";
+
+      // Convert auth_chain to vector<json::object_t>, stripping event_id
       std::vector<json::object_t> auth_chain_objects;
       auth_chain_objects.reserve(auth_chain.size());
-      for (const auto &event : auth_chain) {
+      for (auto event : auth_chain) {
+        if (strip_event_id) {
+          event.erase("event_id");
+        }
         auth_chain_objects.push_back(event.get<json::object_t>());
+      }
+
+      // Strip event_id from state events
+      if (strip_event_id) {
+        for (auto &event : state_events) {
+          event.erase("event_id");
+        }
+      }
+
+      // Strip event_id from the signed join event
+      auto response_event = signed_event;
+      if (strip_event_id) {
+        response_event.erase("event_id");
       }
 
       const server_server_json::SendJoinResp response{
           .auth_chain = std::move(auth_chain_objects),
-          .event = signed_event,
+          .event = response_event,
           .members_omitted = false,
           .origin = server_name,
           .servers_in_room = servers_in_room,
