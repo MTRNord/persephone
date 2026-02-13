@@ -1,6 +1,7 @@
 #include "ClientServerCtrl.hpp"
 #include "database/database.hpp"
 #include "database/state_ordering.hpp"
+#include "federation/federation_sender.hpp"
 #include "utils/json_utils.hpp"
 #include "utils/utils.hpp"
 #include "webserver/json.hpp"
@@ -1597,7 +1598,12 @@ void ClientServerCtrl::sendEvent(
       co_return;
     }
 
-    // 13. Return event_id
+    // 13. Broadcast to federated servers
+    FederationSender::broadcast_pdu(finalized, roomId,
+                                    _config.matrix_config.server_name,
+                                    room_version.value());
+
+    // 14. Return event_id
     const json resp_body = {{"event_id", final_event_id}};
     const auto resp = HttpResponse::newHttpResponse();
     resp->setBody(resp_body.dump());
