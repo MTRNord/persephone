@@ -1025,6 +1025,12 @@ federation_request(const HTTPRequest request) {
     req->addHeader("Authorization", auth_header);
   }
 
+  // Set the request body if content is provided and not null
+  if (request.content.has_value() && !request.content.value().is_null()) {
+    req->setBody(request.content.value().dump());
+    req->setContentTypeString(JSON_CONTENT_TYPE);
+  }
+
   req->removeHeader("Host");
   // Use explicit host_header if provided by the caller (e.g. delegated
   // hostname or IP from discovery). Otherwise fall back to the logical
