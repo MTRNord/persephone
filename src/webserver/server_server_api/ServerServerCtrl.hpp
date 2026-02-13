@@ -56,6 +56,12 @@ public:
   ADD_METHOD_TO(ServerServerCtrl::send_join,
                 "/_matrix/federation/v2/send_join/{1:roomId}/{2:eventId}", Put,
                 "server_server_api::FederationAuthFilter");
+  ADD_METHOD_TO(ServerServerCtrl::get_event,
+                "/_matrix/federation/v1/event/{1:eventId}", Get,
+                "server_server_api::FederationAuthFilter");
+  ADD_METHOD_TO(ServerServerCtrl::get_state_ids,
+                "/_matrix/federation/v1/state_ids/{1:roomId}", Get,
+                "server_server_api::FederationAuthFilter");
   METHOD_LIST_END
 
   explicit ServerServerCtrl(Config config, VerifyKeyData verify_key_data)
@@ -78,6 +84,14 @@ protected:
                  std::function<void(const HttpResponsePtr &)> &&callback,
                  const std::string &roomId,
                  const std::string &eventId) const;
+
+  void get_event(const HttpRequestPtr &req,
+                 std::function<void(const HttpResponsePtr &)> &&callback,
+                 const std::string &eventId) const;
+
+  void get_state_ids(const HttpRequestPtr &req,
+                     std::function<void(const HttpResponsePtr &)> &&callback,
+                     const std::string &roomId) const;
 
 private:
   Config _config;

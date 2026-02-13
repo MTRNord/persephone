@@ -872,3 +872,123 @@ void ServerServerCtrl::send_join(
     }
   });
 }
+
+void ServerServerCtrl::get_event(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &eventId) const {
+  const auto config = _config;
+
+  drogon::async_run([req, eventId, config,
+                     callback = std::move(callback)]() -> drogon::Task<> {
+    try {
+      // 1. Look up the event
+      const auto event_opt = co_await Database::get_event_by_id(eventId);
+      if (!event_opt.has_value()) {
+        return_error(callback, "M_NOT_FOUND", "Event not found", k404NotFound);
+        co_return;
+      }
+
+      auto pdu = event_opt.value();
+      const auto room_id = pdu.value("room_id", "");
+
+      // 2. Get room version to determine if event_id should be stripped
+      const auto room_version = co_await Database::get_room_version(room_id);
+      if (room_version.has_value() &&
+          room_version::uses_reference_hash(room_version.value())) {
+        pdu.erase("event_id");
+      }
+
+      // 3. Build Transaction response
+      const auto ts =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::system_clock::now().time_since_epoch())
+              .count();
+
+      json response = {{"origin", config.matrix_config.server_name},
+                       {"origin_server_ts", ts},
+                       {"pdus", json::array({pdu})}};
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(response.dump());
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
+      callback(resp);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "get_event: Exception: " << e.what();
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
+    }
+  });
+}
+
+void ServerServerCtrl::get_state_ids(
+    const HttpRequestPtr &req,
+    std::function<void(const HttpResponsePtr &)> &&callback,
+    const std::string &roomId) const {
+  drogon::async_run([req, roomId,
+                     callback = std::move(callback)]() -> drogon::Task<> {
+    try {
+      // 1. Extract event_id query parameter
+      const auto event_id = req->getParameter("event_id");
+      if (event_id.empty()) {
+        return_error(callback, "M_MISSING_PARAM",
+                     "Missing required query parameter: event_id",
+                     k400BadRequest);
+        co_return;
+      }
+
+      // 2. Verify room exists
+      if (const bool exists = co_await Database::room_exists(roomId); !exists) {
+        return_error(callback, "M_NOT_FOUND", "Room not found", k404NotFound);
+        co_return;
+      }
+
+      // 3. Get room_nid
+      const auto room_nid = co_await Database::get_room_nid(roomId);
+      if (!room_nid.has_value()) {
+        return_error(callback, "M_NOT_FOUND", "Room not found", k404NotFound);
+        co_return;
+      }
+
+      // 4. Get state at the event
+      const auto state_events =
+          co_await Database::get_state_at_event(room_nid.value(), event_id);
+      if (state_events.empty()) {
+        return_error(callback, "M_NOT_FOUND",
+                     "No state found at the given event", k404NotFound);
+        co_return;
+      }
+
+      // 5. Extract event IDs from state events → pdu_ids
+      std::vector<std::string> pdu_ids;
+      pdu_ids.reserve(state_events.size());
+      for (const auto &event : state_events) {
+        if (event.contains("event_id")) {
+          pdu_ids.push_back(event["event_id"].get<std::string>());
+        }
+      }
+
+      // 6. Get auth chain IDs at the event
+      const auto auth_chain_ids =
+          co_await Database::get_auth_chain_ids_at_event(room_nid.value(),
+                                                         event_id);
+
+      LOG_DEBUG << "get_state_ids: room=" << roomId << " event=" << event_id
+                << " pdu_ids=" << pdu_ids.size()
+                << " auth_chain_ids=" << auth_chain_ids.size();
+
+      // 7. Build response
+      json response = {{"auth_chain_ids", auth_chain_ids},
+                       {"pdu_ids", pdu_ids}};
+
+      const auto resp = HttpResponse::newHttpResponse();
+      resp->setBody(response.dump());
+      resp->setContentTypeString(JSON_CONTENT_TYPE);
+      callback(resp);
+    } catch (const std::exception &e) {
+      LOG_ERROR << "get_state_ids: Exception: " << e.what();
+      return_error(callback, "M_UNKNOWN", "Internal server error",
+                   k500InternalServerError);
+    }
+  });
+}

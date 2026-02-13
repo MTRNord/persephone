@@ -220,6 +220,14 @@ public:
   [[nodiscard]] static drogon::Task<std::vector<json>>
   get_auth_chain(const std::string room_id);
 
+  /// Get a single event by its event_id
+  [[nodiscard]] static drogon::Task<std::optional<json>>
+  get_event_by_id(const std::string &event_id);
+
+  /// Get auth chain event IDs at a specific event (recursive walk)
+  [[nodiscard]] static drogon::Task<std::vector<std::string>>
+  get_auth_chain_ids_at_event(int room_nid, const std::string &event_id);
+
   /// Get distinct server names from joined members in a room
   [[nodiscard]] static drogon::Task<std::vector<std::string>>
   get_servers_in_room(const std::string room_id);

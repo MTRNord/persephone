@@ -1393,6 +1393,78 @@ Database::get_auth_chain(const std::string room_id) {
   }
 }
 
+[[nodiscard]] drogon::Task<std::optional<json>>
+Database::get_event_by_id(const std::string &event_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    const auto query = co_await sql->execSqlCoro(
+        "SELECT ej.json FROM event_json ej "
+        "JOIN events e ON ej.event_nid = e.event_nid "
+        "WHERE e.event_id = $1",
+        event_id);
+    if (query.empty()) {
+      co_return std::nullopt;
+    }
+    co_return json::parse(query.at(0)["json"].as<std::string>());
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_event_by_id failed: " << e.base().what();
+    co_return std::nullopt;
+  }
+}
+
+[[nodiscard]] drogon::Task<std::vector<std::string>>
+Database::get_auth_chain_ids_at_event(int room_nid,
+                                      const std::string &event_id) {
+  const auto sql = drogon::app().getDbClient();
+  if (sql == nullptr) {
+    LOG_FATAL << "No database connection available";
+    std::terminate();
+  }
+  try {
+    // First get the depth of the target event
+    const auto depth_query = co_await sql->execSqlCoro(
+        "SELECT depth FROM events WHERE event_id = $1 AND room_nid = $2",
+        event_id, room_nid);
+    if (depth_query.empty()) {
+      LOG_WARN << "get_auth_chain_ids_at_event: event " << event_id
+               << " not found";
+      co_return {};
+    }
+    const auto depth = depth_query.at(0)["depth"].as<int64_t>();
+
+    // Recursive CTE starting from state at the event's depth
+    const auto query = co_await sql->execSqlCoro(
+        "WITH RECURSIVE auth_chain AS ("
+        "  SELECT e.event_id, e.auth_events"
+        "  FROM events e"
+        "  JOIN temporal_state ts ON ts.event_nid = e.event_nid"
+        "  WHERE ts.room_nid = $1"
+        "    AND ts.start_index <= $2"
+        "    AND (ts.end_index > $2 OR ts.end_index IS NULL)"
+        "  UNION"
+        "  SELECT e2.event_id, e2.auth_events"
+        "  FROM events e2"
+        "  JOIN auth_chain ac ON e2.event_id = ANY(ac.auth_events)"
+        ") "
+        "SELECT DISTINCT event_id FROM auth_chain",
+        room_nid, depth);
+
+    std::vector<std::string> ids;
+    ids.reserve(query.size());
+    for (const auto &row : query) {
+      ids.push_back(row["event_id"].as<std::string>());
+    }
+    co_return ids;
+  } catch (const drogon::orm::DrogonDbException &e) {
+    LOG_ERROR << "get_auth_chain_ids_at_event failed: " << e.base().what();
+    co_return {};
+  }
+}
+
 [[nodiscard]] drogon::Task<std::vector<std::string>>
 Database::get_servers_in_room(const std::string room_id) {
   const auto sql = drogon::app().getDbClient();
