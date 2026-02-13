@@ -241,6 +241,20 @@ FederationSender::deliver_to_server(const std::string &destination) {
     transaction_body["origin_server_ts"] = ts;
     transaction_body["pdus"] = pdus;
 
+    // Debug: log what we're sending
+    for (const auto &p : pdus) {
+      LOG_DEBUG << "FederationSender: Sending PDU to " << destination
+                << " type=" << p.value("type", "?")
+                << " sender=" << p.value("sender", "?")
+                << " room_id=" << p.value("room_id", "?")
+                << " depth=" << p.value("depth", 0)
+                << " auth_events=" << p.value("auth_events", json::array()).size()
+                << " prev_events=" << p.value("prev_events", json::array()).size()
+                << " has_signatures=" << p.contains("signatures")
+                << " has_hashes=" << p.contains("hashes")
+                << " has_event_id=" << p.contains("event_id");
+    }
+
     // Retry loop with exponential backoff
     const auto path = std::format("/_matrix/federation/v1/send/{}", txn_id);
     int backoff_ms = INITIAL_BACKOFF_MS;
@@ -283,7 +297,8 @@ FederationSender::deliver_to_server(const std::string &destination) {
         if (response) {
           LOG_WARN << "FederationSender: " << destination << " returned status "
                    << response->getStatusCode() << " (attempt " << attempt + 1
-                   << "/" << MAX_RETRIES_PER_ATTEMPT + 1 << ")";
+                   << "/" << MAX_RETRIES_PER_ATTEMPT + 1
+                   << ") body: " << response->body();
         }
       } catch (const std::exception &e) {
         LOG_WARN << "FederationSender: Error sending to " << destination

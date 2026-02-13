@@ -1599,6 +1599,8 @@ void ClientServerCtrl::sendEvent(
     }
 
     // 13. Broadcast to federated servers
+    LOG_DEBUG << "sendEvent: Broadcasting event " << final_event_id
+              << " type=" << eventType << " to room " << roomId;
     FederationSender::broadcast_pdu(finalized, roomId,
                                     _config.matrix_config.server_name,
                                     room_version.value());
