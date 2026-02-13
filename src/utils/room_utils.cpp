@@ -202,7 +202,61 @@ std::vector<json> build_createRoom_state(const CreateRoomStateBuildData &data,
     state_events.push_back(canonical_alias_pdu);
   }
 
-  // TODO: here handle the preset
+  // Handle room presets — determines join_rules, history_visibility,
+  // guest_access
+  const auto preset = data.createRoom_body.preset.value_or(
+      data.createRoom_body.is_direct.value_or(false) ? "trusted_private_chat"
+                                                     : "private_chat");
+
+  std::string join_rule = "invite";
+  std::string history_visibility = "shared";
+  std::string guest_access = "can_join";
+
+  if (preset == "public_chat") {
+    join_rule = "public";
+    history_visibility = "shared";
+    guest_access = "forbidden";
+  } else if (preset == "private_chat") {
+    join_rule = "invite";
+    history_visibility = "shared";
+    guest_access = "can_join";
+  } else if (preset == "trusted_private_chat") {
+    join_rule = "invite";
+    history_visibility = "shared";
+    guest_access = "can_join";
+  }
+
+  const auto now_ts =
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+          std::chrono::system_clock::now().time_since_epoch())
+          .count();
+
+  state_events.push_back(json{
+      {"type", "m.room.join_rules"},
+      {"content", {{"join_rule", join_rule}}},
+      {"origin_server_ts", now_ts},
+      {"sender", data.user_id},
+      {"state_key", ""},
+      {"room_id", data.room_id},
+  });
+
+  state_events.push_back(json{
+      {"type", "m.room.history_visibility"},
+      {"content", {{"history_visibility", history_visibility}}},
+      {"origin_server_ts", now_ts},
+      {"sender", data.user_id},
+      {"state_key", ""},
+      {"room_id", data.room_id},
+  });
+
+  state_events.push_back(json{
+      {"type", "m.room.guest_access"},
+      {"content", {{"guest_access", guest_access}}},
+      {"origin_server_ts", now_ts},
+      {"sender", data.user_id},
+      {"state_key", ""},
+      {"room_id", data.room_id},
+  });
 
   // Add origin_server_ts, room_id, sender to each initial_state event
   for (auto &initial_state :
