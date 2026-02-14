@@ -8,6 +8,7 @@
 #include <drogon/HttpRequest.h>
 #include <drogon/HttpResponse.h>
 #include <drogon/HttpTypes.h>
+#include <fstream>
 #ifdef __GNUC__
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Warray-bounds"
@@ -126,7 +127,8 @@ register_test_user(const drogon::HttpClientPtr &client,
   auto resp = co_await client->sendRequestCoro(req, 10);
   if (resp->statusCode() != drogon::k200OK) {
     throw std::runtime_error(
-        std::format("Registration failed: {} {}", resp->statusCode(),
+        std::format("Registration failed: {} {}",
+                    static_cast<int>(resp->statusCode()),
                     std::string(resp->body())));
   }
 

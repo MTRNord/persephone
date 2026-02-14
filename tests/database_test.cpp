@@ -12,6 +12,7 @@
 #include <drogon/HttpAppFramework.h>
 #include <drogon/orm/DbConfig.h>
 #include <drogon/utils/coroutine.h>
+#include <fstream>
 #include <snitch/snitch.hpp>
 #include <sodium/core.h>
 #include <thread>
@@ -298,10 +299,15 @@ log_level: "warn"
   std::this_thread::sleep_for(std::chrono::seconds(2));
 
   // Run snitch tests
-  // snitch uses argc/argv automatically via its main
-  snitch::cli::input const args(argc, argv);
-  snitch::tests.configure(args);
-  const bool success = snitch::tests.run_tests(args);
+  auto args = snitch::cli::parse_arguments(argc, argv);
+  if (!args.has_value()) {
+    fprintf(stderr, "Failed to parse command line arguments\n");
+    drogon::app().getLoop()->queueInLoop([]() { drogon::app().quit(); });
+    thr.join();
+    return 1;
+  }
+  snitch::tests.configure(args.value());
+  const bool success = snitch::tests.run_tests(args.value());
 
   // Shutdown
   drogon::app().getLoop()->queueInLoop([]() { drogon::app().quit(); });
