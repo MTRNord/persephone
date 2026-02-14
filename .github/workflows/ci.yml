@@ -212,6 +212,7 @@ jobs:
           #go test -v -tags persephone_blacklist ./tests ./tests/csapi
           go test -v -json -tags persephone_blacklist ./tests ./tests/csapi  | ../.github/gotestfmt
         env:
+          COMPLEMENT_BASE_IMAGE: complement-persephone
           COMPLEMENT_BASE_IMAGE_HS1: ghcr.io/element-hq/synapse/complement-synapse:latest
           COMPLEMENT_BASE_IMAGE_HS2: complement-persephone
           COMPLEMENT_ENABLE_DIRTY_RUNS: true
