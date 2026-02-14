@@ -50,7 +50,8 @@ public:
   ADD_METHOD_TO(ClientServerCtrl::versions, "/_matrix/client/versions", Get,
                 Options);
   ADD_METHOD_TO(ClientServerCtrl::capabilities,
-                "/_matrix/client/v3/capabilities", Get, Options);
+                "/_matrix/client/v3/capabilities", Get, Options,
+                "client_server_api::AccessTokenFilter");
   // User info
   ADD_METHOD_TO(ClientServerCtrl::whoami, "/_matrix/client/v3/account/whoami",
                 Get, Options, "client_server_api::AccessTokenFilter");
