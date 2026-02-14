@@ -3,6 +3,7 @@
 /// Set PERSEPHONE_TEST_DB_HOST, PERSEPHONE_TEST_DB_PORT, PERSEPHONE_TEST_DB_USER,
 /// PERSEPHONE_TEST_DB_PASSWORD, PERSEPHONE_TEST_DB_NAME environment variables.
 
+#define DROGON_TEST_MAIN
 #include "database/database.hpp"
 #include "test_helpers.hpp"
 #include "utils/config.hpp"
