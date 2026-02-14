@@ -742,3 +742,321 @@ TEST_CASE("client_server_json::CreateRoomBody with invite_3pid",
     REQUIRE(output["invite_3pid"][0]["address"] == "a@b.c");
   }
 }
+
+// ============================================================================
+// Sync API types
+// ============================================================================
+
+TEST_CASE("client_server_json::SyncTimeline serialization",
+          "[json_serialization]") {
+  SECTION("Full timeline") {
+    json input = {{"events", {{{"type", "m.room.message"}}}},
+                  {"limited", true},
+                  {"prev_batch", "s72594_4483_1934"}};
+
+    auto tl = input.get<client_server_json::SyncTimeline>();
+    REQUIRE(tl.events.size() == 1);
+    REQUIRE(tl.limited == true);
+    REQUIRE(tl.prev_batch.value() == "s72594_4483_1934");
+
+    json output = tl;
+    REQUIRE(output["events"].size() == 1);
+    REQUIRE(output["limited"] == true);
+    REQUIRE(output["prev_batch"] == "s72594_4483_1934");
+  }
+
+  SECTION("Defaults") {
+    json input = {{"events", json::array()}};
+    auto tl = input.get<client_server_json::SyncTimeline>();
+    REQUIRE(tl.events.empty());
+    REQUIRE(tl.limited == false);
+    REQUIRE_FALSE(tl.prev_batch.has_value());
+  }
+}
+
+TEST_CASE("client_server_json::SyncRoomState serialization",
+          "[json_serialization]") {
+  SECTION("Round-trip") {
+    json input = {
+        {"events", {{{"type", "m.room.create"}, {"state_key", ""}}}}};
+    auto state = input.get<client_server_json::SyncRoomState>();
+    REQUIRE(state.events.size() == 1);
+
+    json output = state;
+    REQUIRE(output["events"][0]["type"] == "m.room.create");
+  }
+}
+
+TEST_CASE("client_server_json::SyncAccountData serialization",
+          "[json_serialization]") {
+  SECTION("Round-trip") {
+    json input = {
+        {"events",
+         {{{"type", "m.push_rules"}, {"content", {{"global", json::object()}}}}}}};
+    auto ad = input.get<client_server_json::SyncAccountData>();
+    REQUIRE(ad.events.size() == 1);
+
+    json output = ad;
+    REQUIRE(output["events"][0]["type"] == "m.push_rules");
+  }
+}
+
+TEST_CASE("client_server_json::UnreadNotificationCounts serialization",
+          "[json_serialization]") {
+  SECTION("Round-trip") {
+    json input = {{"highlight_count", 3}, {"notification_count", 7}};
+    auto unc = input.get<client_server_json::UnreadNotificationCounts>();
+    REQUIRE(unc.highlight_count == 3);
+    REQUIRE(unc.notification_count == 7);
+
+    json output = unc;
+    REQUIRE(output["highlight_count"] == 3);
+    REQUIRE(output["notification_count"] == 7);
+  }
+
+  SECTION("Defaults to zero") {
+    json input = json::object();
+    auto unc = input.get<client_server_json::UnreadNotificationCounts>();
+    REQUIRE(unc.highlight_count == 0);
+    REQUIRE(unc.notification_count == 0);
+  }
+}
+
+TEST_CASE("client_server_json::RoomSummary serialization",
+          "[json_serialization]") {
+  SECTION("Full summary") {
+    json input = {{"m.heroes", {"@alice:example.com", "@bob:example.com"}},
+                  {"m.joined_member_count", 5},
+                  {"m.invited_member_count", 2}};
+    auto rs = input.get<client_server_json::RoomSummary>();
+    REQUIRE(rs.m_heroes->size() == 2);
+    REQUIRE(rs.m_joined_member_count.value() == 5);
+    REQUIRE(rs.m_invited_member_count.value() == 2);
+
+    json output = rs;
+    REQUIRE(output["m.heroes"].size() == 2);
+    REQUIRE(output["m.joined_member_count"] == 5);
+  }
+
+  SECTION("Empty summary") {
+    json input = json::object();
+    auto rs = input.get<client_server_json::RoomSummary>();
+    REQUIRE_FALSE(rs.m_heroes.has_value());
+    REQUIRE_FALSE(rs.m_joined_member_count.has_value());
+    REQUIRE_FALSE(rs.m_invited_member_count.has_value());
+
+    json output = rs;
+    REQUIRE_FALSE(output.contains("m.heroes"));
+  }
+}
+
+TEST_CASE("client_server_json::DeviceLists serialization",
+          "[json_serialization]") {
+  SECTION("Full device lists") {
+    json input = {{"changed", {"@alice:example.com", "@bob:example.com"}},
+                  {"left", {"@charlie:example.com"}}};
+    auto dl = input.get<client_server_json::DeviceLists>();
+    REQUIRE(dl.changed.size() == 2);
+    REQUIRE(dl.left.size() == 1);
+    REQUIRE(dl.left[0] == "@charlie:example.com");
+
+    json output = dl;
+    REQUIRE(output["changed"].size() == 2);
+    REQUIRE(output["left"].size() == 1);
+  }
+
+  SECTION("Empty device lists") {
+    json input = json::object();
+    auto dl = input.get<client_server_json::DeviceLists>();
+    REQUIRE(dl.changed.empty());
+    REQUIRE(dl.left.empty());
+  }
+}
+
+TEST_CASE("client_server_json::SyncJoinedRoom serialization",
+          "[json_serialization]") {
+  SECTION("Minimal joined room") {
+    json input = {
+        {"timeline", {{"events", json::array()}}},
+        {"state", {{"events", json::array()}}},
+        {"account_data", {{"events", json::array()}}},
+        {"ephemeral", {{"events", json::array()}}},
+        {"unread_notifications",
+         {{"highlight_count", 0}, {"notification_count", 0}}}};
+
+    auto jr = input.get<client_server_json::SyncJoinedRoom>();
+    REQUIRE(jr.timeline.events.empty());
+    REQUIRE(jr.state.events.empty());
+    REQUIRE_FALSE(jr.summary.has_value());
+
+    json output = jr;
+    REQUIRE(output["timeline"]["events"].empty());
+  }
+}
+
+TEST_CASE("client_server_json::SyncInvitedRoom serialization",
+          "[json_serialization]") {
+  SECTION("With invite state") {
+    json input = {
+        {"invite_state",
+         {{"events",
+           {{{"type", "m.room.member"},
+             {"content", {{"membership", "invite"}}}}}}}}};
+
+    auto ir = input.get<client_server_json::SyncInvitedRoom>();
+    REQUIRE(ir.invite_state.events.size() == 1);
+
+    json output = ir;
+    REQUIRE(output["invite_state"]["events"][0]["type"] == "m.room.member");
+  }
+}
+
+TEST_CASE("client_server_json::SyncLeftRoom serialization",
+          "[json_serialization]") {
+  SECTION("Minimal left room") {
+    json input = {{"timeline", {{"events", json::array()}}},
+                  {"state", {{"events", json::array()}}},
+                  {"account_data", {{"events", json::array()}}}};
+
+    auto lr = input.get<client_server_json::SyncLeftRoom>();
+    REQUIRE(lr.timeline.events.empty());
+    REQUIRE(lr.state.events.empty());
+
+    json output = lr;
+    REQUIRE(output["timeline"]["events"].empty());
+  }
+}
+
+TEST_CASE("client_server_json::SyncRooms serialization",
+          "[json_serialization]") {
+  SECTION("With joined, invited, and left rooms") {
+    json input = {
+        {"join",
+         {{"!abc:example.com",
+           {{"timeline", {{"events", json::array()}}},
+            {"state", {{"events", json::array()}}},
+            {"account_data", {{"events", json::array()}}},
+            {"ephemeral", {{"events", json::array()}}},
+            {"unread_notifications",
+             {{"highlight_count", 0}, {"notification_count", 0}}}}}}},
+        {"invite",
+         {{"!def:example.com",
+           {{"invite_state", {{"events", json::array()}}}}}}},
+        {"leave",
+         {{"!ghi:example.com",
+           {{"timeline", {{"events", json::array()}}},
+            {"state", {{"events", json::array()}}},
+            {"account_data", {{"events", json::array()}}}}}}}};
+
+    auto rooms = input.get<client_server_json::SyncRooms>();
+    REQUIRE(rooms.join.size() == 1);
+    REQUIRE(rooms.invite.size() == 1);
+    REQUIRE(rooms.leave.size() == 1);
+    REQUIRE(rooms.join.contains("!abc:example.com"));
+    REQUIRE(rooms.invite.contains("!def:example.com"));
+    REQUIRE(rooms.leave.contains("!ghi:example.com"));
+
+    json output = rooms;
+    REQUIRE(output["join"].size() == 1);
+    REQUIRE(output["invite"].size() == 1);
+    REQUIRE(output["leave"].size() == 1);
+  }
+}
+
+TEST_CASE("client_server_json::SyncResponse serialization",
+          "[json_serialization]") {
+  SECTION("Minimal sync response") {
+    json input = {
+        {"next_batch", "s72594_4483_1934"},
+        {"account_data", {{"events", json::array()}}},
+        {"rooms",
+         {{"join", json::object()},
+          {"invite", json::object()},
+          {"leave", json::object()}}},
+        {"device_lists", {{"changed", json::array()}, {"left", json::array()}}},
+        {"device_one_time_keys_count", {{"signed_curve25519", 50}}},
+        {"device_unused_fallback_key_types", {"signed_curve25519"}}};
+
+    auto resp = input.get<client_server_json::SyncResponse>();
+    REQUIRE(resp.next_batch == "s72594_4483_1934");
+    REQUIRE(resp.account_data.events.empty());
+    REQUIRE(resp.rooms.join.empty());
+    REQUIRE(resp.device_lists.changed.empty());
+    REQUIRE(resp.device_one_time_keys_count.at("signed_curve25519") == 50);
+    REQUIRE(resp.device_unused_fallback_key_types.size() == 1);
+
+    json output = resp;
+    REQUIRE(output["next_batch"] == "s72594_4483_1934");
+    REQUIRE(output["device_one_time_keys_count"]["signed_curve25519"] == 50);
+  }
+}
+
+// ============================================================================
+// capabilities types
+// ============================================================================
+
+TEST_CASE("client_server_json::capabilities_obj serialization",
+          "[json_serialization]") {
+  SECTION("With room versions") {
+    json input = {{"m.room_versions",
+                   {{"default", "11"},
+                    {"available", {{"1", "stable"}, {"11", "stable"}}}}}};
+
+    auto caps = input.get<client_server_json::capabilities_obj>();
+    REQUIRE(caps.room_versions.has_value());
+    REQUIRE(caps.room_versions->default_ == "11");
+    REQUIRE(caps.room_versions->available.at("1") == "stable");
+
+    json output = caps;
+    REQUIRE(output["m.room_versions"]["default"] == "11");
+    REQUIRE(output["m.room_versions"]["available"]["11"] == "stable");
+  }
+
+  SECTION("With boolean capabilities") {
+    json input = {{"m.change_password", {{"enabled", true}}},
+                  {"m.set_displayname", {{"enabled", false}}}};
+
+    auto caps = input.get<client_server_json::capabilities_obj>();
+    REQUIRE(caps.change_password->enabled == true);
+    REQUIRE(caps.set_displayname->enabled == false);
+
+    json output = caps;
+    REQUIRE(output["m.change_password"]["enabled"] == true);
+    REQUIRE(output["m.set_displayname"]["enabled"] == false);
+  }
+
+  SECTION("Empty capabilities") {
+    json input = json::object();
+    auto caps = input.get<client_server_json::capabilities_obj>();
+    REQUIRE_FALSE(caps.room_versions.has_value());
+    REQUIRE_FALSE(caps.change_password.has_value());
+  }
+}
+
+// ============================================================================
+// server_server_json::DirectoryQueryResp
+// ============================================================================
+
+TEST_CASE("server_server_json::DirectoryQueryResp serialization",
+          "[json_serialization]") {
+  SECTION("Round-trip") {
+    json input = {{"room_id", "!abc:example.com"},
+                  {"servers", {"example.com", "other.com"}}};
+
+    auto resp = input.get<server_server_json::DirectoryQueryResp>();
+    REQUIRE(resp.room_id == "!abc:example.com");
+    REQUIRE(resp.servers.size() == 2);
+
+    json output = resp;
+    REQUIRE(output["room_id"] == "!abc:example.com");
+    REQUIRE(output["servers"].size() == 2);
+  }
+
+  SECTION("Empty servers") {
+    json input = {{"room_id", "!xyz:example.com"}, {"servers", json::array()}};
+
+    auto resp = input.get<server_server_json::DirectoryQueryResp>();
+    REQUIRE(resp.room_id == "!xyz:example.com");
+    REQUIRE(resp.servers.empty());
+  }
+}

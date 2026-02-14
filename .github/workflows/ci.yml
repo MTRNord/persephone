@@ -24,6 +24,21 @@ jobs:
     permissions:
       contents: read
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: persephone_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: persephone_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,6 +54,7 @@ jobs:
           CC=/usr/bin/clang-21 CXX=/usr/bin/clang++-21 cmake -S . -B cmake-build-debug \
             -DCMAKE_BUILD_TYPE=Debug \
             -DDISABLE_TESTS=OFF \
+            -DENABLE_INTEGRATION_TESTS=ON \
             -DCODE_COVERAGE=ON \
             -DCMAKE_EXE_LINKER_FLAGS="-fuse-ld=lld" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fuse-ld=lld"
@@ -49,6 +65,12 @@ jobs:
           make -j$(nproc) ccov-all
           cat ccov/binaries.list | xargs llvm-cov export -instr-profile=ccov/all-merged.profdata -format=lcov > ccov/all-merged/lcov.info
           cd ..
+        env:
+          PERSEPHONE_TEST_DB_HOST: localhost
+          PERSEPHONE_TEST_DB_PORT: "5432"
+          PERSEPHONE_TEST_DB_USER: persephone_test
+          PERSEPHONE_TEST_DB_PASSWORD: test
+          PERSEPHONE_TEST_DB_NAME: persephone_test
       - name: Report results to DeepSource
         run: |
           # Tests have finished and a test coverage report is available

@@ -825,3 +825,162 @@ TEST_CASE("sign_json error cases", "[json_signing]") {
         snitch::matchers::with_what_contains{"Secret key is empty"});
   }
 }
+
+// ============================================================================
+// strip_ipv6_zone_id tests
+// ============================================================================
+
+TEST_CASE("strip_ipv6_zone_id", "[network]") {
+  SECTION("No zone id") {
+    REQUIRE(strip_ipv6_zone_id("fe80::1") == "fe80::1");
+  }
+
+  SECTION("With zone id") {
+    REQUIRE(strip_ipv6_zone_id("fe80::1%eth0") == "fe80::1");
+  }
+
+  SECTION("With numeric zone id") {
+    REQUIRE(strip_ipv6_zone_id("fe80::1%25") == "fe80::1");
+  }
+
+  SECTION("IPv4 unchanged") {
+    REQUIRE(strip_ipv6_zone_id("127.0.0.1") == "127.0.0.1");
+  }
+
+  SECTION("Hostname unchanged") {
+    REQUIRE(strip_ipv6_zone_id("example.com") == "example.com");
+  }
+
+  SECTION("Empty string") {
+    REQUIRE(strip_ipv6_zone_id("") == "");
+  }
+}
+
+// ============================================================================
+// build_host_header tests
+// ============================================================================
+
+TEST_CASE("build_host_header", "[network]") {
+  SECTION("Hostname with port") {
+    ResolvedServer r{.address = "1.2.3.4", .port = 8448, .server_name = "example.com"};
+    REQUIRE(build_host_header(r) == "example.com:8448");
+  }
+
+  SECTION("Hostname already includes port (host:port)") {
+    ResolvedServer r{.address = "1.2.3.4", .port = 443, .server_name = "example.com:443"};
+    // server_name contains a colon but no ']', so has_explicit_port is true
+    REQUIRE(build_host_header(r) == "example.com:443");
+  }
+
+  SECTION("No port") {
+    ResolvedServer r{.address = "1.2.3.4", .port = std::nullopt, .server_name = "example.com"};
+    REQUIRE(build_host_header(r) == "example.com");
+  }
+
+  SECTION("IPv6 bracketed server name with port") {
+    ResolvedServer r{.address = "::1", .port = 8448, .server_name = "[::1]"};
+    // server_name contains ':' but also ']', so has_explicit_port is false → port appended
+    REQUIRE(build_host_header(r) == "[::1]:8448");
+  }
+}
+
+// ============================================================================
+// build_server_url tests
+// ============================================================================
+
+TEST_CASE("build_server_url", "[network]") {
+  SECTION("Hostname with port") {
+    ResolvedServer r{.address = "example.com", .port = 8448, .server_name = "example.com"};
+    REQUIRE(build_server_url(r) == "https://example.com:8448");
+  }
+
+  SECTION("Hostname without port") {
+    ResolvedServer r{.address = "example.com", .port = std::nullopt, .server_name = "example.com"};
+    REQUIRE(build_server_url(r) == "https://example.com");
+  }
+
+  SECTION("IPv4 address with port") {
+    ResolvedServer r{.address = "192.168.1.1", .port = 443, .server_name = "192.168.1.1"};
+    REQUIRE(build_server_url(r) == "https://192.168.1.1:443");
+  }
+
+  SECTION("IPv6 address gets brackets") {
+    ResolvedServer r{.address = "::1", .port = 8448, .server_name = "::1"};
+    REQUIRE(build_server_url(r) == "https://[::1]:8448");
+  }
+
+  SECTION("Already bracketed IPv6") {
+    ResolvedServer r{.address = "[::1]", .port = 8448, .server_name = "[::1]"};
+    REQUIRE(build_server_url(r) == "https://[::1]:8448");
+  }
+
+  SECTION("IPv6 with zone id stripped") {
+    ResolvedServer r{.address = "fe80::1%eth0", .port = 8448, .server_name = "fe80::1%eth0"};
+    REQUIRE(build_server_url(r) == "https://[fe80::1]:8448");
+  }
+}
+
+// ============================================================================
+// strip_federation_fields tests
+// ============================================================================
+
+TEST_CASE("strip_federation_fields", "[json_utils]") {
+  SECTION("Removes federation-only fields") {
+    json event = {{"type", "m.room.message"},
+                  {"content", {{"body", "hello"}}},
+                  {"auth_events", {"$ev1", "$ev2"}},
+                  {"prev_events", {"$ev3"}},
+                  {"depth", 5},
+                  {"hashes", {{"sha256", "abc"}}},
+                  {"signatures", {{"example.com", {{"ed25519:key", "sig"}}}}}};
+
+    json_utils::strip_federation_fields(event);
+
+    REQUIRE(event.contains("type"));
+    REQUIRE(event.contains("content"));
+    REQUIRE_FALSE(event.contains("auth_events"));
+    REQUIRE_FALSE(event.contains("prev_events"));
+    REQUIRE_FALSE(event.contains("depth"));
+    REQUIRE_FALSE(event.contains("hashes"));
+    REQUIRE_FALSE(event.contains("signatures"));
+  }
+
+  SECTION("No-op when fields are absent") {
+    json event = {{"type", "m.room.message"}, {"content", {{"body", "hi"}}}};
+
+    json_utils::strip_federation_fields(event);
+
+    REQUIRE(event.contains("type"));
+    REQUIRE(event.contains("content"));
+    REQUIRE(event.size() == 2);
+  }
+}
+
+// ============================================================================
+// Additional password tests
+// ============================================================================
+
+TEST_CASE("Password hashing edge cases", "[passwords]") {
+  SECTION("Wrong password fails verification") {
+    const auto hash = hash_password("correctpassword");
+    REQUIRE_FALSE(verify_hashed_password(hash, "wrongpassword"));
+  }
+
+  SECTION("Empty password can be hashed and verified") {
+    const auto hash = hash_password("");
+    REQUIRE(!hash.empty());
+    REQUIRE(verify_hashed_password(hash, ""));
+    REQUIRE_FALSE(verify_hashed_password(hash, "notempty"));
+  }
+
+  SECTION("Hash has argon2 prefix") {
+    const auto hash = hash_password("test");
+    REQUIRE(hash.starts_with("$argon2"));
+  }
+
+  SECTION("Different passwords produce different hashes") {
+    const auto hash1 = hash_password("password1");
+    const auto hash2 = hash_password("password2");
+    REQUIRE(hash1 != hash2);
+  }
+}

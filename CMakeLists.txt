@@ -301,14 +301,7 @@ if (NOT DISABLE_TESTS)
     )
 
 
-    add_executable(drogon_tests tests/drogon_tests.cpp)
-    target_link_libraries(drogon_tests PRIVATE
-            persephone_lib
-            snitch::snitch
-    )
-    target_compile_options(drogon_tests PRIVATE
-            ${TEST_COMPILE_OPTIONS}
-    )
+    # drogon_tests moved to ENABLE_INTEGRATION_TESTS section below
 
     add_executable(sync_test tests/sync_test.cpp)
     target_link_libraries(sync_test PRIVATE
@@ -359,7 +352,6 @@ if (NOT DISABLE_TESTS)
             COMMAND utils_test
             COMMAND state_res_test
             COMMAND config_test
-            COMMAND drogon_tests
             COMMAND sync_test
             COMMAND json_serialization_test
             COMMAND room_utils_test
@@ -379,10 +371,6 @@ if (NOT DISABLE_TESTS)
     add_test(
             NAME config_test
             COMMAND config_test
-    )
-    add_test(
-            NAME drogon_tests
-            COMMAND drogon_tests
     )
     add_test(
             NAME sync_test
@@ -408,12 +396,44 @@ if (NOT DISABLE_TESTS)
     target_code_coverage(utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_res_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(config_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
-    target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(sync_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(json_serialization_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(room_utils_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(state_ordering_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     target_code_coverage(send_join_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+
+    # Integration tests (require PostgreSQL)
+    option(ENABLE_INTEGRATION_TESTS "Enable integration tests (requires PostgreSQL)" OFF)
+    if (ENABLE_INTEGRATION_TESTS)
+        add_executable(drogon_tests tests/drogon_tests.cpp)
+        target_link_libraries(drogon_tests PRIVATE
+                persephone_lib
+                snitch::snitch
+        )
+        target_compile_options(drogon_tests PRIVATE
+                ${TEST_COMPILE_OPTIONS}
+        )
+
+        add_executable(database_test tests/database_test.cpp)
+        target_link_libraries(database_test PRIVATE
+                persephone_lib
+                snitch::snitch
+        )
+        target_compile_options(database_test PRIVATE
+                ${TEST_COMPILE_OPTIONS}
+        )
+
+        add_test(
+                NAME drogon_tests
+                COMMAND drogon_tests
+        )
+        add_test(
+                NAME database_test
+                COMMAND database_test
+        )
+        target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+        target_code_coverage(database_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+    endif ()
 
 endif ()
 
