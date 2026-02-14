@@ -218,12 +218,6 @@ jobs:
           COMPLEMENT_ENABLE_DIRTY_RUNS: true
         continue-on-error: true
 
-      - name: Build Complement homeserver image
-        run: |
-          docker build -t complement-persephone -f complement/Dockerfile .
-        env:
-          DOCKER_BUILDKIT: 1
-
       # - name: Run Complement Tests against continuwuity
       #   run: |
       #     set -o pipefail
