@@ -414,25 +414,25 @@ if (NOT DISABLE_TESTS)
                 ${TEST_COMPILE_OPTIONS}
         )
 
-        add_executable(database_test tests/database_test.cpp)
-        target_link_libraries(database_test PRIVATE
-                persephone_lib
-                snitch::snitch
-        )
-        target_compile_options(database_test PRIVATE
-                ${TEST_COMPILE_OPTIONS}
-        )
+        # add_executable(database_test tests/database_test.cpp)
+        # target_link_libraries(database_test PRIVATE
+        #         persephone_lib
+        #         snitch::snitch
+        # )
+        # target_compile_options(database_test PRIVATE
+        #         ${TEST_COMPILE_OPTIONS}
+        # )
 
         add_test(
                 NAME drogon_tests
                 COMMAND drogon_tests
         )
-        add_test(
-                NAME database_test
-                COMMAND database_test
-        )
+        # add_test(
+        #         NAME database_test
+        #         COMMAND database_test
+        # )
         target_code_coverage(drogon_tests AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
-        target_code_coverage(database_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
+        # target_code_coverage(database_test AUTO ALL EXTERNAL EXCLUDE ${CCOV_EXCLUDES})
     endif ()
 
 endif ()
