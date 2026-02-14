@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -74,10 +74,10 @@ jobs:
       - name: Report results to DeepSource
         run: |
           # Tests have finished and a test coverage report is available
-          
+
           # Install deepsource CLI
           curl https://deepsource.io/cli | sh
-          
+
           # From the root directory, run the report coverage command
           ./bin/deepsource report --analyzer test-coverage --key cxx --value-file cmake-build-debug/ccov/all-merged/lcov.info
         env:
@@ -137,7 +137,7 @@ jobs:
   # Gate for initial tests before running heavier integration tests
   initial-tests-done:
     name: Initial tests passed
-    needs: [ build-and-test, sanitizers ]
+    needs: [build-and-test, sanitizers]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
@@ -204,7 +204,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
 
-      - name: Run Complement Tests
+      - name: Run Complement Tests against synapse
         run: |
           set -o pipefail
           cd complement_ci
@@ -212,18 +212,38 @@ jobs:
           #go test -v -tags persephone_blacklist ./tests ./tests/csapi
           go test -v -json -tags persephone_blacklist ./tests ./tests/csapi  | ../.github/gotestfmt
         env:
-          COMPLEMENT_BASE_IMAGE: complement-persephone
+          COMPLEMENT_BASE_IMAGE_HS1: ghcr.io/element-hq/synapse/complement-synapse:latest
+          COMPLEMENT_BASE_IMAGE_HS2: complement-persephone
           COMPLEMENT_ENABLE_DIRTY_RUNS: true
         continue-on-error: true
 
-      - name: Upload Complement logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: Complement Logs - ${{ job.status }}
-          path: |
-            complement_ci/complement.log
-          retention-days: 14
+      - name: Build Complement homeserver image
+        run: |
+          docker build -t complement-persephone -f complement/Dockerfile .
+        env:
+          DOCKER_BUILDKIT: 1
+
+      # - name: Run Complement Tests against continuwuity
+      #   run: |
+      #     set -o pipefail
+      #     cd complement_ci
+      #     cp ../complement/hs_persephone.go ./runtime/hs_persephone.go
+      #     #go test -v -tags persephone_blacklist ./tests ./tests/csapi
+      #     go test -v -json -tags persephone_blacklist ./tests ./tests/csapi  | ../.github/gotestfmt
+      #   env:
+      #     COMPLEMENT_BASE_IMAGE_HS1: ghcr.io/element-hq/synapse/complement-synapse:latest
+      #     COMPLEMENT_BASE_IMAGE_HS2: complement-persephone
+      #     COMPLEMENT_ENABLE_DIRTY_RUNS: true
+      #   continue-on-error: true
+
+      # - name: Upload Complement logs
+      #   uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: Complement Logs - ${{ job.status }}
+      #     path: |
+      #       complement_ci/complement.log
+      #     retention-days: 14
 
   # Run Sytest integration tests
   sytest:
@@ -312,7 +332,7 @@ jobs:
   # Final gate for all tests
   all-tests-done:
     name: All tests passed
-    needs: [ initial-tests-done, complement, sytest, package ]
+    needs: [initial-tests-done, complement, sytest, package]
     runs-on: ubuntu-latest
     if: ${{ !cancelled() }}
     permissions:
